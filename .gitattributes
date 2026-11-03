@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.zst binary
+*.db binary
+*.png binary
+*.svg text
+# Never left to text=auto's detection: scripts, corpora and data files are LF on every checkout,
+# so Windows runs and reads the same bytes; batch files are CRLF.
+*.pgn text eol=lf
+*.tsv text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf

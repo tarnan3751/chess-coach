@@ -1,0 +1,56 @@
+# Private planning notes (kept out of the repo on purpose)
+PLAN.md
+notes/
+
+# Builds: every preset configures into build/<preset>/, vcpkg installs under it
+build/
+cmake-build-*/
+.cache/
+compile_commands.json
+vcpkg_installed/
+
+# Downloaded dumps and built databases never enter the repository; the sample corpus and the
+# migration fixtures are the exceptions
+*.pgn.zst
+*.jsonl.zst
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+!pipeline/tests/sample/*.pgn.zst
+!**/tests/fixtures/*.db
+
+# Compiled objects and libraries
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# IDEs
+.idea/
+.vscode/
+.vs/
+*.swp
+*~
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Packaging output
+dist/
+*.dmg
+*.pkg
+*.msi
+*.deb
+*.rpm
+*.AppImage
+
+# Local config
+.env
+*.local

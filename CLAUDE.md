@@ -1,0 +1,380 @@
+# chess-coach (working name)
+
+An offline desktop chess opening coach. A tiered opening database built from the Lichess monthly
+game dumps by our own ingestion pipeline (one tree of positions per rating tier, every move badged
+Book, Popular or Dubious from top-tier popularity and engine evaluation), a local Stockfish for
+anything off book, and a Qt Widgets app with four screens: Explore, Spar, Repertoire and Drill.
+C++20, CMake with vcpkg, Qt 6, SQLite. No account and no network, ever. Solo developer with an
+agent team.
+
+This file is the **map**: what the project is, where each area lives, the commands, the
+conventions and the workflow. The scope, the phases, the status, the risks and every recorded
+decision are in `PLAN.md`, which lives at the root of the owner's main working tree (the
+coordinator's checkout, whose path every brief names) and is **gitignored on purpose**, so a
+clone does not carry it: read it from the main tree by that path. The data contract (tiers, the
+position key, the schema, the badges, the knobs) is `docs/database.md`, written before the
+pipeline. How each area works is in its **reference file** under `docs/reference/`, written when
+the area lands. Read this file, then `PLAN.md`'s sections for the phase in progress, then
+`docs/database.md` for anything that touches the data, then the reference file of every area a
+task touches, then the header comments of the files involved. A section named in bold is a
+heading of this file or of a doc.
+
+## Status
+
+**Nothing has landed.** The repository holds the map, the agent definitions, the tools and the
+repository files; the plan is in the main tree. Phase 0 (skeleton) is next and waits on the
+owner's go-ahead. `PLAN.md` §7 lists the seven phases with their sizes, §6 the data, §9 the
+process, §11 the decisions, §12 the resolved questions and §14 the deferred path.
+
+## Stack (pinned)
+
+- **C++20.** Apple clang on macOS (the dev machine's Command Line Tools ship clang 15.0.0, which
+  lacks `std::expected` and has `std::format` only by OS version: use **fmt** and **tl::expected**
+  instead, see **Gotchas**), GCC or Clang on Linux. Warnings as errors.
+- **CMake 3.28 or newer with presets** (`dev`, `gate`, `release`: configure, build and test
+  presets of the same names), **Ninja**, **vcpkg in manifest mode** with a pinned baseline in
+  `vcpkg-configuration.json`; overlay ports under `vcpkg/ports/` for what the registry lacks.
+- **Qt 6 Widgets, Svg, SvgWidgets and Test**, from Homebrew on macOS (`qt`, 6.12 at setup) and
+  from apt on Linux, found through `CMAKE_PREFIX_PATH`; **never from vcpkg**, which builds Qt from
+  source for hours. No Qt Quick, no QtNetwork.
+- **chess-library** (Disservin, MIT, header-only, no releases: an overlay port pinned to a
+  commit) for move generation, legality, SAN and UCI; our own Zobrist tables and FEN
+  normalization in `core`.
+- **SQLite through SQLiteCpp** (MIT) for the opening database and the profile database;
+  **zstd** streaming for the dumps; **nlohmann/json** for the evaluation database; **fmt**,
+  **spdlog**, **CLI11**, **toml++**, **tl-expected**; **reproc++** (MIT) for the Stockfish
+  process.
+- **Catch2 v3** for tests, **RapidCheck** for property tests, **Qt Test** under the offscreen
+  platform for UI tests; **clang-format** with the committed `.clang-format`, **clang-tidy** with
+  the committed `.clang-tidy`, ASan and UBSan in the `gate` preset.
+- **Stockfish** (GPLv3) as a separate process over UCI, never linked; `brew install stockfish`
+  locally (19 at setup), bundled per CPU at release with its licence text and a source link.
+- **Data:** the Lichess monthly dumps and evaluation database (CC0), the `lichess-org/chess-openings`
+  TSV (CC0, verified 2026-11-03), the cburnett piece set (CC BY-SA 3.0, attributed).
+- **MIT** for our code. Dependency policy: permissive freely; LGPL (Qt) dynamically linked with
+  its text shipped; GPL only as a separate process (Stockfish), never linked; AGPL (lila,
+  lila-openingexplorer) never, read only as claims about behaviour.
+
+Check before writing an API call. Qt 5 answers, Qt Quick answers to Widgets questions, pre-C++17
+idioms and python-chess conventions are the most common mistakes here. Look a signature up in the
+real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
+`build/<preset>/vcpkg_installed/<triplet>/include/`, chess-library's single `chess.hpp`.
+
+## Commands
+
+| What | Command |
+|---|---|
+| The gate (format, build with warnings as errors under the sanitizers, every test, the benchmarks on an idle machine, clang-tidy, the boundary, the corpus); its quick per-commit profile (format, build in `dev`, unit tests, boundary) | `tools/gates.sh`; `tools/gates.sh --quick` |
+| Run all tests | `tools/run_tests.sh` |
+| Run one module's tests, optionally filtered by a ctest regex | `tools/run_tests.sh core 'Zobrist'` |
+| The benchmarks, in the release preset | `tools/run_tests.sh --bench` |
+| Format; check only | `tools/format.sh`; `tools/format.sh --check` |
+| Configure and build (dev preset) | `cmake --preset dev && cmake --build --preset dev` |
+| Run the app on an isolated data directory and a given database (the owner alone may omit `--data-dir`: it opens the real user data directory) | `build/dev/app/chess-coach --data-dir <dir> --db <file>` |
+| The CLI | `build/dev/cli/chess-coach-cli <command> [options]` |
+| The pipeline on the sample dump | `build/dev/pipeline/chess-coach-pipeline --in pipeline/tests/sample --out <file>` |
+| Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` (Phase 1) |
+| UI tests with screenshots, offscreen | `tools/ui_tests.sh` (Phase 3) |
+| Package | `cmake --build --preset release --target package` (Phase 6) |
+| Land a delivered series | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash>` |
+| The changelog section for a release, from the commit log | `tools/changelog.sh <version> [<from-ref>] [<to-ref>]` |
+
+**Any configure or build writes files**: `build/<preset>/` in the tree it runs in, the vcpkg
+ports installed under it, and a normal app run reads and writes the owner's user data directory
+(profiles, repertoires, the engine cache) under the OS application-support folder. The gate and
+the UI tests run the app only with `--data-dir` pointed at scratch.
+
+**Run the quick gate at every commit and the full gate at the head of a series, on a fresh
+clone; the landing runs the full gate again.**
+
+## Where things live
+
+| Area | Code | Reference |
+|---|---|---|
+| Core: position and key (Zobrist, normalization), the opening store (read-only), tiers, badges, names, the recommendation score, the profile store (profiles, repertoires, cards, reviews, spar sessions, engine cache), the SRS scheduler, the sparring sampler, the UCI engine client | `core/` | `docs/reference/core.md` |
+| The data contract: tiers, speeds, the key, the schema of both databases, badges, the knobs, the canonical dump | `docs/database.md` | `docs/database.md` is the reference |
+| Pipeline: zstd streaming, PGN scanning, bucketing, the two-pass aggregation, pruning, the eval merge, names, the writer, the benchmark | `pipeline/` | `docs/reference/pipeline.md` |
+| CLI: explore, eval, name, stats, dump, drill in the terminal | `cli/` | `docs/reference/cli.md` |
+| App: the Qt Widgets shell, the board, Explore, Spar, Repertoire, Drill, settings, the engine worker | `app/` | `docs/reference/app.md` |
+| Data files: the chess-openings TSV, piece sets, release database metadata | `data/` | `docs/database.md` |
+| Tests and tools: presets, the gate, the test runner, the corpus runner, the UI harness, landing, CI | `*/tests/`, `tools/`, `cmake/` | `docs/reference/testing-tools.md` (Phase 0) |
+
+## Architecture rules
+
+These keep the data exact, the app testable without a window, and the pipeline runnable on a
+laptop. Treat them as hard rules.
+
+### Module boundaries
+
+- `core ← pipeline`, `core ← cli`, `core ← app`. `pipeline`, `cli` and `app` never depend on each
+  other. Nothing in `core`, `pipeline` or `cli` includes a Qt header or links a Qt target; the
+  gate fails if it does.
+- **No network code anywhere**: no sockets, no HTTP library, no QtNetwork, no download step in
+  the build. The pipeline reads files the owner downloaded; the app reads the database beside it
+  or in its data directory.
+- Every module is a CMake target with an explicit source list (no globbing), public headers
+  under `<module>/include/`, private sources under `<module>/src/`, tests under
+  `<module>/tests/`, each test labelled with its module and its kind (`unit`, `property`,
+  `engine`, `ui`, `bench`).
+
+### `core/` is exact, deterministic and keyed by position
+
+- **Every position is keyed by its Zobrist hash** of the normalized position: pieces, side to
+  move, castling rights, and the en passant file only when an en passant capture is legal; never
+  the move counters. Our own tables, incremental on every move, so transpositions merge and the
+  database, the repertoire and the engine cache agree on identity. The FEN is stored beside the
+  key for display and is never a key.
+- **Chess rules come from chess-library** and nowhere else: move generation, legality, SAN and
+  UCI. `core` wraps it in its own `Position` type; there is no second rules implementation.
+- **Tier is a first-class dimension.** Every statistic, badge, sample and recommendation is
+  computed for a stated tier; nothing falls back to "all games" silently.
+- **The opening database is read-only to the app.** It is opened read-only; profiles,
+  repertoires, cards, reviews, spar sessions and the engine cache live in the profile database in
+  the data directory, versioned with a migration per schema version.
+- **Badges and the off-book rule are computed once, in the pipeline**, from the thresholds in
+  `docs/database.md`; the app reads them. The recommendation score is computed in `core` from
+  stored numbers, with its components exposed, never a black box.
+- **The engine is a process.** Stockfish over UCI through `core`'s client: time-based searches,
+  every result cached by key, depth and line count, the client owning the handshake with never
+  two searches in flight. No Stockfish source is linked, ever.
+- **Deterministic.** The same inputs and seed give the same outputs; the sparring sampler takes
+  an explicit generator; no clock and no I/O in the pure parts, file access only through the
+  store types.
+- **Errors are values** at the library boundary (`tl::expected` with an error type); exceptions
+  only for programming errors.
+
+### `pipeline/` streams and never stores
+
+- Reads `.pgn.zst` through a streaming decompressor and never writes a decompressed dump; filters
+  by speed, rated flag and tier from the headers before touching the moves; stops parsing a game
+  at the depth cap; skips and counts a game it cannot parse, never aborts the run on one.
+- **Two passes, bounded memory**: pass one streams every game into a count-min sketch of
+  position visits per tier, which never underestimates; pass two aggregates exactly only the
+  candidates whose sketch count reaches the threshold. Every survivor's counts are exact; memory
+  is the sketch plus the survivors, never every distinct position.
+- Writes with one transaction per batch; records the months, the knobs and the data version in
+  `meta`. Reproducible: the same months and knobs give the same canonical dump, which is how the
+  sample corpus is checked.
+- Multithreaded by game with a single writer; the throughput and the memory high-water mark are
+  measured by the benchmark and stated in the README.
+
+### `app/` is presentation
+
+- **One store, many views.** Widgets never run SQL; every profile mutation goes through `core`'s
+  store API, so the CLI and the app agree.
+- **Engine and database work never runs on the GUI thread.** Searches run on the engine worker;
+  results arrive by queued signal; a widget is touched only on the GUI thread.
+- **The board is a `QGraphicsView` scene** with SVG pieces, animated moves and our own hit
+  testing in board coordinates; theming through one stylesheet. No Qt Quick.
+- **Every screen works with `--data-dir` and `--db`**; the app writes nowhere outside its data
+  directory.
+- **User-facing strings go through `tr()`** from the first screen; no translation files until a
+  second language is asked for.
+- **Persistence is versioned SQLite** with a migration per version; a profile saved by any
+  release opens in every later one.
+
+## Folder layout
+
+```
+core/            the library: position and key, opening store, tiers, badges, names, score,
+                 profile store, SRS scheduler, sparring sampler, UCI client; include/, src/, tests/
+pipeline/        chess-coach-pipeline: zstd streaming, PGN scanning, bucketing, the two-pass
+                 aggregation, pruning, eval merge, names, writer; tests/ with the sample dump and
+                 its golden canonical dump
+cli/             chess-coach-cli: explore, eval, name, stats, dump, drill; tests/
+app/             chess-coach: the Qt Widgets app, the board, the four screens; tests/ (Qt Test,
+                 offscreen)
+data/            the chess-openings TSV, piece sets, release database metadata
+docs/            database.md (the data contract); reference/ (one file per area, as it lands)
+legal/           the full licence text of every component that ships (`NOTICE` names them)
+tools/           gates.sh, run_tests.sh, format.sh, land_series.sh, changelog.sh;
+                 run_corpus.sh (Phase 1), ui_tests.sh (Phase 3)
+cmake/           warnings, sanitizers, the boundary check, packaging (Phase 0)
+vcpkg/           overlay ports (chess-library)
+.claude/agents/  scout, researcher, developer, reviewer
+.github/         workflows (Phase 0)
+PLAN.md          the plan: gitignored, read from the main tree
+```
+
+## C++, Qt and chess gotchas for this project
+
+- **En passant in the key.** Hash the en passant file only when a capture is actually legal;
+  otherwise the same position reached with and without a double pawn push gets two keys and the
+  tree splits. The FEN's en passant field is normalized the same way before it is stored.
+- **Normalized FEN** strips the halfmove and fullmove counters; everything else is kept as
+  chess-library gives it. `parse(print(fen))` must reproduce the normalized form.
+- **Lichess PGN**: SAN carries `+`, `#`, `=Q`, disambiguation and `O-O` with capital O; comments
+  `{ [%clk 0:03:00] [%eval 0.17] }` sit between moves; there are no variations; the result token
+  ends the movetext; the speed is the `Event` header ("Rated Blitz game") with `TimeControl`
+  beside it; `WhiteElo` or `BlackElo` can be `?`, and such a game is skipped and counted.
+- **zstd**: `ZSTD_decompressStream` with `ZSTD_DStreamInSize` buffers; a dump is one frame of
+  tens of gigabytes; `ZSTD_decompress` of the whole file is never an option.
+- **SQLite**: one transaction per batch of inserts or the write takes hours; `WITHOUT ROWID` on
+  the key-indexed tables; `journal_mode=OFF` and `synchronous=OFF` during the pipeline's build
+  only; `mmap_size` for reads; the opening database opened `SQLITE_OPEN_READONLY`; prepared
+  statements once per connection; the Zobrist key is `uint64_t` stored as a bit-cast `int64`
+  and compared as integers, never as text.
+- **UCI**: `isready` and `readyok` before every `position`; after `go` only `stop` or waiting for
+  `bestmove`, never a second `go`; `ucinewgame` between games; `info` lines carry `multipv`,
+  `score cp` or `score mate` from the side to move, and `pv`; `UCI_LimitStrength` with `UCI_Elo`
+  has a floor (1320 in Stockfish); the process can die mid-search and the client reports it.
+- **Qt**: a widget touched off the GUI thread crashes at best; `QObject` parent ownership and
+  `std::unique_ptr` on the same object double-delete; the engine worker is `moveToThread` with
+  queued connections; one `QSvgRenderer` per piece shared by its items;
+  `QStandardPaths::AppDataLocation` is the owner's real data directory, which is why `--data-dir`
+  exists.
+- **CMake and vcpkg**: configure only through a preset, so the vcpkg toolchain file is set at
+  the first configure; ports install under `build/<preset>/vcpkg_installed/` per build directory
+  and the binary cache under `~/.cache/vcpkg/archives` makes the second lane fast; Qt comes from
+  `CMAKE_PREFIX_PATH`, never from the manifest.
+- **Apple clang 15**: `std::expected` is C++23 and absent; `std::format` depends on the deployment
+  target; the project uses `tl::expected` and `fmt`. Check the real header before using a C++20
+  library feature.
+- **Sanitizers**: ASan on macOS has no LeakSanitizer, so a leak shows only in the Linux job; UBSan
+  flags signed overflow, so the Zobrist arithmetic is `uint64_t` throughout.
+- **Lifetimes**: a `std::string_view` into the streaming parser's buffer dangles once the next
+  chunk is read; copy what outlives the chunk.
+- **Paths** in tests are built from `std::filesystem::path` segments, never string literals with
+  `/`; a Linux-only or Windows-only failure is otherwise the first sign.
+
+## Seeing the app
+
+The coordinator runs the app on the main tree with `--data-dir` pointed at scratch and `--db` at
+a built database, and reads the screenshots the UI tests produce. Agents see the app only through
+the UI harness in their own clones (Qt Test under the offscreen platform; screenshots land under
+`build/<preset>/ui-screenshots/`) or a manual run on scratch data. Headless runs (the tests, the
+CLI, the pipeline on the sample dump) render nothing and catch most errors.
+
+## Agent workflow
+
+Work on this repository is split across a coordinator and four project subagents
+(`.claude/agents/`). The split is by judgment required, and by how much context each seat can
+afford to hold.
+
+- **Coordinator** (the top-level session) — talks to the owner, makes design decisions within
+  `PLAN.md` or escalates them, writes briefs (each naming its **tier**, below), approves plans
+  where a plan is required, routes work and review findings, reads the real diff of every tier A
+  change and of every fold, and lands series. It does not read large files itself (the scout
+  does), and does not write feature code in the main tree: trivial edits only, when spawning an
+  agent would cost more than the edit.
+- **`developer`** (Opus) — works in a clone of its own (**Lanes**), implements the brief, runs
+  the quick gate at every commit and the full gate at the series head, verifies behaviour
+  through the tests, the CLI, the pipeline's sample corpus and the UI harness in its clone,
+  updates the docs the change invalidates, and delivers a patch series on the current `main`
+  with the tree it reproduces. Never writes to the main working tree. Plans first only when the
+  brief asks (tier A) or when it meets an open decision. **Continue the same agent from plan to
+  implementation** (`SendMessage`); respawning loses what it learned planning.
+- **`reviewer`** (Opus) — independent review of the series, applied in a clone of its own: the
+  full pass for tier A, the targeted pass for tier B (**Tiers**). Report-only; it is given the
+  code and the brief, never the developer's conclusions.
+- **`scout`** / **`researcher`** (Sonnet) — read-only codebase lookups (including API shapes
+  from the installed headers) and outside research (C++20, Qt 6, CMake, vcpkg, SQLite, zstd,
+  the UCI protocol, the Lichess data, chess theory, licences). Neither configures or builds. A
+  load-bearing research fact (an API shape, a Qt behaviour, a data-format detail, a licence
+  term) is verified by Opus or the coordinator before a decision rests on it.
+
+**Tiers.** Every brief names its tier, which sets the plan and the review:
+
+- **A** — the position key (the Zobrist tables, normalization, the en passant and castling
+  rules, the transposition rule); the schema of either database and its versioning and
+  migrations; the pipeline's semantics (tier bucketing, the speed filter, the sketch, pruning,
+  aggregation, determinism); the badge definitions and the off-book rule; the recommendation
+  score, the SRS scheduler and the sparring sampler; the UCI client's protocol handling; module
+  boundaries and the no-network rule; and any change to a golden corpus's expected output or a
+  benchmark's budget. A plan before code, approved by the coordinator, who escalates design
+  decisions to the owner; then the implementation; then the full review: keys probed on random
+  games, aggregation checked for conservation and exactness, old profile files loaded, the
+  engine driven against the fake and the real Stockfish, every gate, the UI harness driven.
+- **B** — features inside existing frameworks: a CLI subcommand, a screen or widget, a new
+  statistic column, a coach message, a piece set, a pipeline report, tooling, CI. No plan round
+  trip: the brief carries the decisions and the developer stops only at an open decision. The
+  targeted review, about thirty minutes: the diff read, the delivered tree checked against the
+  developer's full-gate run, the changed behaviour driven once.
+- **C** — docs, comments, config. No reviewer: the gate and the coordinator's own read.
+
+Small later-scope items are **batched** by area, up to about five a slice, one commit each, one
+brief and one review.
+
+**Briefs.** A brief is the whole of what an agent knows about the task, so it carries:
+
+- **Title and tier.**
+- **Goal** — what changes for the user or the tooling, in two or three sentences, and what is
+  explicitly out of scope.
+- **Decisions made** — every choice the coordinator has already settled (names, which module,
+  which table, which threshold, which file), so the developer never has to guess; for tier A,
+  the plan is where remaining choices surface. Decisions cite `PLAN.md` §11 by row where one
+  applies, and `docs/database.md` by section for anything about the data.
+- **Read** — `CLAUDE.md`, the `PLAN.md` sections for the phase, `docs/database.md` when the data
+  is touched, the reference files of the areas touched, and any module or doc the task depends
+  on; the scout's findings when there are any, as `path:line`.
+- **Verification** — the tests expected (unit, property, corpus, engine, UI), and what the UI
+  run must show when the change is visible.
+- **Lane** — the clone to use, and the base commit the series must be built on.
+- **Delivery** — the plan format (tier A) or the report format, as the agent definition states.
+
+**Lanes.** Every configure and build writes `build/<preset>/` in the tree it runs in, and a
+normal app run opens the owner's data directory, so the main working tree is the coordinator's
+and stays at `HEAD`: no agent writes to it or its index. A developer or a reviewer works in a
+`git clone` of its own under `~/Development/chess-coach-lanes/` (`lanes/dev-N` and
+`lanes/review-N`, series under `series/<brief>/`), never under the session scratchpad or `/tmp`:
+a reboot wipes `/private/tmp` (math-canvas lost every clone and a reviewed series that way on
+2026-10-28). The first configure in a lane compiles the vcpkg ports not yet in the machine-wide
+binary cache, which is slow once. Two developers may run at once on disjoint areas, under these
+rules: the second lane rebases its series onto `main` before delivery; a lane's docs changes stay
+within its area's reference file, the map only where a status line changes; a lane runs the app
+only through the UI harness or with `--data-dir` pointed at scratch, and **nobody runs the app
+without `--data-dir` in a clone**, because that opens the owner's data directory; **no lane runs
+the pipeline on a full monthly dump** (hours of every core: the sample dump and the small 2013
+months are a lane's inputs, and a full build is the coordinator's, on the owner's instruction,
+when no gate is running); engine tests use one thread and a small hash so lanes share the
+machine; no lane kills a process it did not start (`pkill ninja` or `pkill stockfish` ends
+another lane's gate) or clears `~/.cache/vcpkg`. The UI tests run under the offscreen platform,
+so they need no display and no lock, and the full gate runs them.
+
+**Review routing.** The reviewer's findings go back to the **same** developer (`SendMessage`),
+which folds them into the series; the coordinator reads the fold's diff; then the reviewer
+re-reviews. A FAIL loops until it passes; PASS WITH FIXES is folded and read, re-reviewed when
+the fold touched tier A ground or the verdict was FAIL; otherwise the coordinator reads the fold
+and lands. Anything the developer did outside the brief (**Adjacent changes**) is kept or vetoed
+by the coordinator, not the reviewer.
+
+**Delivery and landing.** A series is `git format-patch` files on the current `main`, one logical
+change per commit (refactors separate from features), each a **Conventional Commit**:
+`type(scope): Summary`, with `type` one of `feat`, `fix`, `refactor`, `perf`, `test`, `docs`,
+`build`, `ci`, `chore`, `style`, `revert`; `scope` a module name (`core`, `pipeline`, `cli`,
+`app`) or `data`, `tools`, `docs`, `ci`, `build`; the summary an imperative sentence in sentence
+case, no trailing period, at most 72 characters; a body of plain paragraphs saying what and why;
+**no trailers**: no commit in this repository carries one, the coordinator's own included. The
+series comes with the write-tree hash it reproduces and the full gate's tail at its head, the
+quick gate having run at every commit; small series land together in one batch under one gate.
+Once the review's findings are folded and the fold's diff read, the coordinator lands it with
+`tools/land_series.sh <patch-dir> <base-commit> <tree-hash>` (clean tree and HEAD at the base
+required; `git am`; the messages checked; the tree checked, with a rollback on mismatch; the gate
+run; the commits left in place). The coordinator pushes `main` to `origin` after each landing.
+The owner reviews at phase gates and whenever they choose.
+
+Constraints:
+
+- **Decisions come from `PLAN.md`** (§11 decisions, §12 resolved questions, §5 architecture) and
+  **`docs/database.md`** for the data. An agent that finds an open decision stops and reports;
+  it does not guess.
+- **The architecture rules above are not negotiable**, and neither are: the position key and the
+  transposition rule, chess rules from chess-library only, tier as an explicit dimension, the
+  two-pass bounded-memory pipeline, exact counts for every survivor, the engine as a process, no
+  network, no Qt outside `app`, the GUI-thread rule, the store API, versioned persistence,
+  clang-format, Conventional Commits, no trailers, no GPL or AGPL code in the tree.
+- **Temporary instrumentation is tagged `[verify]`** and gone before a report:
+  `grep -rn "\[verify\]" core pipeline cli app tools cmake` returns nothing.
+
+## Release notes
+
+- CPack with `macdeployqt` builds the `.dmg`, with the opening database and the Stockfish
+  binary for the CPU inside the bundle when they fit the size rule in `PLAN.md` §12, or the
+  database as a separate versioned file the app imports; Linux and Windows packages come after
+  1.0. Installers are unsigned until the signing decision at 1.0, and the README documents the
+  Gatekeeper workaround.
+- `CHANGELOG.md` is generated from the Conventional Commit log per release; tags are `vX.Y.Z`;
+  the database file carries its own data version, shown in the About dialog beside the app's.
+- `NOTICE` lists every third-party component and licence that ships, `legal/` holds each
+  licence's full text, and the Stockfish binary ships with the GPL text and a link to the exact
+  source it was built from.
