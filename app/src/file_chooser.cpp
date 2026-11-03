@@ -5,10 +5,12 @@
 
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QEvent>
 #include <QFileInfo>
 #include <QFileSystemModel>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -16,6 +18,19 @@
 #include <QVBoxLayout>
 
 namespace chesscoach::app {
+
+namespace {
+
+// The path as typed, with a leading ~ for the home folder and the platform's separators read.
+QString expanded(const QString& typed) {
+    QString path = QDir::fromNativeSeparators(typed.trimmed());
+    if (path == QStringLiteral("~") || path.startsWith(QStringLiteral("~/"))) {
+        path = QDir::homePath() + path.mid(1);
+    }
+    return path;
+}
+
+} // namespace
 
 FileChooser::FileChooser(Mode mode, const QString& title, const QString& directory,
                          const QStringList& name_filters, const QString& name, QWidget* parent)
@@ -49,7 +64,11 @@ FileChooser::FileChooser(Mode mode, const QString& title, const QString& directo
     buttons->addButton(accept_, QDialogButtonBox::AcceptRole);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(accept_, &QPushButton::clicked, this, &FileChooser::accept);
-    connect(path_, &QLineEdit::returnPressed, this, [this] { go_to(path_->text()); });
+    // Return in the path line goes where it says and never reaches the default button.
+    path_->installEventFilter(this);
+    // Which of the two lines the user edited last decides the name a typed file path gives.
+    connect(path_, &QLineEdit::textEdited, this, [this] { name_edited_last_ = false; });
+    connect(name_, &QLineEdit::textEdited, this, [this] { name_edited_last_ = true; });
     connect(tree_->selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex& current) { select(model_->filePath(current)); });
     connect(tree_, &QTreeView::doubleClicked, this, [this](const QModelIndex& index) {
@@ -74,7 +93,26 @@ FileChooser::FileChooser(Mode mode, const QString& title, const QString& directo
     go_to(QFileInfo(directory).isDir() ? directory : QDir::homePath());
 }
 
-void FileChooser::go_to(const QString& path) {
+bool FileChooser::eventFilter(QObject* watched, QEvent* event) {
+    const auto* key_event = dynamic_cast<const QKeyEvent*>(event);
+    if (watched == path_ && event->type() == QEvent::KeyPress && key_event != nullptr) {
+        const int key = key_event->key();
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            go_to(path_->text());
+            return true;
+        }
+    }
+    return QDialog::eventFilter(watched, event);
+}
+
+void FileChooser::go_to(const QString& typed) {
+    QString path = expanded(typed);
+    // In save mode a file that does not exist yet names its folder and the file's name.
+    QString new_name;
+    if (mode_ == Mode::save && !QFileInfo::exists(path) && QFileInfo(path).absoluteDir().exists()) {
+        new_name = QFileInfo(path).fileName();
+        path = QFileInfo(path).absolutePath();
+    }
     const QModelIndex index = model_->index(QFileInfo(path).absoluteFilePath());
     if (!index.isValid()) {
         message_->setText(tr("%1 is not there.").arg(path));
@@ -87,25 +125,27 @@ void FileChooser::go_to(const QString& path) {
         tree_->expand(index);
     }
     select(model_->filePath(index));
+    if (!new_name.isEmpty()) {
+        name_->setText(new_name);
+    }
 }
 
 void FileChooser::select(const QString& path) {
     const QFileInfo info(path);
     message_->hide();
-    path_->setText(QDir::toNativeSeparators(info.absoluteFilePath()));
-    if (info.isDir()) {
-        directory_ = info.absoluteFilePath();
+    directory_ = info.isDir() ? info.absoluteFilePath() : info.absolutePath();
+    if (info.isDir() || mode_ == Mode::open) {
+        path_->setText(QDir::toNativeSeparators(info.absoluteFilePath()));
         return;
     }
-    directory_ = info.absolutePath();
-    if (mode_ == Mode::save) {
-        name_->setText(info.fileName());
-    }
+    // In save mode the path line holds the folder, and the file's name goes to its own field.
+    path_->setText(QDir::toNativeSeparators(directory_));
+    name_->setText(info.fileName());
 }
 
 void FileChooser::accept() {
     if (mode_ == Mode::open) {
-        const QFileInfo chosen(QDir::fromNativeSeparators(path_->text()));
+        const QFileInfo chosen(expanded(path_->text()));
         if (!chosen.isFile()) {
             message_->setText(tr("Choose a file."));
             message_->show();
@@ -115,13 +155,36 @@ void FileChooser::accept() {
         QDialog::accept();
         return;
     }
-    const QString name = name_->text().trimmed();
+    // The path line holds the folder, or a file path typed there without Return, which then
+    // gives the folder and, unless the name field was edited after it, the name: the user's
+    // last edit wins.
+    QString directory = directory_;
+    QString name = name_->text().trimmed();
+    if (const QFileInfo typed(expanded(path_->text())); !path_->text().trimmed().isEmpty()) {
+        if (typed.isDir()) {
+            directory = typed.absoluteFilePath();
+        } else if (typed.absoluteDir().exists()) {
+            directory = typed.absolutePath();
+            if (!name_edited_last_) {
+                name = typed.fileName();
+            }
+        } else {
+            message_->setText(tr("%1 is not there.").arg(path_->text()));
+            message_->show();
+            return;
+        }
+    }
     if (name.isEmpty()) {
         message_->setText(tr("Give the file a name."));
         message_->show();
         return;
     }
-    const QString target = QDir(directory_).filePath(name);
+    if (name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\'))) {
+        message_->setText(tr("A file name cannot hold a slash: give the folder in the path line."));
+        message_->show();
+        return;
+    }
+    const QString target = QDir(directory).filePath(name);
     if (QFileInfo::exists(target)) {
         // An export never replaces a file (docs/database.md §12.5).
         message_->setText(tr("%1 exists: choose another name.").arg(name));

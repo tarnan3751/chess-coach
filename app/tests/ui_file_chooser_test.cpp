@@ -1,8 +1,10 @@
 // UI tests of the app's file chooser (app; ui): a file picked through its model in open mode, the
 // name filter hiding the other files, a folder refused as a file; save mode refusing a file that
-// exists and taking a new name; and Browse in the Settings dialog opening it at the folder last
-// used and keeping the new one in settings.ini. The platform's settings folder gains no file while
-// the tests run. A screenshot of the chooser (ui_harness.hpp).
+// exists and taking a new name; Return in the path line going to a folder, a file or ~ without
+// accepting; save mode reading a full path typed in the path line, taking the name the user
+// edited last, and refusing a name with a slash; and Browse in the Settings dialog opening it at
+// the folder last used and keeping the new one in settings.ini. The platform's settings folder
+// gains no file while the tests run. A screenshot of the chooser (ui_harness.hpp).
 #include "file_chooser.hpp"
 #include "main_window.hpp"
 #include "settings.hpp"
@@ -126,6 +128,78 @@ class FileChooserTest : public QObject {
         QCOMPARE(QFileInfo(chooser.file()).fileName(), QStringLiteral("other.db"));
         QCOMPARE(canonical(QFileInfo(chooser.file()).absolutePath()), canonical(folder.path()));
         QVERIFY(!QFileInfo::exists(chooser.file())); // choosing writes nothing
+    }
+
+    void return_in_the_path_line_goes_there_and_never_accepts() {
+        const QTemporaryDir& folder = *folder_;
+        QDir(folder.path()).mkpath(QStringLiteral("inner"));
+        const QString inner = QDir(folder.path()).filePath(QStringLiteral("inner"));
+        FileChooser chooser(FileChooser::Mode::save, QStringLiteral("Save"), folder.path(),
+                            {QStringLiteral("*.db")}, QStringLiteral("profile.db"));
+        chooser.show();
+        auto& path = child<QLineEdit>(chooser, QStringLiteral("file_chooser_path"));
+        auto& name = child<QLineEdit>(chooser, QStringLiteral("file_chooser_name"));
+        // A folder typed and Return: the chooser goes there and stays open.
+        path.setText(inner);
+        QTest::keyClick(&path, Qt::Key_Return);
+        QVERIFY(chooser.isVisible());
+        QCOMPARE(chooser.result(), int{QDialog::Rejected});
+        QCOMPARE(canonical(chooser.directory()), canonical(inner));
+        // A file typed and Return: its folder, and its name in the name field.
+        path.setText(QDir(folder.path()).filePath(QStringLiteral("mine.db")));
+        QTest::keyClick(&path, Qt::Key_Enter);
+        QVERIFY(chooser.isVisible());
+        QCOMPARE(canonical(chooser.directory()), canonical(folder.path()));
+        QCOMPARE(name.text(), QStringLiteral("mine.db"));
+        // ~ is the home folder.
+        path.setText(QStringLiteral("~"));
+        QTest::keyClick(&path, Qt::Key_Return);
+        QCOMPARE(canonical(chooser.directory()), canonical(QDir::homePath()));
+        QVERIFY(chooser.isVisible());
+    }
+
+    void save_mode_reads_a_path_typed_without_return() {
+        const QTemporaryDir& folder = *folder_;
+        QDir(folder.path()).mkpath(QStringLiteral("inner"));
+        FileChooser chooser(FileChooser::Mode::save, QStringLiteral("Save"), folder.path(),
+                            {QStringLiteral("*.db")}, QStringLiteral("profile.db"));
+        chooser.show();
+        auto& path = child<QLineEdit>(chooser, QStringLiteral("file_chooser_path"));
+        auto& name = child<QLineEdit>(chooser, QStringLiteral("file_chooser_name"));
+        // A name with a slash is refused.
+        name.setText(QStringLiteral("inner/mine.db"));
+        child<QPushButton>(chooser, QStringLiteral("file_chooser_accept")).click();
+        QVERIFY(chooser.isVisible());
+        QVERIFY(child<QLabel>(chooser, QStringLiteral("file_chooser_message"))
+                    .text()
+                    .startsWith(QStringLiteral("A file name cannot hold a slash")));
+        // A full path in the path line gives the folder and the name.
+        const QString typed = QDir(folder.path()).filePath(QStringLiteral("inner/mine.db"));
+        path.setText(typed);
+        child<QPushButton>(chooser, QStringLiteral("file_chooser_accept")).click();
+        QCOMPARE(chooser.result(), int{QDialog::Accepted});
+        QCOMPARE(QFileInfo(chooser.file()).fileName(), QStringLiteral("mine.db"));
+        QCOMPARE(canonical(QFileInfo(chooser.file()).absolutePath()),
+                 canonical(QDir(folder.path()).filePath(QStringLiteral("inner"))));
+    }
+
+    void save_mode_takes_the_name_edited_last() {
+        const QTemporaryDir& folder = *folder_;
+        FileChooser chooser(FileChooser::Mode::save, QStringLiteral("Save"), folder.path(),
+                            {QStringLiteral("*.db")}, QStringLiteral("profile.db"));
+        chooser.show();
+        auto& path = child<QLineEdit>(chooser, QStringLiteral("file_chooser_path"));
+        auto& name = child<QLineEdit>(chooser, QStringLiteral("file_chooser_name"));
+        // A file path typed, then the name field edited: the name field's name, in the typed
+        // path's folder.
+        path.clear();
+        QTest::keyClicks(&path, QDir(folder.path()).filePath(QStringLiteral("typed.db")));
+        name.clear();
+        QTest::keyClicks(&name, QStringLiteral("named.db"));
+        child<QPushButton>(chooser, QStringLiteral("file_chooser_accept")).click();
+        QCOMPARE(chooser.result(), int{QDialog::Accepted});
+        QCOMPARE(QFileInfo(chooser.file()).fileName(), QStringLiteral("named.db"));
+        QCOMPARE(canonical(QFileInfo(chooser.file()).absolutePath()), canonical(folder.path()));
     }
 
     void browse_starts_at_the_last_folder_and_keeps_the_new_one() {

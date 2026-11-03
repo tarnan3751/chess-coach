@@ -36,10 +36,19 @@ class FileChooser : public QDialog {
     [[nodiscard]] QString file() const { return file_; }
     // The folder shown: the one selected, or the selected file's.
     [[nodiscard]] QString directory() const { return directory_; }
-    // Selects a folder, or a file and its folder, as the path line does on Return.
-    void go_to(const QString& path);
+    // Selects a folder, or a file and its folder, as the path line does on Return; a leading ~ is
+    // the home folder. In save mode a file that does not exist yet selects its folder and fills
+    // in its name.
+    void go_to(const QString& typed);
 
+    // Open mode takes the file the path line names; save mode the folder it names, or the folder
+    // of a file path typed there, with the name field's name, or the typed path's when the path
+    // line was edited after the name field (the user's last edit wins), refusing a name that is
+    // taken or holds a slash.
     void accept() override;
+
+  protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
     void select(const QString& path);
@@ -53,6 +62,7 @@ class FileChooser : public QDialog {
     QPushButton* accept_;
     QString directory_;
     QString file_;
+    bool name_edited_last_ = false; // the name field was edited after the path line
 };
 
 // An existing file the user picks, starting at the folder last used, which the pick then
