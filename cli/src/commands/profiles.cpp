@@ -8,6 +8,8 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <filesystem>
+#include <system_error>
 #include <utility>
 
 namespace chesscoach::cli {
@@ -44,7 +46,15 @@ Result<void> run_profile(const ProfileOptions& options, std::ostream& out, const
                 return fail(fmt::format("{} exists or cannot be written", options.path));
             }
             if (exported.error() == ProfileError::not_profiles) {
-                return fail(fmt::format("{} has no profiles.db to export", options.data_dir));
+                // Absent or empty, there is nothing to export; otherwise the file is not one.
+                const auto file = std::filesystem::path(options.data_dir) / "profiles.db";
+                std::error_code error;
+                if (!std::filesystem::is_regular_file(file, error) ||
+                    std::filesystem::file_size(file, error) == 0) {
+                    return fail(fmt::format("{} has no profiles.db to export", options.data_dir));
+                }
+                return fail(
+                    fmt::format("profiles.db in {} is not a profiles.db", options.data_dir));
             }
             return fail(
                 fmt::format("profiles.db in {} {}", options.data_dir, describe(exported.error())));
