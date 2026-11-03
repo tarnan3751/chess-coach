@@ -1,0 +1,32 @@
+// The board's colour presets (board_theme.hpp).
+#include "board_theme.hpp"
+
+namespace chesscoach::app {
+
+BoardTheme BoardTheme::light() {
+    return BoardTheme{
+        .light_square = QColor(0xf0, 0xd9, 0xb5),
+        .dark_square = QColor(0xb5, 0x88, 0x63),
+        .last_move = QColor(0xcd, 0xd2, 0x6a, 0xa0),
+        .selected = QColor(0x14, 0x55, 0x1e, 0x80),
+        .check = QColor(0xff, 0x00, 0x00, 0xc0),
+        .hint = QColor(0x14, 0x55, 0x1e, 0x80),
+        .coordinate_on_light = QColor(0xb5, 0x88, 0x63),
+        .coordinate_on_dark = QColor(0xf0, 0xd9, 0xb5),
+    };
+}
+
+BoardTheme BoardTheme::dark() {
+    return BoardTheme{
+        .light_square = QColor(0x9e, 0xa3, 0xa8),
+        .dark_square = QColor(0x4b, 0x55, 0x60),
+        .last_move = QColor(0x6f, 0xa8, 0xdc, 0x90),
+        .selected = QColor(0x6f, 0xa8, 0xdc, 0xa0),
+        .check = QColor(0xff, 0x40, 0x40, 0xc0),
+        .hint = QColor(0x10, 0x20, 0x30, 0x90),
+        .coordinate_on_light = QColor(0x4b, 0x55, 0x60),
+        .coordinate_on_dark = QColor(0x9e, 0xa3, 0xa8),
+    };
+}
+
+} // namespace chesscoach::app
