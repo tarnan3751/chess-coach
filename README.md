@@ -11,10 +11,10 @@ vcpkg, SQLite. `chess-coach` is a working name.
 
 ## Status
 
-Pre-alpha and private. Nothing has been built yet: the repository holds the project's conventions
-and tools. The first milestone is the skeleton (a configured, tested, packaged build on macOS and
-Linux); the second is the ingestion pipeline that turns the Lichess dumps into the tiered
-database.
+Pre-alpha and private. The skeleton is in place: the four modules (`core`, `pipeline`, `cli`,
+`app`) configure, build and test on macOS and Linux, the two command-line tools print their
+version, and the app opens an empty window titled with it. The next milestone is the ingestion
+pipeline that turns the Lichess dumps into the tiered database.
 
 ## How it will work
 
@@ -34,16 +34,43 @@ database.
 
 ## Building and running
 
-There is nothing to build yet. Once the skeleton lands, the build needs CMake 3.28 or newer,
-Ninja, a C++20 compiler, vcpkg (`VCPKG_ROOT` set), Qt 6 from Homebrew or apt, and Stockfish on
-the `PATH` for the engine tests:
+The build needs CMake 3.28 or newer, Ninja, a C++20 compiler (Apple clang 15 or newer, GCC 13
+or newer), vcpkg, Qt 6.4 or newer with the Svg module, clang-format and clang-tidy, and
+Stockfish for the engine tests. vcpkg builds every other dependency from the manifest
+(`vcpkg.json`, pinned to a baseline in `vcpkg-configuration.json`); Qt always comes from the
+system, never from vcpkg.
+
+On macOS, with Homebrew:
 
 ```
-cmake --preset dev && cmake --build --preset dev     # configure and build
-tools/run_tests.sh                                    # every test
-tools/gates.sh                                        # everything a change must pass
-build/dev/app/chess-coach --data-dir <dir> --db <file>   # the app on a scratch data directory
+brew install ninja clang-format llvm stockfish qt
+git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 ```
+
+On Ubuntu 24.04:
+
+```
+sudo apt-get install ninja-build clang-format clang-tidy qt6-base-dev qt6-svg-dev libgl1-mesa-dev stockfish
+git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+```
+
+The build finds vcpkg through `VCPKG_ROOT`, or at `~/vcpkg` when that is unset, and on macOS
+finds Qt through `brew --prefix qt`. Configure and build only through a preset: `dev` (debug),
+`gate` (optimised, under ASan and UBSan) or `release`. Each builds into `build/<preset>/`, and
+the first configure compiles the vcpkg ports, which takes a few minutes once.
+
+```
+cmake --preset dev && cmake --build --preset dev       # configure and build
+tools/run_tests.sh                                      # every test but the benchmarks
+tools/gates.sh                                          # everything a change must pass
+build/dev/pipeline/chess-coach-pipeline --version
+build/dev/cli/chess-coach-cli --version
+build/dev/app/chess-coach --data-dir <dir> --db <file>  # the app on a scratch data directory
+```
+
+Without `--data-dir` the app uses the platform's application data directory (on macOS
+`~/Library/Application Support/chess-coach`). How the presets, the tests and the gate work is in
+[docs/reference/testing-tools.md](docs/reference/testing-tools.md).
 
 ## Data
 

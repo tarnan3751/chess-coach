@@ -1,0 +1,69 @@
+chess-coach
+Copyright (c) 2026 Tahseen Arnan
+Licensed under the MIT License; see LICENSE.
+
+This product includes, links or runs the third-party components below, under the licences
+named. The full text of each licence that ships with the application will be under legal/
+(from the first release); until then each is at the URL given.
+
+Libraries built from source through vcpkg and linked into the executables
+--------------------------------------------------------------------------
+chess-library (Disservin), MIT License
+    https://github.com/Disservin/chess-library
+CLI11, BSD 3-Clause License
+    https://github.com/CLIUtils/CLI11
+{fmt}, MIT License
+    https://github.com/fmtlib/fmt
+JSON for Modern C++ (nlohmann/json), MIT License
+    https://github.com/nlohmann/json
+reproc and reproc++, MIT License
+    https://github.com/DaanDeMeyer/reproc
+spdlog, MIT License
+    https://github.com/gabime/spdlog
+SQLite, public domain (the SQLite blessing)
+    https://sqlite.org/copyright.html
+SQLiteC++ (SQLiteCpp), MIT License
+    https://github.com/SRombauts/SQLiteCpp
+tl::expected, CC0 1.0 Universal
+    https://github.com/TartanLlama/expected
+toml++ (tomlplusplus), MIT License
+    https://github.com/marzer/tomlplusplus
+Zstandard (zstd), BSD 3-Clause License (zstd is dual-licensed BSD or GPLv2; it is used under
+the BSD licence)
+    https://github.com/facebook/zstd
+
+Libraries used by the tests only, never shipped
+-----------------------------------------------
+Catch2, Boost Software License 1.0 (with parts under the BSD 3-Clause License)
+    https://github.com/catchorg/Catch2
+RapidCheck, BSD 2-Clause License
+    https://github.com/emil-e/rapidcheck
+
+Qt
+--
+Qt 6 (Qt Widgets, Qt Svg, Qt Svg Widgets; Qt Test for the tests only), GNU Lesser General
+Public License version 3. Qt is linked dynamically, never statically, and is taken unmodified
+from the system's package manager (Homebrew or apt); its licence text ships with the
+application, and its source is at https://code.qt.io and https://download.qt.io.
+    https://www.qt.io/licensing/open-source-lgpl-obligations
+
+Stockfish
+---------
+Stockfish, GNU General Public License version 3. Stockfish is a separate program: chess-coach
+starts it as a child process and talks to it over the UCI protocol, and never links any of its
+code. When a release bundles a Stockfish binary, its licence text and a link to the exact
+source it was built from ship beside it.
+    https://github.com/official-stockfish/Stockfish
+
+Data
+----
+Lichess monthly game dumps (standard rated games) and the Lichess evaluation database,
+Creative Commons CC0 ("Database exports are released under the Creative Commons CC0
+license"). The opening database is built from them by chess-coach's own pipeline.
+    https://database.lichess.org/
+Opening names, lichess-org/chess-openings (a.tsv through e.tsv), CC0 1.0 Universal
+    https://github.com/lichess-org/chess-openings
+The cburnett chess piece set, by Colin M.L. Burnett, Creative Commons Attribution-ShareAlike 3.0
+Unported (CC BY-SA 3.0), as published in lila's piece directory
+    https://github.com/lichess-org/lila/tree/master/public/piece/cburnett
+    https://creativecommons.org/licenses/by-sa/3.0/
