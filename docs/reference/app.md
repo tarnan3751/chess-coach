@@ -149,10 +149,12 @@ it is created by the first stored search and a run that searches nothing writes 
 thread, and `Engine::search` blocks there, so two searches are never in flight. Each request the
 window sends carries the next request id; before sending it, the window calls
 `cancel_before(request_id)` directly from the GUI thread, which records the id and calls
-`Engine::stop()` (the one engine call another thread may make; the worker's mutex only keeps the
-engine from being replaced meanwhile). The search in progress then returns at once, marked
-stopped, and is neither stored nor answered; a request older than the recorded id is skipped
-unsearched; and the window drops an answer whose id or key is not its current one. The window
+`Engine::stop_before(request_id)` (the engine calls another thread may make are the stops; the
+worker's mutex only keeps the engine from being replaced meanwhile). Every search carries its
+request id as its generation, so the search in progress of an older request returns at once,
+marked stopped, and is neither stored nor answered, and so does one the worker was just about to
+start when the stop came, which sends nothing to the engine; a request older than the recorded id
+is skipped unsearched; and the window drops an answer whose id or key is not its current one. The window
 never blocks: a 30 s search is stopped by the next move. Closing the window cancels the same way
 before it quits and joins the thread, and the engine quits with the worker.
 

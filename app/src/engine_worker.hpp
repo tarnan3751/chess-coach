@@ -4,8 +4,9 @@
 // worker**). Every evaluation looks in the cache first and searches only on a miss, storing what
 // it finds; its slots run one at a time on its thread, so there is never more than one search.
 // The GUI thread reaches it by queued connection, and calls cancel_before directly, which stops
-// the search in progress (Engine::stop may come from any thread) and makes older requests
-// stale. Lines leave it with their scores from white's side, as openings.db's are.
+// the search in progress and every later search of an older request (Engine::stop_before may come
+// from any thread) and makes older requests stale. Lines leave it with their scores from white's
+// side, as openings.db's are.
 #pragma once
 
 #include <chesscoach/engine.hpp>
@@ -66,7 +67,7 @@ class EngineWorker : public QObject {
     explicit EngineWorker(const QString& data_dir, QObject* parent = nullptr);
 
     // From the GUI thread: requests before request_id are dropped unanswered, and the search in
-    // progress, if any, stops.
+    // progress, or about to start, of an older request stops.
     void cancel_before(int request_id);
 
     // The settings of the next search; a running engine is dropped, so the next search starts

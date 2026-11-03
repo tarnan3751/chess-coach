@@ -100,7 +100,7 @@ void EngineWorker::cancel_before(int request_id) {
     latest_request_.store(request_id);
     const std::scoped_lock lock(engine_mutex_);
     if (engine_) {
-        engine_->stop();
+        engine_->stop_before(request_id);
     }
 }
 
@@ -203,7 +203,8 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
     Engine& engine = *engine_;
     const QString name = QString::fromStdString(engine.name());
     emit engine_state(tr("searching"));
-    const auto result = engine.search(*position, {.lines = lines, .seconds = settings_.seconds});
+    const auto result = engine.search(
+        *position, {.lines = lines, .seconds = settings_.seconds, .generation = request_id});
     emit engine_state(name);
     if (!result) {
         emit engine_failed(tr("The engine %1 %2").arg(name, describe(result.error())));
