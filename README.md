@@ -166,6 +166,7 @@ verified. One line per command:
 chess-coach-cli dump       --db openings.db                          # the canonical dump
 chess-coach-cli stats      --db openings.db                          # meta, counts per tier
 chess-coach-cli explore    --db openings.db --tier 3 --moves "e4 c5" # the moves at a tier
+chess-coach-cli explore    --db openings.db --tier 3 --engine --data-dir <dir>  # and Stockfish's
 chess-coach-cli name       --db openings.db --moves "e4 c5 Nf3 d6"   # the opening's name
 chess-coach-cli eval       --data-dir <dir> --moves "e4 e5"          # Stockfish's lines
 chess-coach-cli spar       --db openings.db --data-dir <dir> --tier 3 --colour white
