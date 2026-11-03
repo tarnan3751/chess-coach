@@ -13,7 +13,6 @@ namespace chesscoach::app {
 EvalBar::EvalBar(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("eval_bar"));
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
-    hide();
 }
 
 double EvalBar::white_share_of_cp(qint64 cp) {
@@ -31,7 +30,6 @@ void EvalBar::set_evaluation(std::optional<qint64> cp, std::optional<qint64> mat
     } else {
         white_share_.reset();
     }
-    setVisible(white_share_.has_value());
     update();
 }
 

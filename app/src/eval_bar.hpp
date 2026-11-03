@@ -1,5 +1,5 @@
 // The evaluation bar beside the board: white's share of a vertical bar from the stored
-// evaluation of the position (docs/database.md §6.2), hidden when there is none. A centipawn
+// evaluation of the position (docs/database.md §6.2), empty when there is none. A centipawn
 // score maps to white's winning chances, 1 / (1 + e^(-0.00368208 * cp)), the curve lichess
 // draws its bar with; a mate fills the bar for the mating side. White is at the bottom, or at
 // the top when the board is flipped. GUI thread only.

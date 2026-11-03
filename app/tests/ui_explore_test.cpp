@@ -280,7 +280,8 @@ class ExploreTest : public QObject {
         select_tier(window, 0);
         const auto& bar = child<EvalBar>(window, QStringLiteral("eval_bar"));
         // The start position: +0.19 for white.
-        QTRY_VERIFY(bar.isVisible());
+        QTRY_VERIFY(bar.white_share().has_value());
+        const int width = bar.width();
         const double share = bar.white_share().value_or(-1);
         QVERIFY(std::abs(share - EvalBar::white_share_of_cp(19)) < 1e-9);
         QVERIFY(share > 0.5);
@@ -296,7 +297,7 @@ class ExploreTest : public QObject {
                      QStringLiteral("Evaluation: -M1"));
         QCOMPARE(bar.white_share(), std::optional(0.0));
         QVERIFY(bar.isVisible());
-        // 1. Nf3 d5 has no evaluation: the bar hides.
+        // 1. Nf3 d5 has no evaluation: the bar empties, keeping its width beside the board.
         child<QAction>(window, QStringLiteral("new_game_action")).trigger();
         click(board, "g1");
         click(board, "f3");
@@ -304,7 +305,8 @@ class ExploreTest : public QObject {
         click(board, "d5");
         QTRY_COMPARE(child<QLabel>(window, QStringLiteral("explore_evaluation")).text(),
                      QStringLiteral("Evaluation: no evaluation"));
-        QVERIFY(!bar.isVisible());
+        QVERIFY(bar.isVisible());
+        QCOMPARE(bar.width(), width);
         QCOMPARE(bar.white_share(), std::nullopt);
     }
 

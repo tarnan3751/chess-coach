@@ -10,6 +10,7 @@
 #include <chesscoach/profile_store.hpp>
 
 #include "board_view.hpp"
+#include "eval_bar.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
 #include "settings.hpp"
@@ -226,7 +227,8 @@ class SparTest : public QObject {
         QTRY_COMPARE(status(window), QStringLiteral("In book · move 1"));
         QTRY_VERIFY(board.isEnabled());
         QVERIFY(!child<QComboBox>(window, QStringLiteral("tier_selector")).isEnabled());
-        QVERIFY(!child<QWidget>(window, QStringLiteral("eval_bar")).isVisible()); // Explore's
+        // Explore's evaluation: the bar is empty on Spar.
+        QVERIFY(!child<chesscoach::app::EvalBar>(window, QStringLiteral("eval_bar")).white_share());
         for (const auto step :
              {meet_a_dubious_move, leave_the_book, reach_the_move_limit, replay_the_session}) {
             step(window, board);
