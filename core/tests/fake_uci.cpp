@@ -7,12 +7,15 @@
 //                     the movetime or on stop
 //   late-readyok      normal, but waits delay_ms before every readyok after the first
 //   interleaved-info  on go, junk lines, info string, currmove and nps lines, multipv 2 before 1,
-//                     repeated depths with changed scores, a bound score, a multipv above the
-//                     request and a mate score, then bestmove with ponder
+//                     repeated depths with changed scores, a bound score, a line with two scores,
+//                     a multipv above the request and a mate score, then bestmove with ponder
 //   no-bestmove       infos, then never bestmove, even after stop
+//   chatty-after-stop normal until stop, then info lines every 10 ms and never bestmove
+//   multipv-max-2     normal, but its MultiPV option's max is 2
 //   die-mid-search    exits after the first info of a search
 //   garbage           non-UCI lines (an early readyok and bestmove among them) before uciok, and
-//                     no options advertised; normal afterwards
+//                     no options advertised; uciok and readyok padded with spaces and a carriage
+//                     return; normal afterwards
 // The scores and moves are fixed, not chess: the client is under test, not the engine.
 #include <array>
 #include <charconv>
@@ -52,19 +55,30 @@ int number(std::string_view text, int fallback) {
 }
 
 // The search a go starts: waits for its movetime or a stop, then answers bestmove unless the
-// script never does.
+// script never does; a chatty one keeps sending info after a stop, until the engine quits.
 class Search {
   public:
-    void start(int movetime_ms, bool answer, std::string bestmove) {
+    void start(int movetime_ms, bool answer, std::string bestmove, bool chatty) {
         join();
         {
             const std::scoped_lock lock(mutex_);
             stopped_ = false;
+            quitting_ = false;
         }
-        thread_ = std::thread([this, movetime_ms, answer, bestmove = std::move(bestmove)] {
+        thread_ = std::thread([this, movetime_ms, answer, chatty, bestmove = std::move(bestmove)] {
             std::unique_lock lock(mutex_);
-            stop_.wait_for(lock, std::chrono::milliseconds(movetime_ms),
-                           [this] { return stopped_; });
+            const bool stopped = stop_.wait_for(lock, std::chrono::milliseconds(movetime_ms),
+                                                [this] { return stopped_; });
+            if (chatty && stopped) {
+                while (!quitting_) {
+                    lock.unlock();
+                    say("info depth 9 multipv 1 score cp 1 nodes 1 pv e2e4");
+                    lock.lock();
+                    stop_.wait_for(lock, std::chrono::milliseconds(10),
+                                   [this] { return quitting_; });
+                }
+                return;
+            }
             lock.unlock();
             if (answer) {
                 say(bestmove);
@@ -80,7 +94,12 @@ class Search {
     }
     void join() {
         if (thread_.joinable()) {
-            stop();
+            {
+                const std::scoped_lock lock(mutex_);
+                stopped_ = true;
+                quitting_ = true;
+            }
+            stop_.notify_all();
             thread_.join();
         }
     }
@@ -96,6 +115,7 @@ class Search {
     std::mutex mutex_;
     std::condition_variable stop_;
     bool stopped_ = false;
+    bool quitting_ = false;
 };
 
 int value_after(std::string_view line, std::string_view word, int fallback) {
@@ -129,6 +149,7 @@ void interleaved_infos() {
              "info depth 2 multipv 1 score cp 28 pv e2e4 c7c5",
              "info depth 2 multipv 1 score cp 25 pv e2e4 e7e5 g1f3",
              "info depth 3 multipv 1 score cp 999 lowerbound pv a2a3",
+             "info depth 4 multipv 1 score cp 50 score mate 3 pv a2a3",
              "info depth 3 multipv 3 score cp 0 pv h2h3",
              "info depth 3 multipv 2 score mate -2 pv d2d4 e7e5",
              "info depth x multipv 1 score cp 1 pv a2a4",
@@ -163,7 +184,7 @@ int run(const std::vector<std::string>& args) {
                          "id",
                          "option name",
                          "bestmove e2e4",
-                         "uciok is coming",
+                         "not uciok yet",
                      }) {
                     say(junk);
                 }
@@ -171,17 +192,19 @@ int run(const std::vector<std::string>& args) {
             say("id name FakeUCI 1.0");
             say("id author nobody");
             if (script != "garbage") {
-                say("option name MultiPV type spin default 1 min 1 max 500");
+                say(script == "multipv-max-2"
+                        ? "option name MultiPV type spin default 1 min 1 max 2"
+                        : "option name MultiPV type spin default 1 min 1 max 500");
                 say("option name UCI_LimitStrength type check default false");
                 say("option name UCI_Elo type spin default 1320 min 1320 max 3190");
             }
-            say("uciok");
+            say(script == "garbage" ? "uciok \r" : "uciok");
         } else if (line == "isready") {
             if (script == "late-readyok" && readyoks > 0) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
             }
             ++readyoks;
-            say("readyok");
+            say(script == "garbage" ? " readyok  \r" : "readyok");
         } else if (line.starts_with("setoption name MultiPV value ")) {
             multipv = value_after(line, "value ", 1);
         } else if (line.starts_with("go")) {
@@ -192,11 +215,12 @@ int run(const std::vector<std::string>& args) {
             }
             if (script == "interleaved-info") {
                 interleaved_infos();
-                search.start(movetime, true, "bestmove e2e4 ponder e7e5");
+                search.start(movetime, true, "bestmove e2e4 ponder e7e5", false);
             } else {
                 normal_infos(multipv);
-                search.start(movetime, script != "no-bestmove",
-                             "bestmove " + std::string(moves.front()));
+                search.start(movetime, script != "no-bestmove" && script != "chatty-after-stop",
+                             "bestmove " + std::string(moves.front()),
+                             script == "chatty-after-stop");
             }
         } else if (line == "stop") {
             search.stop();

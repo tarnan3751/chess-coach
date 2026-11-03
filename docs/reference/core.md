@@ -242,25 +242,32 @@ its own thread. `stop()` may come from any other thread.
 |---|---|---|
 | `start(binary, options)` | `uci`; then `setoption name Threads`, `setoption name Hash`; `isready` | every line up to `uciok`, then `readyok`, each within `reply_timeout` |
 | `new_game()` | `ucinewgame`, `isready` | `readyok`, within `reply_timeout` |
-| `search(position, request)` | `setoption name MultiPV` when the line count changed; `setoption name UCI_LimitStrength value true` or `false` when that changed, and `UCI_Elo` when limited; `isready`; `position fen <normalized FEN> 0 1`; `go movetime <ms>` | `readyok` within `reply_timeout`; then info lines up to `bestmove`, within the movetime plus `reply_timeout` |
-| `stop()` during a search | `stop`, written by the searching thread | `bestmove` within `reply_timeout` of the stop |
+| `search(position, request)` | `setoption name MultiPV` when the line count, clamped to the engine's maximum, changed; `setoption name UCI_LimitStrength value true` or `false` when that changed, and `UCI_Elo` when its value changed; `isready`; `position fen <normalized FEN> 0 1`; `go movetime <ms>` | `readyok` within `reply_timeout`; then info lines up to `bestmove`, within the movetime plus `reply_timeout` |
+| `stop()` during a search | `stop`, written by the searching thread | `bestmove` within `reply_timeout` of the stop, however many lines keep coming |
 | destruction | `quit` | the process's exit; then terminate, then kill, a second apart |
 
-- **The handshake** records the `id name`, and `UCI_Elo`'s `min` and `max` when the engine
-  advertises the option; every other line before `uciok` is ignored. A limited search clamps
-  its Elo to that range (Stockfish's floor is 1320) and reports the value applied; an engine
-  without `UCI_Elo` answers a limited request with `unsupported`.
-- **Info lines.** A line counts when it has a `depth` and an exact `score cp` or `score mate`
+- **The handshake** records the `id name`, `UCI_Elo`'s `min` and `max` and `MultiPV`'s `max`
+  when the engine advertises them; every other line before `uciok` is ignored. `uciok`,
+  `readyok` and `bestmove` are recognised by a line's first token, spaces and a carriage return
+  aside. A limited search clamps its Elo to that range (Stockfish's floor is 1320) and reports
+  the value applied; an engine without `UCI_Elo` answers a limited request with `unsupported`.
+  A request for more lines than the engine's `MultiPV` maximum (Stockfish's is 256) is clamped
+  to it, and the result has at most that many lines.
+- **A request** asks for at least one line and for more than 0 and at most
+  `maximum_search_seconds` (3600) seconds, finite; anything else is `invalid_request`, and
+  nothing is sent.
+- **Info lines.** A line counts when it has a `depth` and one exact `score cp` or `score mate`
   (and usually a `pv`); a missing `multipv` is 1. `info string`, `currmove` and `nps` lines,
-  lines with a `lowerbound` or `upperbound` score, unreadable numbers and multipvs above the
-  request are ignored. The result keeps the last counted line per multipv, ordered by multipv;
-  `best_move` is what `bestmove` names (empty for `(none)`), which need not be the first line's
-  first move when the engine's last word on it was a bound.
+  lines with a `lowerbound` or `upperbound` score or with two scores, unreadable numbers and
+  multipvs above the request are ignored. The result keeps the last counted line per multipv,
+  ordered by multipv; `best_move` is what `bestmove` names (empty for `(none)`), which need not
+  be the first line's first move when the engine's last word on it was a bound.
 - **One call at a time.** A mutex marks a call as running: a second `search` or `new_game` from
   another thread returns `busy` without touching the process; `stop()` sets a flag under the
   same mutex only while a search runs, so it reaches the running search or nothing. The
   searching thread polls stdout in 25 ms slices and checks the flag and the deadline between
-  slices, so all I/O stays on one thread and there is never a second `go` in flight.
+  slices, so all I/O stays on one thread and there is never a second `go` in flight. The search
+  has one deadline, which a stop shortens for every line after it.
 - **Failure.** A missed bound is `timeout`, a closed pipe or failed write is `died`; either kills
   the process, `is_alive()` turns false for good, and every later call returns `died`; the
   caller starts a new engine. `start` ignores SIGPIPE process-wide, once, on POSIX, because
@@ -271,9 +278,12 @@ drives: `fake-uci <script> [delay_ms] [log_path]`, logging every line it receive
 checks exactly what the client sent and in which order. Its scripts: `normal` (the protocol as
 Stockfish speaks it, a `go` answered after its movetime or on `stop`), `late-readyok` (every
 `readyok` after the first `delay_ms` late), `interleaved-info` (junk, `info string`, multipv 2
-before 1, repeated depths, a bound score, a multipv above the request and a mate score),
-`no-bestmove`, `die-mid-search` and `garbage` (non-UCI lines before `uciok`, no options). The
-tests set `reply_timeout` to fractions of a second, so the timeouts are tested in well under one.
+before 1, repeated depths, a bound score, a line with two scores, a multipv above the request
+and a mate score), `no-bestmove`, `chatty-after-stop` (info every 10 ms after a stop and never
+`bestmove`), `multipv-max-2` (a `MultiPV` maximum of 2), `die-mid-search` and `garbage` (non-UCI
+lines before `uciok`, no options, `uciok` and `readyok` padded with spaces and a carriage
+return). The tests set `reply_timeout` to fractions of a second, so the timeouts are tested in
+well under one.
 `core_engine_stockfish_test` (label `engine`) drives the real Stockfish, found through
 `CHESS_COACH_STOCKFISH` or the `PATH`, with one thread and a 16 MB hash, and skips with a message
 when there is none.

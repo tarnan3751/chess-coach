@@ -36,6 +36,7 @@ struct EngineState {
     reproc::process process;
     std::string name;
     std::optional<std::pair<int, int>> elo_range; // UCI_Elo's min and max, when advertised
+    std::optional<int> multipv_max;               // MultiPV's max, when advertised
     std::chrono::milliseconds reply_timeout{};
     std::string pending; // output read but not yet split into lines
     std::atomic<bool> alive{true};
@@ -44,8 +45,9 @@ struct EngineState {
     bool running = false;
     std::atomic<bool> stop_requested{false};
 
-    int multipv_sent = 1;    // UCI's default MultiPV
-    bool limit_sent = false; // UCI's default UCI_LimitStrength
+    int multipv_sent = 1;        // UCI's default MultiPV
+    bool limit_sent = false;     // UCI's default UCI_LimitStrength
+    std::optional<int> elo_sent; // the last UCI_Elo sent, which the engine keeps
 };
 
 // How long one poll of stdout waits before the deadline and the stop flag are checked again.
@@ -103,6 +105,7 @@ std::optional<SearchLine> parse_info(std::string_view line) {
     }
     SearchLine info;
     bool has_depth = false;
+    bool has_score = false;
     for (std::size_t i = 1; i < tokens.size(); ++i) {
         const auto token = tokens.at(i);
         const auto next = [&]() -> std::optional<std::string_view> {
@@ -121,9 +124,10 @@ std::optional<SearchLine> parse_info(std::string_view line) {
         } else if (token == "score") {
             const auto kind = next();
             const auto value = parse_next_int(next());
-            if (!kind || !value || (*kind != "cp" && *kind != "mate")) {
-                return std::nullopt;
+            if (has_score || !kind || !value || (*kind != "cp" && *kind != "mate")) {
+                return std::nullopt; // a second score makes the line ambiguous
             }
+            has_score = true;
             (*kind == "cp" ? info.score_cp : info.score_mate) = value;
         } else if (token == "lowerbound" || token == "upperbound") {
             return std::nullopt;
@@ -167,10 +171,10 @@ tl::expected<void, EngineError> send(EngineState& impl, std::string_view command
 }
 
 // The next line of the engine's output by the deadline. before_poll runs before every poll and may
-// move the deadline (a stop shortens it).
+// move the deadline, which the caller owns, so a stop's shorter bound holds for every later line.
 template <typename BeforePoll>
 tl::expected<std::string, EngineError>
-read_line(EngineState& impl, SteadyClock::time_point deadline, BeforePoll before_poll) {
+read_line(EngineState& impl, SteadyClock::time_point& deadline, BeforePoll before_poll) {
     std::array<std::uint8_t, 4096> buffer{};
     while (true) {
         if (const auto end = impl.pending.find('\n'); end != std::string::npos) {
@@ -215,7 +219,13 @@ tl::expected<std::string, EngineError> read_line(EngineState& impl,
         [](SteadyClock::time_point&) -> tl::expected<void, EngineError> { return {}; });
 }
 
-// Reads and drops lines up to the one that is exactly `reply`, within reply_timeout.
+// Whether the line's first token, spaces and a carriage return aside, is the word.
+bool starts_with_token(std::string_view line, std::string_view word) {
+    const auto tokens = split_tokens(line);
+    return !tokens.empty() && tokens.front() == word;
+}
+
+// Reads and drops lines up to one whose first token is `reply`, within reply_timeout.
 tl::expected<void, EngineError> await(EngineState& impl, std::string_view reply) {
     const auto deadline = SteadyClock::now() + impl.reply_timeout;
     while (true) {
@@ -223,7 +233,7 @@ tl::expected<void, EngineError> await(EngineState& impl, std::string_view reply)
         if (!line) {
             return tl::unexpected(line.error());
         }
-        if (*line == reply) {
+        if (starts_with_token(*line, reply)) {
             return {};
         }
     }
@@ -233,7 +243,25 @@ tl::expected<void, EngineError> ready(EngineState& impl) {
     return send(impl, "isready").and_then([&] { return await(impl, "readyok"); });
 }
 
-// The handshake's lines up to uciok: the id name, and UCI_Elo's range when the engine offers it.
+// The min and max of an option line's spin, when it gives both.
+std::optional<std::pair<int, int>> spin_range(const std::vector<std::string_view>& tokens) {
+    std::optional<int> low;
+    std::optional<int> high;
+    for (std::size_t i = 3; i + 1 < tokens.size(); ++i) {
+        if (tokens.at(i) == "min") {
+            low = parse_int(tokens.at(i + 1));
+        } else if (tokens.at(i) == "max") {
+            high = parse_int(tokens.at(i + 1));
+        }
+    }
+    if (!low || !high || *low > *high) {
+        return std::nullopt;
+    }
+    return std::pair{*low, *high};
+}
+
+// The handshake's lines up to uciok: the id name, and UCI_Elo's range and MultiPV's maximum when
+// the engine offers them.
 tl::expected<void, EngineError> handshake(EngineState& impl) {
     if (const auto sent = send(impl, "uci"); !sent) {
         return sent;
@@ -244,26 +272,20 @@ tl::expected<void, EngineError> handshake(EngineState& impl) {
         if (!line) {
             return tl::unexpected(line.error());
         }
-        if (*line == "uciok") {
+        if (starts_with_token(*line, "uciok")) {
             return {};
         }
         const auto tokens = split_tokens(*line);
         if (tokens.size() > 2 && tokens.at(0) == "id" && tokens.at(1) == "name") {
             impl.name = std::string_view(*line).substr(line->find("name") + 5);
         }
-        if (tokens.size() > 2 && tokens.at(0) == "option" && tokens.at(1) == "name" &&
-            tokens.at(2) == "UCI_Elo") {
-            std::optional<int> low;
-            std::optional<int> high;
-            for (std::size_t i = 3; i + 1 < tokens.size(); ++i) {
-                if (tokens.at(i) == "min") {
-                    low = parse_int(tokens.at(i + 1));
-                } else if (tokens.at(i) == "max") {
-                    high = parse_int(tokens.at(i + 1));
+        if (tokens.size() > 2 && tokens.at(0) == "option" && tokens.at(1) == "name") {
+            if (tokens.at(2) == "UCI_Elo") {
+                impl.elo_range = spin_range(tokens);
+            } else if (tokens.at(2) == "MultiPV") {
+                if (const auto range = spin_range(tokens); range && range->second >= 1) {
+                    impl.multipv_max = range->second;
                 }
-            }
-            if (low && high && *low <= *high) {
-                impl.elo_range = std::pair{*low, *high};
             }
         }
     }
@@ -378,7 +400,8 @@ tl::expected<void, EngineError> Engine::new_game() {
 
 tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
                                                        const SearchRequest& request) {
-    if (request.lines < 1 || !(request.seconds > 0.0)) {
+    if (request.lines < 1 || !(request.seconds > 0.0) ||
+        !(request.seconds <= maximum_search_seconds)) {
         return tl::unexpected(EngineError::invalid_request);
     }
     const RunningCall call(*impl_);
@@ -391,9 +414,11 @@ tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
     }
     SearchResult result;
     result.engine_name = impl.name;
+    const int line_count =
+        impl.multipv_max ? std::min(request.lines, *impl.multipv_max) : request.lines;
     std::vector<std::string> commands;
-    if (request.lines != impl.multipv_sent) {
-        commands.push_back("setoption name MultiPV value " + std::to_string(request.lines));
+    if (line_count != impl.multipv_sent) {
+        commands.push_back("setoption name MultiPV value " + std::to_string(line_count));
     }
     if (request.limit_elo) {
         if (!impl.elo_range) {
@@ -405,7 +430,9 @@ tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
         if (!impl.limit_sent) {
             commands.emplace_back("setoption name UCI_LimitStrength value true");
         }
-        commands.push_back("setoption name UCI_Elo value " + std::to_string(*result.elo));
+        if (impl.elo_sent != result.elo) {
+            commands.push_back("setoption name UCI_Elo value " + std::to_string(*result.elo));
+        }
     } else if (impl.limit_sent) {
         commands.emplace_back("setoption name UCI_LimitStrength value false");
     }
@@ -414,8 +441,11 @@ tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
             return tl::unexpected(sent.error());
         }
     }
-    impl.multipv_sent = request.lines;
+    impl.multipv_sent = line_count;
     impl.limit_sent = result.limited;
+    if (result.elo) {
+        impl.elo_sent = result.elo;
+    }
 
     const auto movetime = std::max<std::int64_t>(1, std::llround(request.seconds * 1000.0));
     const auto searched =
@@ -427,8 +457,9 @@ tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
     }
 
     std::map<int, SearchLine> lines;
-    auto const deadline =
-        SteadyClock::now() + std::chrono::milliseconds(movetime) + impl.reply_timeout;
+    // One deadline for the whole search: a stop shortens it, and the shorter bound holds for
+    // every line after the stop.
+    auto deadline = SteadyClock::now() + std::chrono::milliseconds(movetime) + impl.reply_timeout;
     const auto stop_if_asked =
         [&](SteadyClock::time_point& until) -> tl::expected<void, EngineError> {
         if (result.stopped || !impl.stop_requested) {
@@ -450,7 +481,7 @@ tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
             }
             break;
         }
-        if (auto info = parse_info(*line); info && info->multipv <= request.lines) {
+        if (auto info = parse_info(*line); info && info->multipv <= line_count) {
             lines.insert_or_assign(info->multipv, std::move(*info));
         }
     }

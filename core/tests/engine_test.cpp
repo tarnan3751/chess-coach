@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -285,6 +286,13 @@ TEST_CASE("An invalid request sends nothing", "[engine]") {
               EngineError::invalid_request);
         CHECK(engine.search(Position::start(), {.seconds = -1.0}).error() ==
               EngineError::invalid_request);
+        CHECK(engine.search(Position::start(), {.seconds = 3600.5}).error() ==
+              EngineError::invalid_request);
+        CHECK(engine.search(Position::start(), {.seconds = std::numeric_limits<double>::infinity()})
+                  .error() == EngineError::invalid_request);
+        CHECK(
+            engine.search(Position::start(), {.seconds = std::numeric_limits<double>::quiet_NaN()})
+                .error() == EngineError::invalid_request);
         CHECK(engine.is_alive());
     }
     CHECK(log.lines() == then(handshake(), {"quit"}));
@@ -304,4 +312,83 @@ TEST_CASE("An engine moves with its process", "[engine]") {
     const auto result = moved.search(Position::start(), {.seconds = 0.02});
     REQUIRE(result.has_value());
     CHECK(moved.is_alive());
+}
+
+TEST_CASE("After a stop, the shorter bound holds even while info keeps coming", "[engine]") {
+    const Log log("chatty-after-stop");
+    auto engine = start("chatty-after-stop", log, 0, 300ms);
+    auto running = std::async(std::launch::async, [&] {
+        return engine.search(Position::start(), {.lines = 1, .seconds = 10.0});
+    });
+    std::this_thread::sleep_for(200ms);
+    const auto stopped_at = std::chrono::steady_clock::now();
+    engine.stop();
+    const auto result = running.get();
+    const auto elapsed = std::chrono::steady_clock::now() - stopped_at;
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error() == EngineError::timeout);
+    // The reply bound after the stop, not the ten-second movetime.
+    CHECK(elapsed >= 250ms);
+    CHECK(elapsed < 1500ms);
+    CHECK_FALSE(engine.is_alive());
+}
+
+TEST_CASE("A request above the engine's MultiPV maximum is clamped to it", "[engine]") {
+    const Log log("multipv-max");
+    {
+        auto engine = start("multipv-max-2", log);
+        const auto three = engine.search(Position::start(), {.lines = 3, .seconds = 0.02});
+        REQUIRE(three.has_value());
+        CHECK(three->lines ==
+              std::vector{line(1, 3, 29, {"e2e4", "e7e5"}), line(2, 3, 28, {"d2d4", "e7e5"})});
+        // Two lines were sent, so asking for two sends nothing more; one sends 1.
+        const auto two = engine.search(Position::start(), {.lines = 2, .seconds = 0.02});
+        REQUIRE(two.has_value());
+        CHECK(two->lines.size() == 2);
+        const auto one = engine.search(Position::start(), {.lines = 1, .seconds = 0.02});
+        REQUIRE(one.has_value());
+        CHECK(one->lines.size() == 1);
+    }
+    CHECK(
+        log.lines() ==
+        then(handshake(), {"setoption name MultiPV value 2", "isready", std::string(start_fen_sent),
+                           "go movetime 20", "isready", std::string(start_fen_sent),
+                           "go movetime 20", "setoption name MultiPV value 1", "isready",
+                           std::string(start_fen_sent), "go movetime 20", "quit"}));
+}
+
+TEST_CASE("UCI_Elo is sent only when its value changes", "[engine]") {
+    const Log log("elo-once");
+    {
+        auto engine = start("normal", log);
+        for (int i = 0; i < 3; ++i) {
+            const auto limited =
+                engine.search(Position::start(), {.seconds = 0.02, .limit_elo = 1500});
+            REQUIRE(limited.has_value());
+            CHECK(limited->elo == 1500);
+        }
+        // Full strength, then 1500 again: the engine kept its UCI_Elo.
+        REQUIRE(engine.search(Position::start(), {.seconds = 0.02}).has_value());
+        REQUIRE(engine.search(Position::start(), {.seconds = 0.02, .limit_elo = 1500}).has_value());
+    }
+    CHECK(log.lines() == then(handshake(), {"setoption name UCI_LimitStrength value true",
+                                            "setoption name UCI_Elo value 1500",
+                                            "isready",
+                                            std::string(start_fen_sent),
+                                            "go movetime 20",
+                                            "isready",
+                                            std::string(start_fen_sent),
+                                            "go movetime 20",
+                                            "isready",
+                                            std::string(start_fen_sent),
+                                            "go movetime 20",
+                                            "setoption name UCI_LimitStrength value false",
+                                            "isready",
+                                            std::string(start_fen_sent),
+                                            "go movetime 20",
+                                            "setoption name UCI_LimitStrength value true",
+                                            "isready",
+                                            std::string(start_fen_sent),
+                                            "go movetime 20",
+                                            "quit"}));
 }

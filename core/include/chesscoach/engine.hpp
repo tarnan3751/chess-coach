@@ -29,7 +29,7 @@ enum class EngineError : std::uint8_t {
     died,            // the process exited or closed its output, or the engine was already unusable
     busy,            // a search or new_game is in progress on another thread; nothing was sent
     unsupported,     // limit_elo asked of an engine that advertises no UCI_Elo option
-    invalid_request, // lines below 1, or seconds not above 0; nothing was sent
+    invalid_request, // lines below 1, or seconds not in (0, maximum_search_seconds]; nothing sent
 };
 
 struct EngineOptions {
@@ -42,9 +42,14 @@ struct EngineOptions {
     std::chrono::milliseconds reply_timeout{5000};
 };
 
+// The longest search a request may ask for.
+inline constexpr double maximum_search_seconds = 3600.0;
+
 struct SearchRequest {
-    int lines = 1;        // MultiPV
-    double seconds = 1.0; // go movetime, rounded to milliseconds, at least 1
+    // MultiPV; above the maximum the engine advertises, the maximum.
+    int lines = 1;
+    // go movetime, rounded to milliseconds, at least 1; above 0 and at most maximum_search_seconds.
+    double seconds = 1.0;
     // UCI_LimitStrength with UCI_Elo, clamped to the engine's range.
     std::optional<int> limit_elo = std::nullopt;
 };
@@ -76,8 +81,8 @@ struct SearchResult {
 class Engine {
   public:
     // Starts the binary and performs the handshake: uci; every line up to uciok, recording the id
-    // name and the UCI_Elo option's min and max and ignoring anything else; setoption Threads and
-    // Hash; isready; readyok.
+    // name, the UCI_Elo option's min and max and the MultiPV option's max, and ignoring anything
+    // else; setoption Threads and Hash; isready; readyok.
     [[nodiscard]] static tl::expected<Engine, EngineError>
     start(const std::filesystem::path& binary, EngineOptions options = {});
 
@@ -95,10 +100,10 @@ class Engine {
     // ucinewgame, isready, readyok: between games.
     [[nodiscard]] tl::expected<void, EngineError> new_game();
 
-    // setoption MultiPV when the line count changed, UCI_LimitStrength when it changed and UCI_Elo
-    // when limited; isready, readyok; position fen <normalized FEN> 0 1; go movetime; the info
-    // lines collected until bestmove, which must come within the movetime plus reply_timeout, or
-    // within reply_timeout of a stop.
+    // setoption MultiPV when the line count (clamped to the engine's maximum) changed,
+    // UCI_LimitStrength when it changed and UCI_Elo when its value changed; isready, readyok;
+    // position fen <normalized FEN> 0 1; go movetime; the info lines collected until bestmove,
+    // which must come within the movetime plus reply_timeout, or within reply_timeout of a stop.
     [[nodiscard]] tl::expected<SearchResult, EngineError> search(const Position& position,
                                                                  const SearchRequest& request);
 
