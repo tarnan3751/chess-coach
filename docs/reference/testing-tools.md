@@ -20,7 +20,8 @@ configure preset uses Ninja and builds into `build/<preset>/`, which holds the v
 
 Each configure preset has a build preset and a test preset of the same name. The test presets
 print the output of a failing test and treat "no tests matched" as an error, which the gate and
-`tools/run_tests.sh` read as "no tests of this kind yet".
+`tools/run_tests.sh` catch: they say so in one line ("no tests match yet", "no benchmarks yet")
+and succeed, so a module or a kind with no tests yet passes.
 
 The presets set no toolchain: the root `CMakeLists.txt` picks it before `project()`, from
 `$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake` when `VCPKG_ROOT` is set, else from

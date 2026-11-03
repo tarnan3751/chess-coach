@@ -9,6 +9,8 @@
 # stockfish on the PATH) and skip without one, which the full gate turns into a failure
 # (docs/reference/testing-tools.md, **Tests**).
 # Writes build/<preset>/ in the tree it runs in, so an agent runs it only in its clone.
+# When no test matches the selection (a module, a kind or a pattern with no tests yet), it says so
+# in one line and succeeds, as tools/gates.sh does.
 # When the tests fail, ctest's logs of this run (LastTest.log, LastTestsFailed.log, with every
 # failing test's output and a RapidCheck property's seed) are kept in
 # build/gate-failures/<UTC timestamp>-<pid>/<preset>/, whose path it prints: report it, and the
@@ -47,8 +49,19 @@ if [ -n "$module" ]; then
 fi
 
 cmake --preset "$preset" >/dev/null && cmake --build --preset "$preset" || exit $?
-ctest --preset "$preset" "${selection[@]}" --output-on-failure
-status=$?
+output="$(mktemp "${TMPDIR:-/tmp}/chess-coach-run-tests.XXXXXX")"
+trap 'rm -f "$output"' EXIT
+ctest --preset "$preset" "${selection[@]}" --output-on-failure 2>&1 | tee "$output"
+status=${PIPESTATUS[0]}
+# The test presets make ctest fail when nothing matches; that is not a failure here.
+if [ $status -ne 0 ] && grep -q 'No tests were found' "$output"; then
+  if [ "$preset" = release ]; then
+    echo "run_tests: no benchmarks yet"
+  else
+    echo "run_tests: no tests match yet"
+  fi
+  exit 0
+fi
 if [ $status -ne 0 ]; then
   kept="$(keep_failures "$preset")"
   if [ -n "$kept" ]; then
