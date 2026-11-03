@@ -14,7 +14,10 @@ vcpkg, SQLite. `chess-coach` is a working name.
 Pre-alpha and private. The four modules (`core`, `pipeline`, `cli`, `app`) configure, build and
 test on macOS and Linux; the ingestion pipeline builds the tiered database from the Lichess
 dumps, the CLI queries it, and the app's Explore screen shows it at any tier on a playable
-board, with Stockfish's lines beside it. The next milestones are the other three screens.
+board, with Stockfish's lines beside it. Its Spar screen plays sessions against replies drawn
+from the tier and, off book, from Stockfish at limited strength, interrupting a Dubious or an
+off-book move with the better choices, and keeps each session to replay. The next milestones are
+Repertoire and Drill.
 
 Explore at the start position and the 1600–1799 tier, in the light and the dark theme, as the UI
 harness (`tools/ui_tests.sh`) renders it on the tests' small fixture database and a stand-in
@@ -23,6 +26,11 @@ engine: the moves with their badges, results and scores, and the engine's lines 
 ![Explore in the light theme: the board, the table of moves with badges and result bars, and three engine lines](docs/images/explore-light.png)
 
 ![The same in the dark theme](docs/images/explore-dark.png)
+
+Spar interrupting 1. a3, a Dubious move at the 1800–1999 tier of the same fixture, with the
+better choices; the move stands and the coach has replied:
+
+![Spar: the board after 1. a3 e5 and the interruption panel with the reason, the badges and loss of a3, and e4 and d4 as better choices](docs/images/spar-interruption.png)
 
 ## How it will work
 
