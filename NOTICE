@@ -3,33 +3,33 @@ Copyright (c) 2026 Tahseen Arnan
 Licensed under the MIT License; see LICENSE.
 
 This product includes, links or runs the third-party components below, under the licences
-named. The full text of each licence that ships with the application will be under legal/
-(from the first release); until then each is at the URL given.
+named. The full text of each licence is in the file under legal/ that its entry names; the
+macOS application carries this file and legal/ in chess-coach.app/Contents/Resources/.
 
 Libraries built from source through vcpkg and linked into the executables
 --------------------------------------------------------------------------
-chess-library (Disservin), MIT License
+chess-library (Disservin), MIT License: legal/chess-library.txt
     https://github.com/Disservin/chess-library
-CLI11, BSD 3-Clause License
+CLI11, BSD 3-Clause License: legal/cli11.txt
     https://github.com/CLIUtils/CLI11
-{fmt}, MIT License
+{fmt}, MIT License: legal/fmt.txt
     https://github.com/fmtlib/fmt
-JSON for Modern C++ (nlohmann/json), MIT License
+JSON for Modern C++ (nlohmann/json), MIT License: legal/nlohmann-json.txt
     https://github.com/nlohmann/json
-reproc and reproc++, MIT License
+reproc and reproc++, MIT License: legal/reproc.txt
     https://github.com/DaanDeMeyer/reproc
-spdlog, MIT License
+spdlog, MIT License: legal/spdlog.txt
     https://github.com/gabime/spdlog
-SQLite, public domain (the SQLite blessing)
+SQLite, public domain (the SQLite blessing): legal/sqlite3.txt
     https://sqlite.org/copyright.html
-SQLiteC++ (SQLiteCpp), MIT License
+SQLiteC++ (SQLiteCpp), MIT License: legal/sqlitecpp.txt
     https://github.com/SRombauts/SQLiteCpp
-tl::expected, CC0 1.0 Universal
+tl::expected, CC0 1.0 Universal: legal/tl-expected.txt
     https://github.com/TartanLlama/expected
-toml++ (tomlplusplus), MIT License
+toml++ (tomlplusplus), MIT License: legal/tomlplusplus.txt
     https://github.com/marzer/tomlplusplus
 Zstandard (zstd), BSD 3-Clause License (zstd is dual-licensed BSD or GPLv2; it is used under
-the BSD licence)
+the BSD licence): legal/zstd.txt, which holds both texts as the port ships them
     https://github.com/facebook/zstd
 
 Libraries used by the tests only, never shipped
@@ -42,29 +42,81 @@ RapidCheck, BSD 2-Clause License
 Qt
 --
 Qt 6 (Qt Widgets, Qt Svg, Qt Svg Widgets; Qt Test for the tests only), GNU Lesser General
-Public License version 3. Qt is linked dynamically, never statically, and is taken unmodified
-from the system's package manager (Homebrew or apt); its licence text ships with the
-application, and its source is at https://code.qt.io and https://download.qt.io.
+Public License version 3: legal/qt-LGPL-3.0.txt, with the GNU General Public License version 3
+it supplements in legal/qt-GPL-3.0.txt (both the canonical texts from gnu.org, as the Homebrew
+keg ships no licence file). Qt is linked dynamically, never statically, and is taken unmodified
+from the system's package manager (Homebrew or apt); the macOS application carries its
+frameworks in chess-coach.app/Contents/Frameworks/, as macdeployqt copies them, changed only in
+their load paths, and its source is at https://code.qt.io and https://download.qt.io.
     https://www.qt.io/licensing/open-source-lgpl-obligations
+
+Libraries Qt depends on, shipped with it in the macOS application
+-----------------------------------------------------------------
+Homebrew's Qt links these, and macdeployqt copies them into chess-coach.app/Contents/Frameworks/
+beside it, changed only in their load paths. Each text is the one the installed Homebrew keg
+carries, or, where the keg carries none, the one named. Where a library is offered under a
+choice of licences, the first named is the one it is used under.
+Brotli, MIT License: legal/brotli.txt
+    https://github.com/google/brotli
+D-Bus (libdbus), Academic Free License version 2.1, or GNU General Public License version 2 or
+later: legal/dbus.txt, the AFL text from D-Bus's source at the installed version
+    https://www.freedesktop.org/wiki/Software/dbus/
+double-conversion, BSD 3-Clause License: legal/double-conversion.txt
+    https://github.com/google/double-conversion
+FreeType, the FreeType License, or GNU General Public License version 2: legal/freetype.txt,
+the FreeType License text from FreeType's source at the installed version. Portions of this
+software are copyright (c) 1996-2026 The FreeType Project (https://freetype.org). All rights
+reserved.
+    https://freetype.org
+GLib (libglib, libgthread), GNU Lesser General Public License version 2.1 or later:
+legal/glib.txt, the canonical LGPL-2.1 text from gnu.org
+    https://gitlab.gnome.org/GNOME/glib
+GNU gettext's libintl, GNU Lesser General Public License version 2.1 or later: legal/gettext.txt,
+the canonical LGPL-2.1 text from gnu.org
+    https://www.gnu.org/software/gettext/
+Graphite2, GNU Lesser General Public License version 2.1 or later, or Mozilla Public License 2.0,
+or GNU General Public License version 2 or later: legal/graphite2.txt (its notice, then the
+LGPL-2.1 text)
+    https://github.com/silnrsi/graphite
+HarfBuzz, the "Old MIT" licence: legal/harfbuzz.txt
+    https://github.com/harfbuzz/harfbuzz
+ICU (International Components for Unicode), Unicode License V3: legal/icu4c.txt
+    https://icu.unicode.org
+libb2 (BLAKE2), CC0 1.0 Universal: legal/libb2.txt
+    https://github.com/BLAKE2/libb2
+libpng, PNG Reference Library License version 2: legal/libpng.txt
+    http://www.libpng.org/pub/png/libpng.html
+MD4C, MIT License: legal/md4c.txt
+    https://github.com/mity/md4c
+OpenSSL (libssl, libcrypto; QtCore links them, chess-coach makes no network connection), Apache
+License 2.0: legal/openssl.txt
+    https://www.openssl.org
+PCRE2, BSD 3-Clause License with the PCRE2 exception for binaries: legal/pcre2.txt
+    https://github.com/PCRE2Project/pcre2
+Zstandard (libzstd), BSD 3-Clause License: legal/zstd.txt, as above
+    https://github.com/facebook/zstd
 
 Stockfish
 ---------
-Stockfish, GNU General Public License version 3. Stockfish is a separate program: chess-coach
-starts it as a child process and talks to it over the UCI protocol, and never links any of its
-code. When a release bundles a Stockfish binary, its licence text and a link to the exact
-source it was built from ship beside it.
+Stockfish, GNU General Public License version 3: legal/stockfish.txt. Stockfish is a separate
+program: chess-coach starts it as a child process and talks to it over the UCI protocol, and
+never links any of its code. The macOS application bundles a Stockfish binary in
+chess-coach.app/Contents/Resources/engine/, with the licence text beside it (COPYING) and the
+exact version, a link to its source and how the binary was obtained (SOURCE.txt).
     https://github.com/official-stockfish/Stockfish
 
 Data
 ----
 Lichess monthly game dumps (standard rated games) and the Lichess evaluation database,
 Creative Commons CC0 ("Database exports are released under the Creative Commons CC0
-license"). The opening database is built from them by chess-coach's own pipeline.
+license"): legal/lichess-data.txt. The opening database is built from them by chess-coach's own
+pipeline.
     https://database.lichess.org/
-Opening names, lichess-org/chess-openings (a.tsv through e.tsv), CC0 1.0 Universal
+Opening names, lichess-org/chess-openings (a.tsv through e.tsv), CC0 1.0 Universal:
+legal/lichess-data.txt
     https://github.com/lichess-org/chess-openings
 The cburnett chess piece set (data/pieces/cburnett/), by Colin M.L. Burnett, from Wikimedia
 Commons, used under the Creative Commons Attribution-ShareAlike 3.0 Unported licence (CC BY-SA
-3.0), one of the licences the author publishes it under
+3.0), one of the licences the author publishes it under: legal/cburnett-pieces.txt
     https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces/Standard_transparent
     https://creativecommons.org/licenses/by-sa/3.0/

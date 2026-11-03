@@ -211,7 +211,10 @@ apt (6.4.2 on Ubuntu 24.04), `find_package(Qt6 6.4 ...)` in `app/` only; Stockfi
 Homebrew, a separate process, never linked; clang-format from its own Homebrew formula
 (`clang-format`, 23 at setup) or apt; clang-tidy and `run-clang-tidy` from Homebrew's `llvm`
 (23 at setup; not linked into the `PATH`, so the gate looks in the keg) or apt. `NOTICE` names
-every component and its licence.
+every component and its licence, and `legal/` holds each shipped component's licence text: the
+vcpkg ports' from their installed `share/<port>/copyright` at the pinned versions, the Homebrew
+libraries' from their kegs, and the canonical text where the source carries none, as `NOTICE`
+says entry by entry.
 
 ## Lanes and landing
 
