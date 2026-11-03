@@ -6,8 +6,8 @@ client and the profile store with the engine cache. What these must do is fixed 
 `docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11,
 `profiles.db` §12, the score's inputs §13); this file says how `core` does it. The rules it obeys
 are in `CLAUDE.md`, **`core/` is exact, deterministic and keyed by position**. The sparring
-sampler and the spar session are described below; the scheduler is described here when it
-lands.
+sampler, the spar session and the scheduler are described below; repertoire coverage is described
+here when it lands.
 
 | Header (`core/include/chesscoach/`) | Holds |
 |---|---|
@@ -22,6 +22,7 @@ lands.
 | `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_loss`, the score's numbers |
 | `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
 | `spar.hpp` | `SparSession`, `SparConfig`, `Interruption`, `Summary`, `ReplyProvider`, `SparError` |
+| `scheduler.hpp` | `CardState`, `Grade`, `Review`, `new_card`, `review`, `replay`, `is_due`, SM-2's numbers |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
 | `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
@@ -378,6 +379,35 @@ which must equal the record (`replay_mismatch` otherwise, and for a record that 
 end; `replay_illegal_move` for a recorded move that does not play). The summary it returns,
 interruptions and phases included, equals the original's.
 
+## The scheduler
+
+`scheduler.hpp` is SM-2 (`PLAN.md` §5.2, §11) as `constexpr` functions over a card's integer
+state, so a history replays to exactly the same state on every platform; FSRS may later replace
+the rules behind the same functions. No clock: every time is given, in Unix seconds UTC.
+
+- `CardState`: `repetitions` (passes since the last failure), `interval_days` (0 before the first
+  review), `ease_milli` (the E-Factor in thousandths) and `due_at`.
+- `Grade` is SM-2's quality, stored as its value: `again` 1 (a failure), `hard` 3, `good` 4,
+  `easy` 5.
+- `new_card(created_at)` starts at ease 2500 and is due at once, at `created_at`, so never in the
+  past.
+- `review(card, grade, reviewed_at)`:
+  - the interval: on `again`, 1 day and no repetitions; on a pass, 1 day after the first pass, 6
+    after the second, then `(interval_days * ease_milli + 500) / 1000` (round(interval × ease)
+    half up, in 64-bit integers) with the ease from before this review (SuperMemo's order), at
+    most `maximum_interval_days`, and one repetition more;
+  - the ease, for every grade q: `ease_milli += 100 - (5 - q) * (80 + (5 - q) * 20)`, so `easy`
+    +100, `good` 0, `hard` −140 and `again` −540, at least `minimum_ease_milli`;
+  - `due_at = reviewed_at + interval_days * 86400`, so never before the review.
+- `replay(created_at, history)` is `new_card` followed by `review` of each entry; `is_due(card,
+  now)` is `now >= due_at`.
+
+The numbers are tier A: the starting ease 2500, the floor 1300, the 100, 80 and 20 of the ease
+rule, the first intervals 1 and 6, the rounding, 86400 seconds a day, and the cap of 36500 days
+(100 years), which keeps the arithmetic bounded however many `easy` reviews a card gets. Good,
+good, good, again, good gives intervals of 1, 6, 15, 1 and 1 days with eases 2500, 2500, 2500,
+1960 and 1960.
+
 ## Tests
 
 `core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
@@ -404,6 +434,10 @@ off-book interruption, the sampler's book replies, the provider off book, the en
 and its replay; a session off book from the start, a book position without candidates, a mate's
 result, the provider's failures, the replay's refusals, the calls out of turn) and
 `spar_property_test` (sessions from generated seeds, colours, end moves and user moves replay to
-the same summary). The property tests' random games (`random_games.hpp`) start from the start
-position or from positions that soon castle, promote or meet en passant, and pick moves by index
-into the sorted legal moves.
+the same summary); `scheduler_test` (a hand-computed sequence, also checked at compile time,
+`hard` and `easy`, the ease floor, the interval cap, when a card is due) and
+`scheduler_property_test` (over random histories: intervals grow on passes and reset on a
+failure, due never before creation or review, the bounds, replay equals the fold). The
+property tests' random games (`random_games.hpp`) start from the start position or from
+positions that soon castle, promote or meet en passant, and pick moves by index into the sorted
+legal moves.

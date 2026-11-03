@@ -15,6 +15,7 @@ add_library(core STATIC
   include/chesscoach/profile_store.hpp
   include/chesscoach/random.hpp
   include/chesscoach/sampler.hpp
+  include/chesscoach/scheduler.hpp
   include/chesscoach/score.hpp
   include/chesscoach/spar.hpp
   include/chesscoach/tier.hpp
@@ -106,6 +107,12 @@ if(BUILD_TESTING)
   chesscoach_add_test(core_sampler_property_test MODULE core KIND property
                       SOURCES tests/sampler_property_test.cpp
                       LIBS chesscoach::core rapidcheck)
+  chesscoach_add_test(core_scheduler_test MODULE core KIND unit
+                      SOURCES tests/scheduler_test.cpp
+                      LIBS chesscoach::core)
+  chesscoach_add_test(core_scheduler_property_test MODULE core KIND property
+                      SOURCES tests/scheduler_property_test.cpp
+                      LIBS chesscoach::core rapidcheck)
   chesscoach_add_test(core_score_test MODULE core KIND unit
                       SOURCES tests/score_test.cpp
                       LIBS chesscoach::core)
@@ -144,6 +151,8 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_random_test)
   chesscoach_assert_no_qt(core_sampler_test)
   chesscoach_assert_no_qt(core_sampler_property_test)
+  chesscoach_assert_no_qt(core_scheduler_test)
+  chesscoach_assert_no_qt(core_scheduler_property_test)
   chesscoach_assert_no_qt(core_score_test)
   chesscoach_assert_no_qt(core_score_property_test)
   chesscoach_assert_no_qt(core_spar_test)
