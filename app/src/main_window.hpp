@@ -8,7 +8,8 @@
 // and drills their cards through the profile worker, each worker on its own thread, and shows
 // their answers. It never touches the opening store, the profile store or an engine itself, but
 // for replacing profiles.db on import once every worker has closed its connection. GUI thread
-// only. It writes the settings file itself (settings.hpp); the workers write profiles.db.
+// only. It writes settings.ini itself (settings.hpp) and sends Qt's own settings to the data
+// directory; the workers write profiles.db; nothing is written outside the data directory.
 #pragma once
 
 #include <chesscoach/position.hpp>

@@ -10,11 +10,12 @@ only by the database worker on its own thread (**Database worker**); the engine 
 cache belong to the engine worker on another (**Engine worker**); a sparring session, with its
 own connection to `--db` and its own engine, belongs to the spar worker on a third (**Spar**);
 the repertoires and cards, with another connection to `--db` for coverage and the score, belong
-to the profile worker on a fourth (**Profile worker**). The app writes two files in
-`--data-dir`: `settings.ini`, only when a setting changes (**Settings**), and `profiles.db`, only
-when the engine worker stores a search (**Engine worker**), the spar worker saves a session
+to the profile worker on a fourth (**Profile worker**). The app writes in `--data-dir` and
+nowhere else: `settings.ini`, only when a setting changes (**Settings**); `profiles.db`, only when
+the engine worker stores a search (**Engine worker**), the spar worker saves a session
 (**Spar**), the profile worker changes a repertoire or a card (**Profile worker**), or a profile
-is imported (**Export and import**), which also leaves `profiles.db.previous`.
+is imported (**Export and import**), which also leaves `profiles.db.previous`. Files are chosen
+with a chooser of the app's own, which writes nothing (**Files**).
 
 ## Code
 
@@ -38,6 +39,7 @@ is imported (**Export and import**), which also leaves `profiles.db.previous`.
 | `drill_screen.{hpp,cpp}` | `DrillScreen`, the Drill screen (**Drill**) |
 | `default_profile.{hpp,cpp}` | The profile the app works on: Default, else the first |
 | `tables.{hpp,cpp}` | The read-only tables of Spar and Repertoire |
+| `file_chooser.{hpp,cpp}` | `FileChooser`, the app's own file chooser, and the functions that run it (**Files**) |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
 | `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
 | `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings (**Settings**) |
@@ -76,7 +78,8 @@ which the executable and the UI tests link. The piece set and the two stylesheet
 - **The status bar**: `database_status`, "No database" or the `--db` file's name (its tooltip the
   full path); `data_version_status`, "Data version <v>" once the database is open; and
   `engine_status`, "Engine: <state>" as the engine worker reports it ("not started" until then,
-  "not found", the engine's name when idle, "searching").
+  "not found", "failed to start" for a binary that does not answer the handshake, the engine's
+  name when idle, "searching").
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
 every position along them. On Explore, a move on the board (`move_played`) appends to it (on the
@@ -135,15 +138,15 @@ the window, deleted on its thread when the thread finishes. It owns one core `En
 
 **An evaluation.** First the cache: `cache_lookup(key, lines, 12)`, a hit needing every line at
 depth 12 or more, as the CLI's `eval`; a hit is answered with `cached` set and the engine is not
-touched. On a miss the worker finds the engine: the settings' binary, else
-`CHESS_COACH_STOCKFISH`, else `stockfish` on the `PATH`, else `stockfish` beside the app (the
-bundle's, from Phase 6), and reports "not found" when there is none (`find_engine_binary`, which
-the spar worker shares). The engine starts at the
-first search (Threads and Hash from the settings) and again after it dies or times out. The worker
-reports "searching", runs `search` for the settings' line count and seconds, reports the engine's
-name, and stores a full result with `cache_store`, answering with what the cache then holds.
-`profiles.db` is opened only when it exists, for a lookup, or when a search is to be stored, so
-it is created by the first stored search and a run that searches nothing writes nothing.
+touched. On a miss the worker finds the engine: the settings' binary, else `CHESS_COACH_STOCKFISH`,
+else `stockfish` on the `PATH`, else `stockfish` beside the app (the bundle's, from Phase 6), and
+reports "not found" when there is none (`find_engine_binary`, which the spar worker shares), and
+"failed to start" when the binary does not answer the UCI handshake. The engine starts at the first
+search (Threads and Hash from the settings) and again after it dies or times out. The worker reports
+"searching", runs `search` for the settings' line count and seconds, reports the engine's name, and
+stores a full result with `cache_store`, answering with what the cache then holds. `profiles.db` is
+opened only when it exists, for a lookup, or when a search is to be stored, so it is created by the
+first stored search and a run that searches nothing writes nothing.
 
 **One search at a time, cancelled by moving on.** The worker's slots run one at a time on its
 thread, and `Engine::search` blocks there, so two searches are never in flight. Each request the
@@ -159,9 +162,11 @@ never blocks: a 30 s search is stopped by the next move. Closing the window canc
 before it quits and joins the thread, and the engine quits with the worker.
 
 **Scores.** `EngineLine` carries the multipv, the depth, the score and the principal variation in
-SAN (at most ten moves, then "…"). UCI and the engine cache give scores from the side to move;
-the worker turns them to white's side, negating them when black is to move, so that they read
-like the stored evaluations of `openings.db`. Explore shows them that way.
+SAN (at most ten moves, then "…"). UCI and the engine cache give scores from the side to move; the
+worker turns them to white's side, negating them when black is to move, so that they read like the
+stored evaluations of `openings.db`. Explore shows them that way. UCI's mate 0, the side to move
+checkmated, has no sign to turn: the line carries the mated side instead (`mated`), shown as "M0"
+when black is mated and "-M0" when white is, and the evaluation bar fills for the winner.
 
 ## Explore
 
@@ -190,7 +195,8 @@ column settings (Result stretches; the others fit their contents).
 `EvalBar` is the vertical bar beside the board: white's share of it is
 `1 / (1 + e^(-0.00368208 * cp))` for a centipawn score, the curve lichess draws its bar with, and
 all or nothing for a mate. It shows the position's stored evaluation when it has one, else the
-engine's first line, and is hidden when there is neither; it follows the board's flip.
+engine's first line, and is empty when there is neither, keeping its width so that the board
+beside it does not move; it follows the board's flip. It is empty on the other screens.
 
 ## Spar
 
@@ -215,30 +221,35 @@ number, whose turn it is, and whether the session ended. The coach's reply comes
 book and from the engine off book: the engine starts at the first off-book reply, with Threads and
 Hash from the engine settings and the binary found as the engine worker finds it, and searches
 through `EngineReplyProvider` at the session's tier (`ProviderConfig{seconds, elo_offset = 100}`),
-again after it dies. A reply that fails, or a read of a corrupt opening database, which throws,
-reports `session_failed`, and the session waits for End session. When the session reaches its move
-limit, or is ended, the worker saves it with `ProfileStore::save_spar_session` under the Default
-profile (`profiles.db` is created then if it is absent), with its start time and, when it ended
-rather than being stopped, its end time; it answers `session_ended` with the summary (the seed, the
-moves in SAN, the interruptions, the phase reached, the result and the saved id) and then the list.
-A replay runs `replay_spar_session` on the saved row, with its seed, moves, end move and
-`min_games`, and is refused, with a message, for a session played against another `data_version` of
-the opening database, whose book replies may differ. Closing the window while a session runs saves
-it as stopped: the window calls `stop_coach()` from the GUI thread, which stops the coach's search
-in progress and keeps another from starting (the one call another thread makes, under the worker's
-mutex), then waits on `end_session` (a blocking queued call) before it joins the thread, so the wait
-is a save, not a search.
+again after it dies; each session after the first sends the running engine `ucinewgame`
+(`Engine::new_game`), as UCI asks between games. A reply that fails, or a read of a corrupt opening
+database, which throws, reports `session_failed`, and the session waits for End session. When the
+session reaches its move limit, or is ended, the worker saves it with
+`ProfileStore::save_spar_session` under the Default profile (`profiles.db` is created then if it is
+absent), with its start time and, when it ended rather than being stopped, its end time; it answers
+`session_ended` with the summary (the seed, the moves in SAN, the interruptions, the phase reached,
+the result and the saved id) and then the list. A replay runs `replay_spar_session` on the saved
+row, with its seed, moves, end move and `min_games`, and is refused, with a message, for a session
+played against another `data_version` of the opening database, whose book replies may differ; a
+session started from the same row then plays the record ply by ply, the user's moves through
+`play_user_move` and the coach's through `coach_reply`, so each interruption is placed at the ply
+where the session raised it. Closing the window while a session runs saves it as stopped: the window
+calls `stop_coach()` from the GUI thread, which stops the coach's search in progress and keeps
+another from starting (the one call another thread makes, under the worker's mutex), then waits on
+`end_session` (a blocking queued call) before it joins the thread, so the wait is a save, not a
+search.
 
 **The window.** While Spar is the current screen, the board is the session's: a move on it goes to
 `user_move`, and the coach's replies are played on it with their animation. Explore's line, query
-and evaluation wait as they were: switching to Spar cancels Explore's engine search and hides the
+and evaluation wait as they were: switching to Spar cancels Explore's engine search and empties the
 evaluation bar, which is Explore's position's, and switching back puts Explore's position, its table
 and its evaluation back. The tier selector is disabled while Spar is current and a session runs,
 which keeps the tier selected when it started; on Explore the selector is Explore's, and changing it
 there leaves the session's tier alone. The board takes a move only when a session runs, it is the
-user's turn, and no interruption is open; the window turns the board to the user's side at the
-start. The move list shows the session's moves, or a replay's up to its ply, and clicking a row does
-nothing on Spar.
+user's turn, and no interruption is open; the board faces the user: the colour of the session
+running, of the replay, or chosen for the next. Explore keeps its own side of the board, which *Flip
+board* sets there, and gets it back on return. The move list shows the session's moves, or a
+replay's up to its ply, and clicking a row does nothing on Spar.
 
 **The screen.** `SparScreen` holds:
 
@@ -299,11 +310,11 @@ shows and *New game*, *Back* and the move list's rows go back along. `Repertoire
 
 - the colour (`repertoire_white`, `repertoire_black`), whose repertoire is shown and edited; the
   board turns to its side;
-- *Import PGN…* (`repertoire_import`), a file dialog and then `import_pgn`; the message line
-  (`repertoire_message`) gives the counts: "Imported 1 games and 0 variations: 2 choices, 1
-  added, 0 already made, 1 conflicts, 0 unparsable.", a conflict being a later move in the file
-  for a position it has chosen, or a choice the repertoire already answers differently, which it
-  keeps;
+- *Import PGN…* (`repertoire_import`), the file chooser (**Files**) and then `import_pgn`; the
+  message line (`repertoire_message`) gives the counts: "Imported 1 games and 0 variations: 2
+  choices, 1 added, 0 already made, 1 conflicts, 0 unparsable.", a conflict being a later move in
+  the file for a position it has chosen, or a choice the repertoire already answers differently,
+  which it keeps;
 - the coverage (`repertoire_coverage`), "Coverage at 1800-1999 to 20 plies: 62.5%", at the tier
   selected and the depth in the settings, computed again after every change and at a change of
   tier;
@@ -345,15 +356,16 @@ drill the same way, and closing the window records a grade still open.
 ## Export and import
 
 *File > Export profile…* writes a copy of `profiles.db` through the profile worker
-(`ProfileStore::export_profiles`, `docs/database.md` §12.5). An export never replaces a file, so
-the save dialog does not offer to, and a name that is taken gets a message box (`profile_error`).
-*File > Import profile…* replaces `profiles.db` with the chosen file. Every connection to it
-closes first: the engine worker's search stops, so that it answers at once, and the engine, spar
-and profile workers close their stores (`close_stores`, each a blocking queued call); then the
-window runs `ProfileStore::import_profiles` itself, a file operation, which migrates the copy and
-keeps the replaced file as `profiles.db.previous`. Each worker opens the file again at its next
-use, and the current screen reads it again. An error goes to the message box. A running spar
-session is kept and saved into the imported file when it ends.
+(`ProfileStore::export_profiles`, `docs/database.md` §12.5), to a file the chooser's save mode gives
+(**Files**). An export never replaces a file: the chooser refuses a name that is taken, and the
+worker refuses one that appeared since with a message box (`profile_error`). *File > Import
+profile…* replaces `profiles.db` with the chosen file. Every connection to it closes first: the
+engine worker's search stops, so that it answers at once, and the engine, spar and profile workers
+close their stores (`close_stores`, each a blocking queued call); then the window runs
+`ProfileStore::import_profiles` itself, a file operation, which migrates the copy and keeps the
+replaced file as `profiles.db.previous`. Each worker opens the file again at its next use, and the
+current screen reads it again. An error goes to the message box. A running spar session is kept and
+saved into the imported file when it ends.
 
 ## Settings
 
@@ -364,16 +376,35 @@ the cores, at least one), `engine/hash_mb` (64), `engine/seconds` (2.0, 0.1 to 6
 `engine/lines` (3, 1 to 10), and sparring's `spar/end_move` (25, 1 to 200: the move number that ends
 a session), `spar/seconds` (0.5, 0.1 to 60: each off-book reply's search) and `spar/seed` (unset:
 each session's seed is the clock's seconds; set, every session uses it), and Repertoire's
-`repertoire/depth` (20, 2 to 40: the coverage depth in plies), each at its default when unset or out
-of range. *Edit > Settings…* (`SettingsDialog`, `settings_dialog`) edits the engine's (the binary
-with a Browse button, the threads, the hash, the seconds and the lines), Spar's move limit and
-seconds per reply (`spar_end_move`, `spar_seconds`) and the coverage depth (`repertoire_depth`);
-accepting saves them, sends them to the engine worker and the spar worker, which restart their
-engines with them at the next search, evaluates the position again and, on Repertoire, computes the
-coverage again. A new move limit applies from the next session. Reading does not create anything;
-the first write, when the theme or the tier changes, creates the data directory and the file. This
-is the first thing the app writes: a run that changes no setting leaves the data directory as it
-found it, or absent.
+`repertoire/depth` (20, 2 to 40: the coverage depth in plies), and `files/last_dir`, the folder the
+file chooser last chose in (**Files**), each at its default when unset or out of range. *Edit >
+Settings…* (`SettingsDialog`, `settings_dialog`) edits the engine's (the binary with a Browse
+button, which opens the file chooser, the threads, the hash, the seconds and the lines), Spar's move
+limit and seconds per reply (`spar_end_move`, `spar_seconds`) and the coverage depth
+(`repertoire_depth`); accepting saves them, sends them to the engine worker and the spar worker,
+which restart their engines with them at the next search, evaluates the position again and, on
+Repertoire, computes the coverage again. A new move limit applies from the next session. Reading
+does not create anything; the first write, when the theme or the tier changes, creates the data
+directory and the file. This is the first thing the app writes: a run that changes no setting leaves
+the data directory as it found it, or absent.
+
+## Files
+
+The app chooses files with `FileChooser`, a dialog of its own (`file_chooser`), never
+`QFileDialog`: Qt's dialog keeps its last folder through `QSettings(UserScope, "QtProject")`,
+which on macOS always writes `~/Library/Preferences/com.qtproject.plist`, and the macOS panel keeps
+its own state in the app's defaults, both outside the data directory. The chooser is a
+`QFileSystemModel` in a `QTreeView` (`file_chooser_tree`) showing folders and the files its name
+filters match, a path line (`file_chooser_path`; Return goes to the folder or file typed), in save
+mode a file name (`file_chooser_name`), a message line (`file_chooser_message`), and *Open* or
+*Save* (`file_chooser_accept`) with *Cancel*. Open mode takes an existing file, and a double click
+on one; save mode takes a name that is not taken in the folder shown and refuses one that is, as an
+export never replaces a file. It starts in the folder last chosen in (`files/last_dir` in
+`settings.ini`), else the home folder, and keeps no state of its own. `choose_file_to_open` and
+`choose_file_to_save` run it for Browse… (every file), Import PGN… (`*.pgn`), Export profile… and
+Import profile… (`*.db`). As a second guard the window first sends Qt's settings for anything else
+that takes the default format to the data directory (`keep_qt_settings_in`:
+`QSettings::setDefaultFormat(IniFormat)` and `setPath` for both scopes).
 
 ## Themes
 
@@ -439,9 +470,9 @@ ratio, so squares stay square at any size. The pieces are rebuilt from the posit
 (read from the first field of its FEN, for display only) after every move.
 
 **Animation.** A clicked move slides the moving piece from its square to its target over
-`BoardView::animation_ms` (150 ms), a `QVariantAnimation` on the item's position with an
-out-cubic curve; castling slides the rook too. A new move, a press, `set_position` or `flip`
-stops any animation still running and puts every piece on its square.
+`BoardView::animation_ms` (150 ms), a `QVariantAnimation` on the item's position with an out-cubic
+curve; castling slides the rook too. A new move, a press on one of the user's own pieces,
+`set_position` or `flip` stops any animation still running and puts every piece on its square.
 
 ## Theme and pieces
 
@@ -481,22 +512,25 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   board and New game clearing it, Flip board, the four screens, the status bar without a
   database. Screenshots: `main-window-start`, `main-window-after-moves`, `main-window-flipped`.
 - `ui_explore_test`, on a fixture database the test writes into `core`'s schema with real keys
-  (`app/tests/fixture_db.cpp`, the CLI fixture's rows): opening it, with the data version, the
-  start position off book at tier 2 and its moves with badges, bars, scores and top-tier shares at
-  tier 3; switching tiers; moves on the board showing the replies and the deepest name; playing a
-  row by double-click and by Return; going back by the move list, *Back* and *New game*; an
-  off-book position; the evaluation bar for a centipawn score, a mate and no evaluation; a
-  database that does not open; `settings.ini` appearing only after a theme change, alone in the
-  data directory; both themes; the About dialog. Screenshots: `explore-start-tier3`,
-  `explore-sicilian-light`, `explore-off-book`, `explore-light`, `explore-dark`, `about-dialog`.
+  (`app/tests/fixture_db.cpp`, the CLI fixture's rows, with the badges §7.3 gives them): opening it,
+  with the data version, the start position off book at tier 2 and its moves with badges, bars,
+  scores and top-tier shares at tier 3; switching tiers; moves on the board showing the replies and
+  the deepest name; playing a row by double-click and by Return; going back by the move list, *Back*
+  and *New game*; an off-book position; the evaluation bar for a centipawn score, a mate and no
+  evaluation, its width kept; the Dubious 1. a3 at tier 4; a database that does not open;
+  `settings.ini` appearing only after a theme change, alone in the data directory; both themes; the
+  About dialog. Screenshots: `explore-start-tier3`, `explore-sicilian-light`, `explore-off-book`,
+  `explore-light`, `explore-dark`, `about-dialog`.
 - `ui_engine_test`, with core's fake engine (`fake-uci`) set as the binary through
   `app/tests/fake-stockfish.sh`, its script, delay and log chosen by environment variables: the
   lines after a request, white to move and black to move, and the evaluation bar following the
   first line where nothing is stored; a cache seeded through `ProfileStore` served without
   starting the engine; a 30 s search stopped by a move while a timer keeps firing, and the window
-  closing at once; a missing binary; the Settings dialog saving and applying its values, and a new
-  window starting with them. Screenshots: `explore-engine`, `explore-engine-dark`,
-  `settings-dialog`.
+  closing at once; a missing binary, and one that fails the handshake; a checkmated side to move,
+  white's and black's, read from the fake's mate 0; Browse writing Qt's dialog state in the data
+  directory and nothing in the platform's settings folder; the Settings dialog saving and applying
+  its values, and a new window starting with them. Screenshots: `explore-engine`,
+  `explore-engine-dark`, `settings-dialog`.
 - `ui_spar_test`, on the fixture database's tier-4 tree (the start position's e4, a Dubious a3
   and d4, black's e5 after 1. a3, and white's Nf3 alone after 1. a3 e5) with the fake engine's
   `legal` script as the coach off book, a fixed seed and a move limit of four: a session as white
@@ -504,7 +538,8 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   answered by the engine, ended at its move limit with the summary and the saved session listed,
   and replayed with the interruptions at plies one and three; a session as black, where the
   coach moves first and the board turns; End session saving a stopped session, and closing the
-  window saving one; the Settings dialog's spar entries ending the next session at the new limit;
+  window saving one; a second session sending the coach's engine `ucinewgame`, read from the fake's
+  log; the Settings dialog's spar entries ending the next session at the new limit;
   and Explore's line and tier untouched by a session, the tier selector disabled only on Spar.
   Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
 - `ui_repertoire_test`, on the same tier-4 tree: 1. e4 chosen by a board move and shown in the tree,
@@ -514,6 +549,11 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   among them; the black repertoire, the board turned and white's move only followed; and an export,
   refused a second time over the same file, imported back after the choice was removed. Screenshots:
   `repertoire-gaps`, `repertoire-tree`.
+- `ui_file_chooser_test`: open mode picking a file through the model, the name filter hiding the
+  others and a folder refused; save mode refusing a taken name and taking a new one; Browse in the
+  Settings dialog starting in `files/last_dir` and keeping the new folder; and the platform's
+  settings folder gaining no entry, but the system's own `com.apple.` ones, while the tests run.
+  Screenshot: `file-chooser-open`.
 - `ui_drill_test`, on a white repertoire of two choices saved through `ProfileStore` with its
   cards then deleted (`drop_cards` in the fixture), so that entering the screen syncs them back:
   a drill with a correct move, graded good at Next and due again a day later, a wrong move,
