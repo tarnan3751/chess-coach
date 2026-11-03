@@ -17,6 +17,7 @@
 #include "ui_harness.hpp"
 
 #include <QAction>
+#include <QByteArray>
 #include <QComboBox>
 #include <QDialog>
 #include <QDir>
@@ -104,15 +105,19 @@ class EngineTest : public QObject {
     Q_OBJECT
 
     std::unique_ptr<FixtureDb> db_;
+    QByteArray normal_script_ = "normal"; // the fake's script every test starts from
 
   private slots:
     void initTestCase() {
         db_ = std::make_unique<FixtureDb>();
         qputenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI);
-        qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "normal");
+        qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", normal_script_);
     }
 
     void cleanupTestCase() { db_.reset(); }
+
+    // Every test starts from the normal script, whatever the one before it set.
+    void cleanup() { qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", normal_script_); }
 
     void a_request_shows_the_engine_lines_from_whites_side() {
         const Session session(*db_, fake(0.1));
@@ -159,7 +164,8 @@ class EngineTest : public QObject {
     }
 
     void a_checkmated_side_to_move_is_the_engines_mate_0() {
-        // The legal script answers a position without a legal move with mate 0.
+        // The legal script answers a position without a legal move with mate 0; cleanup puts the
+        // normal one back however the test ends.
         qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "legal");
         const Session session(*db_, fake(0.1, 1));
         MainWindow& window = *session.window;
@@ -183,7 +189,6 @@ class EngineTest : public QObject {
         QTRY_VERIFY(line_count(window) == 1 &&
                     line_text(window, 0) == QStringLiteral("1: depth 0 M0"));
         QCOMPARE(bar.white_share(), std::optional(1.0));
-        qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "normal");
     }
 
     void a_cached_search_is_served_without_the_engine() {
@@ -306,8 +311,10 @@ class EngineTest : public QObject {
         save_screenshot(dialog, QStringLiteral("settings"), QStringLiteral("dialog"));
         dialog.accept();
 
-        // Applied: the next search has two lines.
-        QTRY_COMPARE(line_count(window), 2);
+        // Applied: the next search, by an engine started again, has two lines.
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(line_count(window), 2, first_wait_ms);
         const EngineSettings saved = Settings(session.data_dir).engine();
         QCOMPARE(saved.hash_mb, 32);
         QCOMPARE(saved.seconds, 0.2);
