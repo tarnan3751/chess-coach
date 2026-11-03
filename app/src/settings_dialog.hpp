@@ -9,6 +9,8 @@
 #include "settings.hpp"
 
 #include <QDialog>
+#include <filesystem>
+#include <optional>
 
 class QDoubleSpinBox;
 class QLineEdit;
@@ -20,9 +22,11 @@ class SettingsDialog : public QDialog {
     Q_OBJECT
 
   public:
-    // files is where Browse's chooser starts and keeps its last folder.
+    // files is where Browse's chooser starts and keeps its last folder; resources the app
+    // bundle's, for the default engine the binary field names.
     SettingsDialog(const EngineSettings& engine, const SparSettings& spar, int repertoire_depth,
-                   Settings& files, QWidget* parent = nullptr);
+                   Settings& files, const std::optional<std::filesystem::path>& resources,
+                   QWidget* parent = nullptr);
 
     [[nodiscard]] EngineSettings engine() const;
     [[nodiscard]] SparSettings spar() const;

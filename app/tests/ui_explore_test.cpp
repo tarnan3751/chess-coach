@@ -17,6 +17,7 @@
 #include <QAction>
 #include <QComboBox>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QLabel>
 #include <QListWidget>
@@ -110,7 +111,7 @@ class ExploreTest : public QObject {
         QCOMPARE(child<QLabel>(window, QStringLiteral("data_version_status")).text(),
                  QStringLiteral("Data version 0"));
         QCOMPARE(child<QLabel>(window, QStringLiteral("database_status")).text(),
-                 QStringLiteral("openings.db"));
+                 QStringLiteral("openings.db (--db)"));
         // Tier 2 to start, where the fixture has no games: the start position is off book.
         QCOMPARE(window.tier(), MainWindow::default_tier);
         QTRY_COMPARE(message(window), QStringLiteral("Off book at 1400-1599: 0 games"));
@@ -320,18 +321,25 @@ class ExploreTest : public QObject {
 
     void a_database_that_does_not_open_leaves_the_empty_state() const {
         const QTemporaryDir root;
-        const QString missing = root.filePath(QStringLiteral("missing.db"));
-        QVERIFY(missing != QString::fromStdString(db_->path()));
-        const Session session(missing);
+        const QString broken = root.filePath(QStringLiteral("broken.db"));
+        QVERIFY(broken != QString::fromStdString(db_->path()));
+        {
+            QFile file(broken);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("not a database");
+        }
+        const Session session(broken);
         MainWindow& window = *session.window;
         QTRY_VERIFY(window.findChild<QMessageBox*>(QStringLiteral("database_error")) != nullptr);
         auto& box = child<QMessageBox>(window, QStringLiteral("database_error"));
-        QVERIFY(box.text().contains(missing));
-        QVERIFY(box.text().contains(QStringLiteral("no such file")));
+        QVERIFY(box.text().contains(broken));
+        QVERIFY(box.text().contains(QStringLiteral("not a readable SQLite database")));
         QCOMPARE(child<QLabel>(window, QStringLiteral("database_status")).text(),
                  QStringLiteral("No database"));
         QVERIFY(!child<QLabel>(window, QStringLiteral("data_version_status")).isVisible());
-        QVERIFY(message(window).startsWith(QStringLiteral("No database loaded")));
+        // The empty state names the file that did not open, not the places looked in.
+        QVERIFY(message(window).startsWith(QStringLiteral("The opening database")));
+        QVERIFY(message(window).contains(QDir::toNativeSeparators(broken)));
         box.accept();
         // The board still plays.
         const auto& board = child<BoardView>(window, QStringLiteral("board"));

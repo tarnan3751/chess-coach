@@ -32,6 +32,8 @@ add_library(app_lib STATIC
   src/explore_screen.hpp
   src/file_chooser.cpp
   src/file_chooser.hpp
+  src/locations.cpp
+  src/locations.hpp
   src/main_window.cpp
   src/main_window.hpp
   src/main_window_drill.cpp
@@ -96,7 +98,8 @@ if(BUILD_TESTING)
   # Each UI test saves its screenshots here, as <test>-<state>.png (tools/ui_tests.sh).
   set(chesscoach_screenshots "${PROJECT_BINARY_DIR}/ui-screenshots")
   foreach(test IN ITEMS ui_board_test ui_main_window_test ui_explore_test ui_engine_test
-                       ui_spar_test ui_repertoire_test ui_drill_test ui_file_chooser_test)
+                       ui_spar_test ui_repertoire_test ui_drill_test ui_file_chooser_test
+                       ui_lookup_test)
     chesscoach_add_test(app_${test} MODULE app KIND ui
                         SOURCES tests/${test}.cpp tests/ui_harness.hpp
                         LIBS chesscoach::app_lib app_test_fixture)
@@ -104,7 +107,7 @@ if(BUILD_TESTING)
                                PRIVATE "CHESSCOACH_UI_SCREENSHOT_DIR=\"${chesscoach_screenshots}\"")
   endforeach()
   # The engine tests drive core's fake engine through tests/fake-stockfish.sh, set as the binary.
-  foreach(test IN ITEMS ui_engine_test ui_spar_test)
+  foreach(test IN ITEMS ui_engine_test ui_spar_test ui_lookup_test)
     add_dependencies(app_${test} fake-uci)
     target_compile_definitions(app_${test}
                                PRIVATE CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"

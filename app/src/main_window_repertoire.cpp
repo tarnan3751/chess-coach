@@ -32,7 +32,7 @@ void MainWindow::repertoire_refresh() {
     emit repertoire_requested(repertoire_white_);
     if (db_path_.isEmpty()) {
         repertoire_->show_coverage_message(
-            tr("Coverage needs an opening database: open one with --db."));
+            tr("Coverage needs an opening database: import one with File > Import database…"));
     } else {
         emit coverage_requested(repertoire_white_, tier(), settings_.repertoire_depth());
     }

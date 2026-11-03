@@ -147,7 +147,7 @@ class MainWindowTest : public QObject {
                  QStringLiteral("Engine: not started"));
         QVERIFY(child<QLabel>(window, QStringLiteral("explore_message"))
                     .text()
-                    .startsWith(QStringLiteral("No database loaded")));
+                    .startsWith(QStringLiteral("No opening database")));
         QVERIFY(!QFileInfo::exists(data_dir_));
     }
 };

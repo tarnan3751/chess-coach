@@ -16,6 +16,7 @@
 
 #include "engine_worker.hpp"
 #include "explore_data.hpp"
+#include "locations.hpp"
 #include "profile_data.hpp"
 #include "settings.hpp"
 #include "spar_data.hpp"
@@ -61,7 +62,7 @@ class MainWindow : public QMainWindow {
 
     // data_dir holds settings.ini (--data-dir, or the platform's application data location);
     // db is the opening database file (--db), empty when none was given, which the worker opens.
-    MainWindow(const QString& data_dir, QString db, QWidget* parent = nullptr);
+    MainWindow(const QString& data_dir, const QString& db, QWidget* parent = nullptr);
     ~MainWindow() override;
     Q_DISABLE_COPY_MOVE(MainWindow)
 
@@ -149,6 +150,7 @@ class MainWindow : public QMainWindow {
     void review_recorded(qint64 card_id, qint64 due_at);
     void profile_failed(const QString& message);
     void show_profile_error(const QString& message);
+    void show_database_label();
     void jump_to(qsizetype ply);
     void rebuild_move_list();
     void request_query();
@@ -167,6 +169,9 @@ class MainWindow : public QMainWindow {
 
     QString data_dir_;
     Settings settings_;
+    // The app bundle's resources, worked out once here and handed to the workers.
+    std::optional<std::filesystem::path> resources_;
+    std::optional<DatabaseChoice> located_; // the opening database, and where it was found
     QString db_path_;
     QString data_version_;
     bool database_open_ = false;

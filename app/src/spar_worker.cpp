@@ -113,8 +113,8 @@ void register_spar_types() {
 // from another thread: the search in progress stops, and no other starts.
 class SparWorker::Coach final : public ReplyProvider {
   public:
-    Coach(EngineSettings settings, double seconds)
-        : settings_(std::move(settings)), seconds_(seconds) {}
+    Coach(EngineSettings settings, double seconds, std::optional<std::filesystem::path> resources)
+        : settings_(std::move(settings)), seconds_(seconds), resources_(std::move(resources)) {}
 
     void set_tier(Tier tier) { tier_ = tier; }
 
@@ -144,7 +144,7 @@ class SparWorker::Coach final : public ReplyProvider {
                 const std::scoped_lock lock(engine_mutex_);
                 engine_.reset();
             }
-            const auto binary = find_engine_binary(settings_);
+            const auto binary = find_engine_binary(settings_, resources_);
             if (!binary) {
                 return tl::unexpected(ProviderError{translate("no engine found").toStdString()});
             }
@@ -168,15 +168,17 @@ class SparWorker::Coach final : public ReplyProvider {
   private:
     EngineSettings settings_;
     double seconds_;
+    std::optional<std::filesystem::path> resources_;
     Tier tier_{};
     std::atomic<bool> stopped_{false};
     std::mutex engine_mutex_; // guards engine_'s replacement against stop()
     std::optional<Engine> engine_;
 };
 
-SparWorker::SparWorker(const QString& data_dir, QString db, QObject* parent)
-    : QObject(parent), data_dir_(data_dir.toStdString()), db_(std::move(db)),
-      coach_(std::make_unique<Coach>(engine_settings_, seconds_)) {}
+SparWorker::SparWorker(const QString& data_dir, QString db,
+                       std::optional<std::filesystem::path> resources, QObject* parent)
+    : QObject(parent), data_dir_(data_dir.toStdString()), resources_(std::move(resources)),
+      db_(std::move(db)), coach_(std::make_unique<Coach>(engine_settings_, seconds_, resources_)) {}
 
 SparWorker::~SparWorker() = default;
 
@@ -188,7 +190,7 @@ void SparWorker::stop_coach() {
 void SparWorker::configure(const EngineSettings& engine, double seconds) {
     engine_settings_ = engine;
     seconds_ = seconds;
-    auto coach = std::make_unique<Coach>(engine_settings_, seconds_);
+    auto coach = std::make_unique<Coach>(engine_settings_, seconds_, resources_);
     const std::scoped_lock lock(coach_mutex_);
     coach_.swap(coach);
     // The old coach's engine quits here, as coach goes.
@@ -247,7 +249,8 @@ void SparWorker::start(int tier, bool user_white, quint64 seed, int end_move) {
     const auto at = tier_from_index(tier);
     const OpeningStore* store = open_store();
     if (!at.has_value() || store == nullptr) {
-        emit session_failed(tr("Sparring needs an opening database: open one with --db."));
+        emit session_failed(
+            tr("Sparring needs an opening database: import one with File > Import database…"));
         return;
     }
     try {

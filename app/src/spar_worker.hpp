@@ -31,7 +31,9 @@ class SparWorker : public QObject {
   public:
     // data_dir holds profiles.db, opened when a session is saved or the list is asked for and it
     // exists; db is the opening database, opened read-only at the first start.
-    SparWorker(const QString& data_dir, QString db, QObject* parent = nullptr);
+    // resources is the app bundle's resources folder, where the packaged engine is, if any.
+    SparWorker(const QString& data_dir, QString db, std::optional<std::filesystem::path> resources,
+               QObject* parent = nullptr);
     ~SparWorker() override;
     Q_DISABLE_COPY_MOVE(SparWorker)
 
@@ -78,6 +80,7 @@ class SparWorker : public QObject {
     void finish();
 
     std::filesystem::path data_dir_;
+    std::optional<std::filesystem::path> resources_;
     QString db_;
     EngineSettings engine_settings_;
     double seconds_ = 0.5;

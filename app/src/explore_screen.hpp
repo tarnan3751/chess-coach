@@ -36,8 +36,8 @@ class ExploreScreen : public QWidget {
 
     // Shows a position at a tier, the tier named by its label.
     void show_data(const ExploreData& explore, const QString& tier_label);
-    // The empty state, without a database.
-    void show_no_database();
+    // The empty state, without a database; message says why, else a plain one.
+    void show_no_database(const QString& message = QString());
 
     // The engine's part, under the table: its lines, marked when they came from the cache; that
     // it is searching, which clears them; or another state ("not found") or failure.

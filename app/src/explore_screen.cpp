@@ -137,12 +137,12 @@ void ExploreScreen::show_data(const ExploreData& explore, const QString& tier_la
     content_->setCurrentWidget(table_);
 }
 
-void ExploreScreen::show_no_database() {
+void ExploreScreen::show_no_database(const QString& message) {
     name_->clear();
     evaluation_->clear();
     games_->clear();
     model_->set_moves({});
-    message_->setText(tr("No database loaded. Open one with --db <file>."));
+    message_->setText(message.isEmpty() ? tr("No database loaded.") : message);
     content_->setCurrentWidget(message_);
 }
 

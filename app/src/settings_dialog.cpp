@@ -17,7 +17,9 @@
 namespace chesscoach::app {
 
 SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings& spar,
-                               int repertoire_depth, Settings& files, QWidget* parent)
+                               int repertoire_depth, Settings& files,
+                               const std::optional<std::filesystem::path>& resources,
+                               QWidget* parent)
     : QDialog(parent), binary_(new QLineEdit(engine.binary, this)), threads_(new QSpinBox(this)),
       hash_mb_(new QSpinBox(this)), seconds_(new QDoubleSpinBox(this)), lines_(new QSpinBox(this)),
       spar_end_move_(new QSpinBox(this)), spar_seconds_(new QDoubleSpinBox(this)),
@@ -26,8 +28,12 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     setWindowTitle(tr("Settings"));
     binary_->setObjectName(QStringLiteral("engine_binary"));
     binary_->setMinimumWidth(binary_->fontMetrics().averageCharWidth() * 48);
+    // Empty, the binary is the default one, which the placeholder names.
+    const EngineSettings defaults;
+    const auto found = find_engine_binary(defaults, resources);
     binary_->setPlaceholderText(
-        tr("CHESS_COACH_STOCKFISH, stockfish on the PATH, or the bundled one"));
+        found ? tr("Default: %1").arg(QString::fromStdString(found->string()))
+              : tr("None found: CHESS_COACH_STOCKFISH, stockfish on the PATH or the app bundle's"));
     auto* browse = new QPushButton(tr("Browse…"), this);
     browse->setObjectName(QStringLiteral("engine_browse"));
     connect(browse, &QPushButton::clicked, this, [this, &files] {

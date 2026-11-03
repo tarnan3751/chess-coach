@@ -53,10 +53,11 @@ struct EngineLine {
 void register_engine_types();
 
 // The engine to run: the settings' binary; else CHESS_COACH_STOCKFISH; else stockfish on the
-// PATH; else stockfish beside the app (the bundle's, from Phase 6). nullopt when the one chosen
-// is not a file.
+// PATH; else <resources>/engine/stockfish, the app bundle's (bundle_resources, which the window
+// works out at start). nullopt when the one chosen is not a file, or there is none.
 [[nodiscard]] std::optional<std::filesystem::path>
-find_engine_binary(const EngineSettings& settings);
+find_engine_binary(const EngineSettings& settings,
+                   const std::optional<std::filesystem::path>& resources);
 
 class EngineWorker : public QObject {
     Q_OBJECT
@@ -66,7 +67,9 @@ class EngineWorker : public QObject {
     static constexpr int min_cached_depth = 12;
 
     // data_dir holds profiles.db, opened only when it exists or when a search is to be stored.
-    explicit EngineWorker(const QString& data_dir, QObject* parent = nullptr);
+    // resources is the app bundle's resources folder, where the packaged engine is, if any.
+    EngineWorker(const QString& data_dir, std::optional<std::filesystem::path> resources,
+                 QObject* parent = nullptr);
 
     // From the GUI thread: requests before request_id are dropped unanswered, and the search in
     // progress, or about to start, of an older request stops.
@@ -97,6 +100,7 @@ class EngineWorker : public QObject {
     void drop_engine();
 
     std::filesystem::path data_dir_;
+    std::optional<std::filesystem::path> resources_;
     EngineSettings settings_;
     std::optional<ProfileStore> profiles_;
     std::atomic<int> latest_request_{0};

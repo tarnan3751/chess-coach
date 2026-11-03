@@ -301,7 +301,8 @@ void ProfileWorker::compute_coverage(bool white, int tier, int depth) {
     try {
         const OpeningStore* store = open_store();
         if (store == nullptr || !at.has_value()) {
-            fail(tr("Coverage needs an opening database: open one with --db."));
+            fail(tr("Coverage needs an opening database: import one with File > Import "
+                    "database…"));
             return;
         }
         Repertoire repertoire;

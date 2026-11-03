@@ -35,7 +35,8 @@ int main(int argc, char* argv[]) {
         QCoreApplication::translate("main", "dir"));
     const QCommandLineOption db_option(
         QStringList{QStringLiteral("db")},
-        QCoreApplication::translate("main", "The opening database file."),
+        QCoreApplication::translate("main", "The opening database file (default: openings.db in "
+                                            "the data directory, then in the app bundle)."),
         QCoreApplication::translate("main", "file"));
     parser.addOption(data_dir_option);
     parser.addOption(db_option);

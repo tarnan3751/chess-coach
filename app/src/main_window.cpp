@@ -26,6 +26,8 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -57,10 +59,12 @@ QString MainWindow::tier_text(int tier) {
     return QString::fromUtf8(label.data(), static_cast<qsizetype>(label.size()));
 }
 
-MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
-    : QMainWindow(parent), data_dir_(data_dir), settings_(data_dir), db_path_(std::move(db)),
-      db_worker_(new DbWorker()), engine_worker_(new EngineWorker(data_dir)),
-      spar_worker_(new SparWorker(data_dir, db_path_)),
+MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* parent)
+    : QMainWindow(parent), data_dir_(data_dir), settings_(data_dir), resources_(bundle_resources()),
+      located_(find_opening_database(db, data_dir, resources_)),
+      db_path_(located_ ? QString::fromStdString(located_->path.string()) : QString()),
+      db_worker_(new DbWorker()), engine_worker_(new EngineWorker(data_dir, resources_)),
+      spar_worker_(new SparWorker(data_dir, db_path_, resources_)),
       profile_worker_(new ProfileWorker(data_dir, db_path_)), board_(new BoardView()),
       eval_bar_(new EvalBar()), explore_(new ExploreScreen()), spar_(new SparScreen()),
       repertoire_(new RepertoireScreen()), drill_(new DrillScreen()), tabs_(new QTabBar()),
@@ -166,6 +170,8 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     db_thread_.start();
     if (!db_path_.isEmpty()) {
         emit open_requested(db_path_);
+    } else {
+        explore_->show_no_database(no_database_text(data_dir_));
     }
 
     // The engine worker likewise, with the one engine and its cache connection; the window
@@ -374,10 +380,9 @@ void MainWindow::build_menus() {
 }
 
 void MainWindow::build_status_bar() {
-    database_label_ =
-        new QLabel(db_path_.isEmpty() ? tr("No database") : QFileInfo(db_path_).fileName());
+    database_label_ = new QLabel();
     database_label_->setObjectName(QStringLiteral("database_status"));
-    database_label_->setToolTip(db_path_);
+    show_database_label();
     data_version_label_ = new QLabel();
     data_version_label_->setObjectName(QStringLiteral("data_version_status"));
     data_version_label_->hide();
@@ -467,10 +472,22 @@ void MainWindow::request_query() {
     }
 }
 
+void MainWindow::show_database_label() {
+    // The file's name and where it was found: "openings.db (data directory)".
+    if (!located_) {
+        database_label_->setText(tr("No database"));
+        database_label_->setToolTip(no_database_text(data_dir_));
+        return;
+    }
+    database_label_->setText(tr("%1 (%2)").arg(
+        QFileInfo(QString::fromStdString(located_->path.string())).fileName(), located_->source));
+    database_label_->setToolTip(QString::fromStdString(located_->path.string()));
+}
+
 void MainWindow::database_opened(const QString& data_version) {
     database_open_ = true;
     data_version_ = data_version;
-    database_label_->setText(QFileInfo(db_path_).fileName());
+    show_database_label();
     data_version_label_->setText(tr("Data version %1").arg(data_version));
     data_version_label_->show();
     request_query();
@@ -481,7 +498,20 @@ void MainWindow::database_failed(const QString& message) {
     data_version_.clear();
     database_label_->setText(tr("No database"));
     data_version_label_->hide();
-    explore_->show_no_database();
+    // The file the window chose did not open: say which, not where else it might have looked.
+    QString empty = no_database_text(data_dir_);
+    if (located_) {
+        const QString file =
+            QDir::toNativeSeparators(QString::fromStdString(located_->path.string()));
+        empty = QFileInfo::exists(file)
+                    ? tr("The opening database %1 did not open. Import another with File > "
+                         "Import database…")
+                          .arg(file)
+                    : tr("There is no opening database at %1, the file --db names. Import one with "
+                         "File > Import database…, or start without --db.")
+                          .arg(file);
+    }
+    explore_->show_no_database(empty);
     eval_bar_->set_evaluation(std::nullopt, std::nullopt);
     auto* box = new QMessageBox(QMessageBox::Warning, tr("Opening database failed"), message,
                                 QMessageBox::Ok, this);
@@ -566,7 +596,7 @@ void MainWindow::update_eval_bar() {
 
 void MainWindow::show_settings() {
     auto* dialog = new SettingsDialog(settings_.engine(), settings_.spar(),
-                                      settings_.repertoire_depth(), settings_, this);
+                                      settings_.repertoire_depth(), settings_, resources_, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, dialog] {
         // Applying saves the settings and restarts the engines with them at the next search; a

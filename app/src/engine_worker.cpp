@@ -95,8 +95,9 @@ void register_engine_types() {
     qRegisterMetaType<QVector<EngineLine>>();
 }
 
-EngineWorker::EngineWorker(const QString& data_dir, QObject* parent)
-    : QObject(parent), data_dir_(data_dir.toStdString()) {}
+EngineWorker::EngineWorker(const QString& data_dir, std::optional<std::filesystem::path> resources,
+                           QObject* parent)
+    : QObject(parent), data_dir_(data_dir.toStdString()), resources_(std::move(resources)) {}
 
 void EngineWorker::cancel_before(int request_id) {
     latest_request_.store(request_id);
@@ -113,7 +114,9 @@ void EngineWorker::configure(const EngineSettings& settings) {
     drop_engine();
 }
 
-std::optional<std::filesystem::path> find_engine_binary(const EngineSettings& settings) {
+std::optional<std::filesystem::path>
+find_engine_binary(const EngineSettings& settings,
+                   const std::optional<std::filesystem::path>& resources) {
     if (!settings.binary.isEmpty()) {
         return existing(settings.binary);
     }
@@ -124,8 +127,11 @@ std::optional<std::filesystem::path> find_engine_binary(const EngineSettings& se
         !found.isEmpty()) {
         return existing(found);
     }
-    return existing(
-        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("stockfish")));
+    // The packaging puts the engine in the bundle's Contents/Resources/engine/.
+    if (resources.has_value()) {
+        return existing(QString::fromStdString((*resources / "engine" / "stockfish").string()));
+    }
+    return std::nullopt;
 }
 
 ProfileStore* EngineWorker::open_profiles(bool create) {
@@ -176,7 +182,7 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
         emit engine_failed(tr("The engine cache could not be read: %1").arg(error.what()));
     }
 
-    const auto path = find_engine_binary(settings_);
+    const auto path = find_engine_binary(settings_, resources_);
     if (!path) {
         drop_engine();
         emit engine_state(tr("not found"));
