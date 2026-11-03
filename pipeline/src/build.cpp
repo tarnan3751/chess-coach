@@ -354,7 +354,9 @@ tl::expected<void, std::string> run_build(const BuildOptions& options, Report& r
     }
     std::uint64_t evaluated = 0;
     for (const PositionRecord& position : tree->positions) {
-        evaluated += position.evaluation ? 1 : 0;
+        if (position.evaluation) {
+            ++evaluated;
+        }
     }
     report.add("positions_evaluated", evaluated);
     report.add("positions_named", named);
