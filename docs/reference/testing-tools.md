@@ -119,8 +119,10 @@ A change to either pattern set changes the other.
 C++20 without extensions. `chesscoach::warnings` (`cmake/warnings.cmake`), linked PRIVATE by
 every target of ours, is `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
 -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual -Wnull-dereference -Wdouble-promotion
--Wformat=2 -Werror`, plus `-Wduplicated-cond -Wlogical-op` on GCC (not `-Wuseless-cast`, which rejects the
-casts between `uint64_t` and `size_t` that macOS needs and Linux does not). Third-party
+-Wformat=2 -Werror`, plus `-Wduplicated-cond -Wlogical-op -Wno-dangling-reference` on GCC (not `-Wuseless-cast`,
+which rejects the casts between `uint64_t` and `size_t` that macOS needs and Linux does not;
+GCC 13's `-Wdangling-reference`, part of its `-Wextra`, flags a `const auto&` bound to an
+accessor's returned reference, a false positive GCC 14 narrowed). Third-party
 headers come in through imported targets as system headers, so the flags apply to our code
 only (Qt's moc output included). `CHESS_COACH_SANITIZE` (`cmake/sanitizers.cmake`) adds
 `-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer` to every

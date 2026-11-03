@@ -23,4 +23,7 @@ target_compile_options(
             -Werror
             # Not -Wuseless-cast: it rejects the casts between uint64_t and size_t that macOS
             # needs and Linux does not, which portable code must keep.
-            "$<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond;-Wlogical-op>")
+            # Not -Wdangling-reference (GCC 13 puts it in -Wextra): it flags `const auto&` bound
+            # to the return of an accessor that returns a reference, a false positive GCC 14
+            # narrowed.
+            "$<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond;-Wlogical-op;-Wno-dangling-reference>")
