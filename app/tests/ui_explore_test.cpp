@@ -1,7 +1,8 @@
 // UI tests of the Explore screen on a fixture database (app; ui): opening it and seeing the start
 // position's moves with their badges and bars, switching tiers, playing moves on the board and
-// from the table, jumping back through the move list, an off-book position, the evaluation bar
-// and a database that does not open, with screenshots (ui_harness.hpp, fixture_db.hpp).
+// from the table, jumping back through the move list, an off-book position, the evaluation bar,
+// a database that does not open, the settings file, the themes and the About dialog, with
+// screenshots of Explore in both themes (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/version.hpp>
 
@@ -323,6 +324,70 @@ class ExploreTest : public QObject {
         click(board, "e2");
         click(board, "e4");
         QCOMPARE(window.line(), (std::vector<std::string>{"e2e4"}));
+    }
+
+    void settings_are_written_only_by_a_theme_change() {
+        const Session session(QString::fromStdString(db_->path()));
+        MainWindow& window = *session.window;
+        QTRY_VERIFY(opened(window));
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        click(board, "e2");
+        click(board, "e4");
+        QTRY_COMPARE(model(window).rowCount(), 0);
+        // Opening a database and playing a move write nothing: the data directory is not there.
+        QVERIFY(!QFileInfo::exists(session.data_dir));
+
+        child<QAction>(window, QStringLiteral("theme_dark")).trigger();
+        QVERIFY(child<QAction>(window, QStringLiteral("theme_dark")).isChecked());
+        QCOMPARE(QDir(session.root.path()).entryList(QDir::AllEntries | QDir::NoDotAndDotDot),
+                 QStringList{QStringLiteral("data")});
+        QCOMPARE(QDir(session.data_dir).entryList(QDir::AllEntries | QDir::NoDotAndDotDot),
+                 QStringList{QStringLiteral("settings.ini")});
+
+        // A second window on the same data directory starts in the dark theme.
+        const MainWindow again(session.data_dir, QString());
+        QVERIFY(child<QAction>(again, QStringLiteral("theme_dark")).isChecked());
+        child<QAction>(window, QStringLiteral("theme_light")).trigger();
+    }
+
+    void the_themes_restyle_explore() {
+        const Session session(QString::fromStdString(db_->path()));
+        MainWindow& window = *session.window;
+        QTRY_VERIFY(opened(window));
+        select_tier(window, 3);
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        click(board, "e2");
+        click(board, "e4");
+        QTRY_COMPARE(model(window).rowCount(), 3);
+        QTRY_VERIFY(!board.animating());
+        child<QAction>(window, QStringLiteral("theme_light")).trigger();
+        QCOMPARE(board.board_scene().theme().dark_square,
+                 chesscoach::app::BoardTheme::light().dark_square);
+        save_screenshot(window, QStringLiteral("explore"), QStringLiteral("light"));
+        child<QAction>(window, QStringLiteral("theme_dark")).trigger();
+        QCOMPARE(board.board_scene().theme().dark_square,
+                 chesscoach::app::BoardTheme::dark().dark_square);
+        QVERIFY(qApp->styleSheet().contains(QStringLiteral("#26292d")));
+        save_screenshot(window, QStringLiteral("explore"), QStringLiteral("dark"));
+        child<QAction>(window, QStringLiteral("theme_light")).trigger();
+    }
+
+    void the_about_dialog_shows_both_versions() {
+        const Session session(QString::fromStdString(db_->path()));
+        MainWindow& window = *session.window;
+        QTRY_VERIFY(opened(window));
+        child<QAction>(window, QStringLiteral("about_action")).trigger();
+        auto& dialog = child<QDialog>(window, QStringLiteral("about_dialog"));
+        QVERIFY(dialog.isVisible());
+        const QString text = child<QLabel>(dialog, QStringLiteral("about_text")).text();
+        QVERIFY(text.contains(
+            QStringLiteral("chess-coach ") +
+            QString::fromStdString(chesscoach::to_string(chesscoach::current_version()))));
+        QVERIFY(text.contains(QStringLiteral("data version 0")));
+        QVERIFY(text.contains(QStringLiteral("Colin M.L. Burnett")));
+        QVERIFY(text.contains(QStringLiteral("LGPL")));
+        save_screenshot(dialog, QStringLiteral("about"), QStringLiteral("dialog"));
+        dialog.reject();
     }
 };
 

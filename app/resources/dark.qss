@@ -1,0 +1,63 @@
+/* The dark theme: one stylesheet for the whole app (docs/reference/app.md, **Themes**); the
+   board's own colours are BoardTheme::dark(). */
+QMainWindow, QDialog {
+    background: #26292d;
+}
+QWidget {
+    color: #dcdcdc;
+}
+QToolBar {
+    background: #1f2226;
+    border: none;
+    spacing: 6px;
+}
+QToolButton {
+    color: #dcdcdc;
+}
+QMenuBar {
+    background: #1f2226;
+    color: #dcdcdc;
+}
+QMenuBar::item:selected, QMenu::item:selected {
+    background: #4f6f8f;
+}
+QMenu {
+    background: #1f2226;
+    color: #dcdcdc;
+}
+QGraphicsView#board {
+    background: transparent;
+    border: none;
+}
+QStatusBar {
+    background: #1f2226;
+}
+QComboBox {
+    background: #33373c;
+    color: #dcdcdc;
+}
+QTableView, QListWidget {
+    background: #2e3136;
+    alternate-background-color: #33373c;
+    selection-background-color: #4f6f8f;
+    selection-color: #ffffff;
+    gridline-color: #3c4046;
+}
+QHeaderView::section {
+    background: #1f2226;
+    color: #dcdcdc;
+    border: none;
+    border-right: 1px solid #3c4046;
+    padding: 3px 6px;
+}
+QTabBar::tab {
+    background: #1f2226;
+    color: #dcdcdc;
+    padding: 5px 14px;
+}
+QTabBar::tab:selected {
+    background: #33373c;
+}
+QLabel#explore_name {
+    font-size: 15px;
+}

@@ -7,6 +7,8 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Svg SvgWidgets Test)
 set(CMAKE_AUTOMOC ON)
 
 add_library(app_lib STATIC
+  src/about_dialog.cpp
+  src/about_dialog.hpp
   src/board_scene.cpp
   src/board_scene.hpp
   src/board_theme.cpp
@@ -28,6 +30,8 @@ add_library(app_lib STATIC
   src/piece_set.hpp
   src/promotion_chooser.cpp
   src/promotion_chooser.hpp
+  src/settings.cpp
+  src/settings.hpp
   src/squares.cpp
   src/squares.hpp)
 add_library(chesscoach::app_lib ALIAS app_lib)
@@ -42,6 +46,12 @@ qt_add_resources(app_lib "pieces"
   PREFIX "/pieces"
   BASE "${PROJECT_SOURCE_DIR}/data/pieces"
   FILES ${chesscoach_pieces})
+# The two themes, one stylesheet each (docs/reference/app.md, **Themes**).
+qt_add_resources(app_lib "themes"
+  PREFIX "/themes"
+  BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+  FILES resources/light.qss resources/dark.qss)
+
 add_executable(app
   src/main.cpp)
 set_target_properties(app PROPERTIES OUTPUT_NAME chess-coach)

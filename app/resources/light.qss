@@ -1,0 +1,54 @@
+/* The light theme: one stylesheet for the whole app (docs/reference/app.md, **Themes**); the
+   board's own colours are BoardTheme::light(). */
+QMainWindow, QDialog {
+    background: #f3f1ec;
+}
+QWidget {
+    color: #1e1e1e;
+}
+QToolBar {
+    background: #e8e4dc;
+    border: none;
+    spacing: 6px;
+}
+QMenuBar {
+    background: #e8e4dc;
+    color: #1e1e1e;
+}
+QMenuBar::item:selected, QMenu::item:selected {
+    background: #cdd26a;
+}
+QMenu {
+    background: #e8e4dc;
+    color: #1e1e1e;
+}
+QGraphicsView#board {
+    background: transparent;
+    border: none;
+}
+QStatusBar {
+    background: #e8e4dc;
+}
+QTableView, QListWidget {
+    background: #ffffff;
+    alternate-background-color: #f6f4ef;
+    selection-background-color: #cdd26a;
+    selection-color: #1e1e1e;
+    gridline-color: #e0ddd5;
+}
+QHeaderView::section {
+    background: #e8e4dc;
+    border: none;
+    border-right: 1px solid #d6d1c6;
+    padding: 3px 6px;
+}
+QTabBar::tab {
+    background: #e8e4dc;
+    padding: 5px 14px;
+}
+QTabBar::tab:selected {
+    background: #ffffff;
+}
+QLabel#explore_name {
+    font-size: 15px;
+}

@@ -5,18 +5,25 @@
 #include <chesscoach/tier.hpp>
 #include <chesscoach/version.hpp>
 
+#include "about_dialog.hpp"
+#include "board_theme.hpp"
 #include "board_view.hpp"
 #include "db_worker.hpp"
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
 
 #include <QAction>
+#include <QActionGroup>
+#include <QApplication>
 #include <QComboBox>
+#include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
 #include <QListWidget>
+#include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -42,8 +49,8 @@ QString tier_text(int tier) {
 
 } // namespace
 
-MainWindow::MainWindow(const QString& /*data_dir*/, QString db, QWidget* parent)
-    : QMainWindow(parent), db_path_(std::move(db)), db_worker_(new DbWorker()),
+MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
+    : QMainWindow(parent), settings_(data_dir), db_path_(std::move(db)), db_worker_(new DbWorker()),
       board_(new BoardView()), eval_bar_(new EvalBar()), explore_(new ExploreScreen()),
       move_list_(new QListWidget()), tier_selector_(new QComboBox()) {
     register_explore_types();
@@ -52,6 +59,7 @@ MainWindow::MainWindow(const QString& /*data_dir*/, QString db, QWidget* parent)
     line_keys_.append(Position::start().key());
 
     build_toolbar();
+    build_menus();
 
     move_list_->setObjectName(QStringLiteral("move_list"));
     connect(board_, &BoardView::move_played, this, &MainWindow::move_played);
@@ -92,6 +100,7 @@ MainWindow::MainWindow(const QString& /*data_dir*/, QString db, QWidget* parent)
     setCentralWidget(central);
 
     build_status_bar();
+    apply_theme(settings_.theme());
 
     // The worker owns the store on its own thread for the window's life; every request and
     // every answer crosses by queued connection.
@@ -141,9 +150,40 @@ void MainWindow::build_toolbar() {
     for (int index = 0; index < tier_count; ++index) {
         tier_selector_->addItem(tier_text(index), index);
     }
-    tier_selector_->setCurrentIndex(default_tier);
-    connect(tier_selector_, &QComboBox::currentIndexChanged, this, [this] { request_query(); });
+    tier_selector_->setCurrentIndex(settings_.last_tier().value_or(default_tier));
+    connect(tier_selector_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        settings_.set_last_tier(index);
+        request_query();
+    });
     toolbar->addWidget(tier_selector_);
+}
+
+void MainWindow::build_menus() {
+    QMenu* view = menuBar()->addMenu(tr("&View"));
+    QMenu* theme = view->addMenu(tr("&Theme"));
+    themes_ = new QActionGroup(this);
+    light_action_ = theme->addAction(tr("Light"));
+    dark_action_ = theme->addAction(tr("Dark"));
+    light_action_->setObjectName(QStringLiteral("theme_light"));
+    dark_action_->setObjectName(QStringLiteral("theme_dark"));
+    for (QAction* action : {light_action_, dark_action_}) {
+        action->setCheckable(true);
+        themes_->addAction(action);
+    }
+    connect(light_action_, &QAction::triggered, this,
+            [this] { choose_theme(QStringLiteral("light")); });
+    connect(dark_action_, &QAction::triggered, this,
+            [this] { choose_theme(QStringLiteral("dark")); });
+
+    QMenu* help = menuBar()->addMenu(tr("&Help"));
+    QAction* about = help->addAction(tr("&About chess-coach"));
+    about->setObjectName(QStringLiteral("about_action"));
+    about->setMenuRole(QAction::AboutRole);
+    connect(about, &QAction::triggered, this, &MainWindow::show_about);
+    QAction* about_qt = help->addAction(tr("About &Qt"));
+    about_qt->setObjectName(QStringLiteral("about_qt_action"));
+    about_qt->setMenuRole(QAction::AboutQtRole);
+    connect(about_qt, &QAction::triggered, this, [] { QApplication::aboutQt(); });
 }
 
 void MainWindow::build_status_bar() {
@@ -242,6 +282,28 @@ void MainWindow::position_ready(const ExploreData& data) {
     const bool evaluated = data.position && data.position->eval_depth;
     eval_bar_->set_evaluation(evaluated ? data.position->eval_cp : std::nullopt,
                               evaluated ? data.position->eval_mate : std::nullopt);
+}
+
+void MainWindow::choose_theme(const QString& theme) {
+    settings_.set_theme(theme);
+    apply_theme(theme);
+}
+
+void MainWindow::apply_theme(const QString& theme) {
+    const bool dark = theme == QStringLiteral("dark");
+    QFile stylesheet(dark ? QStringLiteral(":/themes/dark.qss")
+                          : QStringLiteral(":/themes/light.qss"));
+    if (stylesheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qApp->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
+    }
+    board_->set_theme(dark ? BoardTheme::dark() : BoardTheme::light());
+    (dark ? dark_action_ : light_action_)->setChecked(true);
+}
+
+void MainWindow::show_about() {
+    auto* dialog = new AboutDialog(data_version_, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->open();
 }
 
 } // namespace chesscoach::app
