@@ -84,7 +84,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | Run the app on an isolated data directory and a given database (the owner alone may omit `--data-dir`: it opens the real user data directory) | `build/dev/app/chess-coach --data-dir <dir> --db <file>` |
 | The CLI | `build/dev/cli/chess-coach-cli <command> [options]` |
 | The pipeline on the sample dump | `build/dev/pipeline/chess-coach-pipeline build --in pipeline/tests/sample/lichess_db_standard_rated_2013-01.pgn.zst --out <file>` |
-| Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` (Phase 1) |
+| Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` (Phase 3) |
 | Package | `cmake --build --preset release --target package` (Phase 6) |
 | Land a delivered series; in a batch, every series but the last with `--no-gate` | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--no-gate]` |
@@ -201,7 +201,7 @@ data/            the chess-openings TSV, piece sets, release database metadata
 docs/            database.md (the data contract); reference/ (one file per area, as it lands)
 legal/           the full licence text of every component that ships (`NOTICE` names them)
 tools/           gates.sh, run_tests.sh, format.sh, land_series.sh, changelog.sh;
-                 run_corpus.sh (Phase 1), ui_tests.sh (Phase 3)
+                 run_corpus.sh, ui_tests.sh (Phase 3)
 cmake/           warnings, sanitizers, the boundary check, packaging (Phase 0)
 vcpkg/           overlay ports (chess-library)
 .claude/agents/  scout, researcher, developer, reviewer
