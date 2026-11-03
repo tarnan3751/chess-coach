@@ -214,6 +214,7 @@ tl::expected<void, std::string> run_build(const BuildOptions& options, Report& r
         return tl::unexpected(created.error());
     }
     auto sketch = std::make_unique<VisitSketch>(std::move(*created));
+    const std::size_t sketch_width = sketch->width();
     std::vector<GameScanner> first(threads, GameScanner(options.max_ply, nullptr));
     Progress first_progress(progress, "pass one");
     const auto pass_one = scan_inputs(
@@ -340,7 +341,7 @@ tl::expected<void, std::string> run_build(const BuildOptions& options, Report& r
     }
     report.add("threads", threads);
     report.add("sketch_bytes", sketch_bytes);
-    report.add("sketch_width", sketch_bytes / (VisitSketch::rows * sizeof(std::uint16_t)));
+    report.add("sketch_width", sketch_width);
     report.add("candidates", candidates);
     report.add("nodes", tree->nodes.size());
     std::uint64_t moves = 0;

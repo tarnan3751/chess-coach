@@ -92,16 +92,20 @@ to the pass only at `endPgn`. Ratings are decimal integers of up to nine digits.
 
 ## The sketch
 
-`VisitSketch` has four rows of `width` 16-bit counters, `width` a power of two; a visit of
-(tier, key) adds one to one counter per row, chosen by multiply-shift hashing of the key mixed
-with a per-tier salt, and the estimate is the least of the four. Counters saturate at
-`min_games` (a compare-and-swap that stops there), which is why `min_games` is at most 65535.
+`VisitSketch` has four rows of `width` counters, `width` a power of two. The counters are 8-bit
+when `min_games` is at most 255, as the default 100 is, and 16-bit above it: the cells are a
+`std::variant` of the two vectors, and `add` and `estimate` are one body compiled for each, behind
+the one interface. A visit of (tier, key) adds one to one counter per row, chosen by
+multiply-shift hashing of the key mixed with a per-tier salt, and the estimate is the least of the
+four. Counters saturate at `min_games` (a compare-and-swap that stops there), which is why
+`min_games` is at most 65535.
 
 **Guarantee:** for every (tier, key), estimate ≥ min(true visits, `min_games`). So every
 (tier, key) with at least `min_games` visits is a candidate whatever the sketch's size, and the
 size sets only how many false positives pass two counts and discards. The property test
-`VisitSketch never underestimates below its saturation` checks it over random streams of visits
-and sizes; `run_build gives the same dump on two runs, any thread count and a tiny sketch`
+`VisitSketch never underestimates below its saturation` checks it over random streams of visits,
+sizes and saturations on both sides of 255, so at both widths; `run_build gives the same dump on
+two runs, any thread count and a tiny sketch`
 checks a 1 KiB sketch gives the same database. Saturating increments commute, so the final
 counters do not depend on the order of the adds or the number of threads.
 
@@ -109,16 +113,21 @@ The default size is the least power of two of at least twice the compressed inpu
 and 1 GiB: 64 MiB for a 2013 month, 1 GiB for a recent one; `--sketch-mib` overrides it, up to
 16 GiB, and a size the sketch cannot take is an error value (`VisitSketch::create`).
 
-**Sizing.** A row holds `width` = bytes / 8 counters, so each counter takes, on average, total
-visits / width of the visits; that load must stay well under `min_games`, or most cells saturate
-and pass two counts nearly every position. One recent month (on the order of a hundred million
-games, some thirty visits each) fits the 1 GiB default. Twelve recent months do not: they are
-projected at about 1.3 × 10^10 distinct (tier, key) pairs, so at least that many visits, which
-at 1 GiB (width 2^27, about 1.3 × 10^8) is about a hundred per counter, `min_games` itself, and
-nearly every cell saturates; at 16 GiB (width 2^31) it is about six. A twelve-month build
-therefore passes `--sketch-mib 16384`. If the machine cannot hold that, the two further options
-are 8-bit counters saturating at `min_games`, which halve the memory for the same width, and a
-per-depth frontier pass (`PLAN.md` §12, item 6).
+**Sizing.** A row holds `width` = bytes / 4 counters at 8 bits and bytes / 8 at 16 bits, so each
+counter takes, on average, total visits / width of the visits; that load must stay well under
+`min_games`, or most cells saturate and pass two counts nearly every position. One recent month
+(on the order of a hundred million games, some thirty visits each) fits the 1 GiB default: at the
+default `min_games`, width 2^28 and about eleven visits per counter. Twelve recent months do not:
+they are projected at about 1.3 × 10^10 distinct (tier, key) pairs, so at least that many visits,
+which at 1 GiB of 8-bit counters (width 2^28, about 2.7 × 10^8) is about fifty per counter, half
+of `min_games`, and many cells saturate; at 8 GiB (width 2^31) it is about six. A twelve-month
+build at the default `min_games` therefore passes `--sketch-mib 8192`; with `min_games` above
+255 the counters are 16-bit, and the same width takes `--sketch-mib 16384`. If the machine cannot
+hold that, the further option is a per-depth frontier pass (`PLAN.md` §12, item 6).
+
+On the 2013-01 month, which has no false positives at the default 64 MiB, a 1 MiB sketch passes
+774 candidates for 660 survivors with 16-bit counters and 699 with 8-bit ones; the database is
+the same.
 
 ## Pass two's counts
 
