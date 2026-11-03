@@ -451,13 +451,19 @@ ProfileStore::~ProfileStore() = default;
 tl::expected<ProfileStore, ProfileError> ProfileStore::open(const std::filesystem::path& data_dir,
                                                             Clock clock,
                                                             std::span<const Migration> scripts) {
-    assert(!scripts.empty() && scripts.front().version == 1);
     std::error_code error;
     std::filesystem::create_directories(data_dir, error);
     if (error) {
         return tl::unexpected(ProfileError::unwritable);
     }
-    const auto path = data_dir / "profiles.db";
+    return open_file(data_dir / "profiles.db", std::move(clock), scripts);
+}
+
+tl::expected<ProfileStore, ProfileError>
+ProfileStore::open_file(const std::filesystem::path& path, Clock clock,
+                        std::span<const Migration> scripts) {
+    assert(!scripts.empty() && scripts.front().version == 1);
+    std::error_code error;
     const bool fresh =
         !std::filesystem::exists(path, error) || std::filesystem::file_size(path, error) == 0;
     auto time = std::make_unique<Clock>(std::move(clock));

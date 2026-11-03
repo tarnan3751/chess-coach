@@ -254,6 +254,10 @@ class ProfileStore {
     struct Impl;
     explicit ProfileStore(std::unique_ptr<Impl> impl);
 
+    // open, on a file rather than a data directory.
+    [[nodiscard]] static tl::expected<ProfileStore, ProfileError>
+    open_file(const std::filesystem::path& path, Clock clock, std::span<const Migration> scripts);
+
     std::unique_ptr<Impl> impl_;
 };
 
