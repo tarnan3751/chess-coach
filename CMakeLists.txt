@@ -4,6 +4,14 @@
 #   cmake --preset dev && cmake --build --preset dev
 cmake_minimum_required(VERSION 3.28)
 
+# A static library named twice on a link line, which CMake's 3.28 behaviour writes when an
+# executable and the libraries it links share a dependency, makes Apple's linker warn "ignoring
+# duplicate libraries"; CMake 3.29 and later write each library once, under this policy, for the
+# linkers that need no repetition (Apple's, LLD, MSVC).
+if(POLICY CMP0156)
+  cmake_policy(SET CMP0156 NEW)
+endif()
+
 # The vcpkg toolchain, chosen before project() so the manifest's ports install under
 # build/<preset>/vcpkg_installed/: VCPKG_ROOT when set, else ~/vcpkg.
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
@@ -82,6 +90,9 @@ include(cmake/sanitizers.cmake)
 include(cmake/boundary.cmake)
 
 find_package(fmt CONFIG REQUIRED)
+# Found once, here, so every directory links the same imported target: a target found again in
+# each directory is a different one, which the link line cannot write once.
+find_package(SQLiteCpp CONFIG REQUIRED)
 find_package(tl-expected CONFIG REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 if(BUILD_TESTING)

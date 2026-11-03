@@ -37,7 +37,6 @@ target_link_libraries(cli PRIVATE chesscoach::cli_commands CLI11::CLI11 chesscoa
 chesscoach_assert_no_qt(cli)
 
 if(BUILD_TESTING)
-  find_package(SQLiteCpp CONFIG REQUIRED)
   add_library(cli_test_fixture STATIC
     tests/fixture.cpp
     tests/fixture.hpp)

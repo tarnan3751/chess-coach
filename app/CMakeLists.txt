@@ -84,7 +84,6 @@ target_link_libraries(app PRIVATE chesscoach::app_lib chesscoach::warnings)
 if(BUILD_TESTING)
   # The fixture opening database the Explore tests open, written into core's schema with
   # SQLiteCpp, as the CLI's tests write theirs.
-  find_package(SQLiteCpp CONFIG REQUIRED)
   add_library(app_test_fixture STATIC
     tests/fixture_db.cpp
     tests/fixture_db.hpp)

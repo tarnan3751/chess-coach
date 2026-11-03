@@ -43,7 +43,6 @@ add_library(core STATIC
 add_library(chesscoach::core ALIAS core)
 target_include_directories(core PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
                                        "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated>")
-find_package(SQLiteCpp CONFIG REQUIRED)
 find_package(reproc++ CONFIG REQUIRED)
 target_link_libraries(core PUBLIC fmt::fmt tl::expected
                            PRIVATE SQLiteCpp reproc++ chesscoach::warnings)

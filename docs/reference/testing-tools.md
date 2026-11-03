@@ -287,6 +287,17 @@ copyright. To move it, change `REF`, `SHA512` (`shasum -a 512` of
 `https://github.com/Disservin/chess-library/archive/<commit>.tar.gz`) and the port's
 `version-date` together.
 
+**Linking each library once.** `fmt`, `tl-expected`, `CLI11` and `SQLiteCpp` are found once,
+in the root `CMakeLists.txt`, so every directory links the same imported target (one found
+again in each directory is a different target, which a link line must name again); `SQLiteCpp`
+stays a private dependency of `core`, `pipeline_lib` and the test fixtures, and `app_lib` never
+sees its headers. The root also sets policy `CMP0156`: the "ignoring duplicate libraries" warning
+is Apple's linker reporting a static library named twice on a link line, which CMake writes by
+its 3.28 rules when an executable and the libraries it links share a dependency, and CMake 3.29
+and later, under the policy, write each library once for the linkers that need no repetition
+(Apple's, LLD, MSVC). CMake 3.28, which the policy does not exist in, still builds, with the
+warning.
+
 **Outside vcpkg:** Qt 6 Widgets, Svg, SvgWidgets and Test from Homebrew (6.12.0 at setup) or
 apt (6.4.2 on Ubuntu 24.04), `find_package(Qt6 6.4 ...)` in `app/` only; Stockfish 19 from
 Homebrew, a separate process, never linked; clang-format from its own Homebrew formula

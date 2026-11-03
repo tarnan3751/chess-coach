@@ -5,7 +5,6 @@
 # executable runs. chess-library's header comes in as a system include for the PGN parser
 # (game_scanner.cpp), found by core's find_path.
 find_package(zstd CONFIG REQUIRED)
-find_package(SQLiteCpp CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(pipeline_lib STATIC
