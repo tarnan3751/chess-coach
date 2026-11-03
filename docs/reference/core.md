@@ -446,8 +446,9 @@ order)`, which a property test checks over random choices and reviews.
      removes the copy and returns the error);
   3. opens the current `profiles.db` read-write and reads it, which rolls back a hot journal a
      stopped writer left beside it, so that journal is never played onto the imported file once
-     that takes the name; a `-journal` or `-wal` still there afterwards, or a lock past the busy
-     timeout, is `busy`;
+     that takes the name; while it holds that file's write lock, a `-journal` or `-wal` SQLite
+     ignores (an empty one, or a journal whose header PERSIST mode zeroed) is removed, and one
+     still there afterwards, or a lock past the busy timeout, is `busy`;
   4. renames the current file to `profiles.db.previous`, replacing an earlier one, and the copy to
      `profiles.db`; if that second rename fails, the first is undone, so a `profiles.db` always
      remains, and the import is `unwritable`.

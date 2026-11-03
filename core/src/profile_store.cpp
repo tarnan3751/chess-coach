@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -138,6 +139,24 @@ std::optional<int> read_version(const SQLite::Database& db) {
 
 // How long a connection waits for another's lock before it reports the file busy.
 constexpr std::chrono::milliseconds busy_timeout{2000};
+
+// Whether a -journal or -wal file beside a database is a stray SQLite ignores: an empty one, or a
+// journal whose header PERSIST mode zeroed at its last commit, its first byte 0.
+bool is_stray(const std::filesystem::path& file, bool journal) {
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(file, error)) {
+        return false;
+    }
+    if (std::filesystem::file_size(file, error) == 0 && !error) {
+        return true;
+    }
+    if (!journal) {
+        return false;
+    }
+    std::ifstream in(file, std::ios::binary);
+    char first = 1;
+    return in.get(first) && first == 0;
+}
 
 // A failure because another connection holds the file locked.
 bool is_busy(const SQLite::Exception& error) {
@@ -1130,11 +1149,22 @@ ProfileStore::import_profiles(const std::filesystem::path& data_dir,
     if (replacing) {
         // A rollback journal left beside the current file by a writer that stopped mid-write
         // would be played onto the imported file once that takes the name; opening the current
-        // file read-write and reading it rolls the journal back into it first.
+        // file read-write and taking its write lock reads it first, which rolls the journal back
+        // into it. With the write lock held no other connection is writing, so a -journal or -wal
+        // still beside it that SQLite ignores (is_stray) is a stray, and it is removed.
         try {
             SQLite::Database db(current, SQLite::OPEN_READWRITE);
             db.setBusyTimeout(static_cast<int>(busy_timeout.count()));
+            db.exec("BEGIN IMMEDIATE");
             static_cast<void>(db.execAndGet("SELECT count(*) FROM sqlite_master"));
+            for (const char* suffix : {"-journal", "-wal"}) {
+                auto beside = current;
+                beside += suffix;
+                if (is_stray(beside, std::string_view(suffix) == "-journal")) {
+                    std::filesystem::remove(beside, error);
+                }
+            }
+            db.exec("ROLLBACK");
         } catch (const SQLite::Exception& failure) {
             if (is_busy(failure)) {
                 return refuse(ProfileError::busy);

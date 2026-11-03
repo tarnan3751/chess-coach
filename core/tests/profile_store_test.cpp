@@ -297,6 +297,30 @@ Card new_card_for(std::int64_t id, std::int64_t profile_id, Color colour,
     };
 }
 
+// Copies the profiles.db at from to to as a writer stopped mid-transaction leaves it: the file,
+// with pages of an uncommitted transaction already written through a small cache (a profile
+// 'Uncommitted' and 2000 engine cache rows), and its journal holding those pages as they were,
+// copied while the transaction is open; the transaction is then rolled back at from.
+void copy_mid_transaction(const std::filesystem::path& from, const std::filesystem::path& to) {
+    SQLite::Database writer(from, SQLite::OPEN_READWRITE);
+    writer.exec("PRAGMA cache_size = 10");
+    writer.exec("BEGIN");
+    writer.exec("INSERT INTO profiles (name, tier, created_at) VALUES ('Uncommitted', 1, 1)");
+    writer.exec("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000) "
+                "INSERT INTO engine_cache (key, lines, line, depth, score_cp, score_mate, pv, "
+                "engine, created_at) "
+                "SELECT i, 1, 1, 1, 0, NULL, hex(randomblob(200)), 'x', 0 FROM n");
+    auto journal = from;
+    journal += "-journal";
+    REQUIRE(std::filesystem::file_size(journal) > 0);
+    std::filesystem::create_directories(to.parent_path());
+    std::filesystem::copy_file(from, to);
+    auto copied_journal = to;
+    copied_journal += "-journal";
+    std::filesystem::copy_file(journal, copied_journal);
+    writer.exec("ROLLBACK");
+}
+
 } // namespace
 
 TEST_CASE("A new data directory gets profiles.db at the current version with the Default profile",
@@ -1041,29 +1065,9 @@ TEST_CASE("An import rolls back a journal left beside the current file before re
         auto store = open_store(writer_dir, clock);
         REQUIRE(store.create_profile("Club", Tier::r1800_1999).has_value());
     }
-    // A writer stopped mid-transaction: its file, with pages of the transaction already written
-    // through a small cache, and the journal holding those pages as they were, copied while the
-    // transaction is open, which is what a killed writer leaves.
     auto crashed_journal = crashed.file();
     crashed_journal += "-journal";
-    {
-        SQLite::Database writer(writer_dir.file(), SQLite::OPEN_READWRITE);
-        writer.exec("PRAGMA cache_size = 10");
-        writer.exec("BEGIN");
-        writer.exec("INSERT INTO profiles (name, tier, created_at) VALUES ('Uncommitted', 1, 1)");
-        writer.exec(
-            "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000) "
-            "INSERT INTO engine_cache (key, lines, line, depth, score_cp, score_mate, pv, "
-            "engine, created_at) "
-            "SELECT i, 1, 1, 1, 0, NULL, hex(randomblob(200)), 'x', 0 FROM n");
-        auto journal = writer_dir.file();
-        journal += "-journal";
-        REQUIRE(std::filesystem::file_size(journal) > 0);
-        std::filesystem::create_directories(crashed.path());
-        std::filesystem::copy_file(writer_dir.file(), crashed.file());
-        std::filesystem::copy_file(journal, crashed_journal);
-        writer.exec("ROLLBACK");
-    }
+    copy_mid_transaction(writer_dir.file(), crashed.file());
 
     REQUIRE(ProfileStore::import_profiles(crashed.path(), source, clock.clock()).has_value());
     CHECK_FALSE(std::filesystem::exists(crashed_journal));
@@ -1141,6 +1145,52 @@ TEST_CASE("An import never takes the data directory's staging file as its source
           ProfileError::unwritable);
     CHECK(read_bytes(staging) == before);
     CHECK_FALSE(std::filesystem::exists(dir.file()));
+}
+
+TEST_CASE("A stray journal or WAL beside the replaced file is removed, unless another writes",
+          "[profiles][export]") {
+    const DataDir dir("import-stray");
+    const DataDir from("import-stray-source");
+    TestClock clock;
+    {
+        static_cast<void>(open_store(dir, clock));
+    }
+    {
+        static_cast<void>(open_store(from, clock));
+    }
+    const auto source = from.path() / "export.db";
+    REQUIRE(ProfileStore::export_profiles(from.path(), source).has_value());
+    auto journal = dir.file();
+    journal += "-journal";
+    auto wal = dir.file();
+    wal += "-wal";
+    write_bytes(journal, "");
+    write_bytes(wal, "");
+    SECTION("no other connection: removed, and the import goes on") {
+        REQUIRE(ProfileStore::import_profiles(dir.path(), source, clock.clock()).has_value());
+        CHECK_FALSE(std::filesystem::exists(journal));
+        CHECK_FALSE(std::filesystem::exists(wal));
+        CHECK(std::filesystem::exists(dir.path() / "profiles.db.previous"));
+    }
+    SECTION("a journal whose header PERSIST mode zeroed: removed too") {
+        write_bytes(journal, std::string(512, '\0'));
+        REQUIRE(ProfileStore::import_profiles(dir.path(), source, clock.clock()).has_value());
+        CHECK_FALSE(std::filesystem::exists(journal));
+        CHECK(std::filesystem::exists(dir.path() / "profiles.db.previous"));
+    }
+    SECTION("another connection writing: kept, and the import is busy") {
+        const auto before = read_bytes(dir.file());
+        {
+            SQLite::Database writer(dir.file(), SQLite::OPEN_READWRITE);
+            writer.exec("BEGIN IMMEDIATE");
+            CHECK(ProfileStore::import_profiles(dir.path(), source, clock.clock()).error() ==
+                  ProfileError::busy);
+            CHECK(std::filesystem::exists(journal));
+            writer.exec("ROLLBACK");
+        }
+        CHECK(read_bytes(dir.file()) == before);
+        CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.previous"));
+    }
 }
 
 TEST_CASE("A card stored out of range is reviewed without overflow", "[profiles][repertoire]") {

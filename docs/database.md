@@ -524,15 +524,16 @@ SQLite's backup API so that it is consistent even while the store is open. An ex
 overwrites an existing file, and a data directory without a `profiles.db` has nothing to export
 and is refused without anything being created.
 
-Importing a file refuses, without modifying anything, one that is not SQLite with a `meta` table
-and a decimal `schema_version` (§12.1), one newer than the importing build, and the data
-directory's own `profiles.db.importing`. It copies the file into the data directory as
-`profiles.db.importing` and opens that copy, which migrates it. Then it opens the current
-`profiles.db` read-write and reads it, so that a rollback journal a stopped writer left beside it
-is rolled back into it rather than played onto the imported file, and refuses if a `-journal` or
-`-wal` file still remains. Last, it renames the current `profiles.db` to `profiles.db.previous`,
-replacing any earlier one, and the copy to `profiles.db`; when that second rename fails, the first
-is undone, so a `profiles.db` always remains. The previous file is the one-step undo.
+Importing a file refuses, without modifying anything, one that is not SQLite with a `meta` table and
+a decimal `schema_version` (§12.1), one newer than the importing build, and the data directory's own
+`profiles.db.importing`. It copies the file into the data directory as `profiles.db.importing` and
+opens that copy, which migrates it. Then it opens the current `profiles.db` read-write and takes its
+write lock, which reads it, so that a rollback journal a stopped writer left beside it is rolled
+back into it rather than played onto the imported file; holding the lock, it removes a `-journal` or
+`-wal` SQLite ignores (an empty one, or a journal whose header is zeroed), and it refuses if one
+still remains. Last, it renames the current `profiles.db` to `profiles.db.previous`, replacing any
+earlier one, and the copy to `profiles.db`; when that second rename fails, the first is undone, so a
+`profiles.db` always remains. The previous file is the one-step undo.
 
 Both copies must complete: a file that another connection keeps locked past the store's two
 second busy timeout is reported busy, and a copy without the source's `meta` is removed, never
