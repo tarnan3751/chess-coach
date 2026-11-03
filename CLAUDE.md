@@ -197,6 +197,28 @@ vcpkg/           overlay ports (chess-library)
 PLAN.md          the plan: gitignored, read from the main tree
 ```
 
+## Code conventions
+
+- **Names.** Types `PascalCase`; functions, variables and namespaces `snake_case`; private data
+  members with a trailing underscore (`count_`); enumerators `snake_case` inside an `enum class`;
+  macros, which are rare, `CHESSCOACH_UPPER_SNAKE`. Qt overrides and slots keep Qt's camelCase
+  where Qt requires it; our own members are `snake_case` even in `app`.
+- **Files.** One type or one tight cluster per file; public headers `snake_case.hpp` under
+  `<module>/include/chesscoach/`, private sources under `<module>/src/`, tests
+  `<name>_test.cpp` under `<module>/tests/`. Every file opens with a comment saying what it
+  holds and which rules it obeys.
+- **Headers.** `#pragma once`; includes grouped as `.clang-format` orders them: the file's own
+  header, then `<chesscoach/...>`, then third-party, then the standard library.
+- **Namespaces.** Everything under `namespace chesscoach`, with a nested namespace per
+  executable module where one helps (`chesscoach::pipeline`); no `using namespace` in a header.
+- **Errors.** `tl::expected<T, E>` at every library boundary, `E` an `enum class` or a small
+  struct; exceptions only for programming errors; `[[nodiscard]]` on every function whose result
+  is the point.
+- **Ownership.** `std::unique_ptr` for our objects; Qt parent ownership for `QObject`s; never
+  both on one object. No raw owning pointers, no `new` outside a Qt parent-child construction.
+- **Formatting** is `.clang-format`'s (LLVM base, four-space indent, 100 columns, pointers
+  left-aligned); `.clang-tidy` is the linter; both run in the gate and neither is argued with.
+
 ## C++, Qt and chess gotchas for this project
 
 - **En passant in the key.** Hash the en passant file only when a capture is actually legal;
