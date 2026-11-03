@@ -40,6 +40,12 @@ class BoardView : public QGraphicsView {
     void set_position(const Position& position);
     [[nodiscard]] const Position& position() const { return position_; }
 
+    // Plays a legal move given in UCI as if it had been clicked: animated, then announced by
+    // move_played. Returns false, and plays nothing, for any other text.
+    bool play_move(const QString& uci);
+
+    void set_theme(const BoardTheme& theme);
+
     // Turns the board round: black at the bottom, or white again.
     void flip();
     [[nodiscard]] bool flipped() const;

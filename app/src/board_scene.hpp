@@ -41,6 +41,10 @@ class BoardScene : public QGraphicsScene {
 
     explicit BoardScene(const BoardTheme& theme, QObject* parent = nullptr);
 
+    [[nodiscard]] const BoardTheme& theme() const { return theme_; }
+    // Recolours the squares, highlights, hints and coordinates.
+    void set_theme(const BoardTheme& theme);
+
     [[nodiscard]] bool flipped() const { return flipped_; }
     // Lays every item out again with white at the top (flipped) or at the bottom.
     void set_flipped(bool flipped);

@@ -41,7 +41,6 @@ BoardScene::BoardScene(const BoardTheme& theme, QObject* parent)
     for (int square = 0; square < square_count; ++square) {
         auto* item = new QGraphicsRectItem();
         item->setPen(Qt::NoPen);
-        item->setBrush(is_light(square) ? theme_.light_square : theme_.dark_square);
         item->setZValue(square_z);
         addItem(item);
         squares_.at(index(square)) = item;
@@ -52,15 +51,7 @@ BoardScene::BoardScene(const BoardTheme& theme, QObject* parent)
         item->setVisible(false);
         addItem(item);
     }
-    last_from_->setBrush(theme_.last_move);
-    last_to_->setBrush(theme_.last_move);
-    selected_item_->setBrush(theme_.selected);
-    QRadialGradient glow(QPointF(0.5, 0.5), 0.5);
-    glow.setCoordinateMode(QGradient::ObjectBoundingMode);
-    glow.setColorAt(0.0, theme_.check);
-    glow.setColorAt(1.0, Qt::transparent);
     check_item_->setPen(Qt::NoPen);
-    check_item_->setBrush(glow);
     check_item_->setZValue(highlight_z);
     check_item_->setVisible(false);
     addItem(check_item_);
@@ -79,7 +70,24 @@ BoardScene::BoardScene(const BoardTheme& theme, QObject* parent)
         file_labels_.at(index(i)) = file;
         rank_labels_.at(index(i)) = rank;
     }
-    layout();
+    set_theme(theme_);
+}
+
+void BoardScene::set_theme(const BoardTheme& theme) {
+    theme_ = theme;
+    for (int square = 0; square < square_count; ++square) {
+        squares_.at(index(square))
+            ->setBrush(is_light(square) ? theme_.light_square : theme_.dark_square);
+    }
+    last_from_->setBrush(theme_.last_move);
+    last_to_->setBrush(theme_.last_move);
+    selected_item_->setBrush(theme_.selected);
+    QRadialGradient glow(QPointF(0.5, 0.5), 0.5);
+    glow.setCoordinateMode(QGradient::ObjectBoundingMode);
+    glow.setColorAt(0.0, theme_.check);
+    glow.setColorAt(1.0, Qt::transparent);
+    check_item_->setBrush(glow);
+    layout(); // the coordinates and the hints take their colours there
 }
 
 void BoardScene::set_flipped(bool flipped) {

@@ -52,6 +52,19 @@ void BoardView::set_position(const Position& position) {
     refresh();
 }
 
+bool BoardView::play_move(const QString& uci) {
+    const std::string text = uci.toStdString();
+    const auto legal = position_.legal_moves_uci();
+    if (std::ranges::find(legal, text) == legal.end()) {
+        return false;
+    }
+    cancel_promotion();
+    play(text, true);
+    return true;
+}
+
+void BoardView::set_theme(const BoardTheme& theme) { scene_->set_theme(theme); }
+
 void BoardView::flip() {
     stop_animations();
     cancel_promotion();
