@@ -57,3 +57,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(CTest)
 include(cmake/warnings.cmake)
 include(cmake/sanitizers.cmake)
+include(cmake/boundary.cmake)
+
+if(BUILD_TESTING)
+  # The module boundary and the no-network rule over the sources, the same patterns as
+  # tools/gates.sh's boundary step.
+  add_test(NAME boundary
+           COMMAND "${CMAKE_COMMAND}" "-DCHESSCOACH_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+                   -P "${PROJECT_SOURCE_DIR}/cmake/boundary_check.cmake")
+  set_tests_properties(boundary PROPERTIES LABELS "cmake;unit")
+endif()
