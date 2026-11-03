@@ -141,8 +141,11 @@ class SparSession {
 
     // Plays the coach's reply when the session has not ended and the user is not to move: the
     // sampler's draw while in book; the provider's move once off book, or when the book position
-    // has no candidate, which leaves the book. Returns the reply's UCI. Calling it otherwise is a
-    // programming error (std::logic_error).
+    // has no candidate, which leaves the book once that move has played. Returns the reply's UCI.
+    // A provider's failure or illegal move is an error that changes nothing. Calling it otherwise
+    // is a programming error (std::logic_error); a book move the opening database holds that is
+    // not legal where it is drawn is a corrupt file, which throws std::runtime_error, as the
+    // store's own reads of a corrupt file do.
     [[nodiscard]] tl::expected<std::string, SparError> coach_reply(ReplyProvider& provider);
 
     [[nodiscard]] Summary summary() const;

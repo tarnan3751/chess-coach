@@ -351,7 +351,11 @@ involved, so a seed draws the same replies on every platform.
 A session starts in `book` when the start position has a `nodes` row at the tier, else in
 `off_book`. The user moves with `play_user_move(uci)` and the coach with `coach_reply(provider)`;
 calling either out of turn is a programming error (`std::logic_error`), a move that is not legal
-is a `MoveError`, and a provider's failure or illegal move is a `SparError` that changes nothing.
+is a `MoveError`, and a provider's failure or illegal move is a `SparError` that changes nothing,
+the phase included: a book position without a candidate leaves the book only once the
+provider's move has played. A book move the opening database holds that does not play where it
+is drawn means a corrupt file, and `coach_reply` throws `std::runtime_error`, the store's policy
+for a corrupt file.
 
 **Interruptions.** While in book, a user move that carries the Dubious badge, or whose child
 has no `nodes` row at the tier (§7.3, even when the move itself was never played there and a
