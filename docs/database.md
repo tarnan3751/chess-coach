@@ -403,7 +403,8 @@ UTC.
 `meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)` holds `schema_version`. Each version has one SQL
 migration script that takes a file from the previous version to it. At open the store creates an
 absent or zero-length file at version 1, by version 1's script, and refuses, without modifying
-it, an existing non-empty file that has no `meta` table. It then reads `schema_version`, migrates
+it, an existing non-empty file that has no `meta` table, or whose `meta` has no `schema_version`
+row or one that is not a positive decimal integer. It then reads `schema_version`, migrates
 an older file by running each later script in order, each in its own transaction that sets
 `schema_version` as its last statement, and refuses a file newer than itself without modifying
 it. A test opens a file from every earlier version.
@@ -420,7 +421,7 @@ INTEGER NOT NULL)`. Version 1's script creates the profile `Default` at tier 2.
 | `key` | `INTEGER` | no | The searched position's key |
 | `lines` | `INTEGER` | no | The search's line count (`MultiPV`) |
 | `line` | `INTEGER` | no | This line's `multipv` index, from 1 to the number of lines the search returned |
-| `depth` | `INTEGER` | no | The depth of this line's last `info` |
+| `depth` | `INTEGER` | no | The depth of this line's last `info` with an exact score (one marked `lowerbound` or `upperbound` does not count) |
 | `score_cp` | `INTEGER` | yes | Centipawns from the side to move, as UCI gives it |
 | `score_mate` | `INTEGER` | yes | Mate in moves from the side to move, as UCI gives it; exactly one of the two scores is not null |
 | `pv` | `TEXT` | no | The principal variation, UCI moves separated by spaces |
@@ -429,7 +430,8 @@ INTEGER NOT NULL)`. Version 1's script creates the profile `Default` at tier 2.
 
 `PRIMARY KEY (key, lines, line)`. The engine cache's scores are from the side to move, unlike
 `openings.db`'s, which are from white's side. Only full-strength searches are cached: a
-limited-strength search (`UCI_LimitStrength`, as Spar runs) neither reads nor writes the cache.
+limited-strength search (`UCI_LimitStrength`, as Spar runs) neither reads nor writes the cache,
+and a search stopped before its time is not stored, since it may lack lines its position has.
 A search stores exactly the lines it returned, which are fewer than `lines` when the position has
 fewer legal moves, so a complete result has between one and `lines` rows. A lookup for `(key,
 lines)` with a minimum depth hits when at least one row exists for the pair and the least depth
