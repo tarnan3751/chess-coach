@@ -63,7 +63,8 @@ license"). The opening database is built from them by chess-coach's own pipeline
     https://database.lichess.org/
 Opening names, lichess-org/chess-openings (a.tsv through e.tsv), CC0 1.0 Universal
     https://github.com/lichess-org/chess-openings
-The cburnett chess piece set, by Colin M.L. Burnett, Creative Commons Attribution-ShareAlike 3.0
-Unported (CC BY-SA 3.0), as published in lila's piece directory
-    https://github.com/lichess-org/lila/tree/master/public/piece/cburnett
+The cburnett chess piece set (data/pieces/cburnett/), by Colin M.L. Burnett, from Wikimedia
+Commons, used under the Creative Commons Attribution-ShareAlike 3.0 Unported licence (CC BY-SA
+3.0), one of the licences the author publishes it under
+    https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces/Standard_transparent
     https://creativecommons.org/licenses/by-sa/3.0/
