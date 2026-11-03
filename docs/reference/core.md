@@ -19,6 +19,7 @@ sampler, the spar session, the scheduler and repertoire coverage are described b
 | `names.hpp` | `load_names`, `NameTable`, `Opening`, `NameError` |
 | `opening_schema.hpp` | `openings_schema_sql()`, `opening_schema_version` |
 | `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
+| `opening_locator.hpp` | `locate_opening_database`, `LocatorInput`, `import_opening_database`, `ImportedDatabase`, `ImportError` |
 | `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_value`, `evaluation_loss`, `book_margin_cp`, the score's numbers |
 | `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
 | `spar.hpp` | `SparSession`, `SparConfig`, `Interruption`, `Summary`, `ReplyProvider`, `SparError` |
@@ -203,6 +204,37 @@ error, a file corrupted on disk) throws `std::runtime_error` (`SQLite::Exception
 non-negative and then the negative ones: the order of the keys as unsigned, with nothing sorted
 in memory. Every column is written as stored: NULL as `-`, an integer in decimal (a key column
 as the unsigned value of its bits), text as it is.
+
+## Where the opening database is
+
+`locate_opening_database(LocatorInput)` returns `explicit_db` (a `--db` given) whenever it is
+given, whether or not the file is there, so the caller's open reports a missing one (`no such
+file`) and another file is never read in its place (`PLAN.md` §11). Without one it returns the
+first regular file of `<data_dir>/openings.db` and `<bundle_resources>/openings.db` (the app
+bundle's resources, where a release ships the database while it is small, `PLAN.md` §12 item 2),
+or nullopt. It only looks; opening the file is `OpeningStore::open`'s. The CLI and the app both
+find the file through it.
+
+`import_opening_database(data_dir, source)` puts a copy of a file in place as
+`<data_dir>/openings.db`, which nothing ever writes in place:
+
+1. it refuses, changing nothing, a source that is not a regular file (`missing_source`), that is
+   the data directory's `openings.db` itself (`already_in_place`) or lies elsewhere inside the
+   data directory, `.previous` and `.importing` included (`inside_data_dir`), and one
+   `OpeningStore::open` refuses (`not_openings`, with its `StoreError`); a `wrong_version` whose
+   `schema_version` is above `opening_schema_version` is `newer_version`, with the source's
+   version, so the message can name both;
+2. it creates the data directory, copies the source to `openings.db.importing`, a plain copy, and
+   opens the copy, which must open with the source's `data_version`, else the copy is removed
+   (`unwritable`, as is any copy or rename that fails);
+3. it renames the current `openings.db`, if any, to `openings.db.previous`, replacing an earlier
+   one, and the copy to `openings.db`; when that second rename fails, the first is undone, so an
+   `openings.db` that was there stays. The undo is not tested, since no failure of a rename in
+   one directory can be provoked without a fault hook.
+
+It returns the path, the `data_version` (`opening_data_version`), meta's `months` as stored and
+whether a file was replaced. A reader holding the old file keeps reading it until it opens the
+path again; the source is only read.
 
 ## The recommendation score
 
@@ -605,6 +637,9 @@ file rolled back, a file locked by another connection reported busy, the version
 migrated and the version 3 one opened unchanged);
 `profile_store_property_test` (over random choices for one position and random reviews, a card's
 stored state is the replay of its stored reviews);
+`opening_locator_test` (the locator's order, an explicit path taken though it is not there, a
+directory where the data directory's file is expected, the import's round trip with `.previous`,
+every refusal leaving the data directory as it was);
 `random_test` (the reference output of seed 0, one sequence per seed; `key_test`'s pinned values
 guard the tables); `sampler_test` (min_games, the order, no draw without a candidate, the draw by
 cumulative weight, one sequence per seed, and the frequencies over 200,000 draws within half a point

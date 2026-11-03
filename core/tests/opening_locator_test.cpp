@@ -1,0 +1,207 @@
+// Unit tests for chesscoach/opening_locator.hpp (core; unit): the locator's order, an explicit path
+// taken whether or not it is there, then the data directory and the bundle's resources; the
+// import's round trip, which keeps the replaced file as openings.db.previous; and every refusal,
+// after which the data directory is as it was. Each database is a small file in core's schema
+// (openings_schema_sql) whose meta varies. The undo of a failed final rename cannot be provoked
+// without a fault hook, so it is documented (docs/reference/core.md) rather than tested.
+#include <chesscoach/opening_locator.hpp>
+#include <chesscoach/opening_schema.hpp>
+
+#include <SQLiteCpp/SQLiteCpp.h>
+#include <catch2/catch_test_macros.hpp>
+
+#include <algorithm>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
+
+using chesscoach::ImportError;
+using chesscoach::LocatorInput;
+using chesscoach::StoreError;
+
+namespace {
+
+// A directory of its own for each test, under the build directory, removed when it ends.
+class Scratch {
+  public:
+    explicit Scratch(std::string_view name)
+        : root_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "locator" / name) {
+        std::filesystem::remove_all(root_);
+        std::filesystem::create_directories(root_);
+    }
+    Scratch(const Scratch&) = delete;
+    Scratch& operator=(const Scratch&) = delete;
+    Scratch(Scratch&&) = delete;
+    Scratch& operator=(Scratch&&) = delete;
+    ~Scratch() {
+        std::error_code ignored;
+        std::filesystem::remove_all(root_, ignored);
+    }
+    [[nodiscard]] std::filesystem::path path(std::string_view name) const { return root_ / name; }
+
+  private:
+    std::filesystem::path root_;
+};
+
+// SQLite's open flags are ints, combined with | as its API documents.
+int create_flags() {
+    return SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE; // NOLINT(bugprone-signed-bitwise)
+}
+
+// An opening database with core's tables and the meta given, and no rows.
+void write_openings(const std::filesystem::path& path, std::string_view schema_version,
+                    std::string_view data_version, std::string_view months = "2013-01") {
+    std::filesystem::create_directories(path.parent_path());
+    SQLite::Database db(path, create_flags());
+    db.exec(chesscoach::openings_schema_sql());
+    SQLite::Statement insert(db, "INSERT INTO meta (key, value) VALUES (?1, ?2)");
+    for (const auto& [key, value] : {
+             std::pair{std::string_view("schema_version"), schema_version},
+             std::pair{std::string_view("data_version"), data_version},
+             std::pair{std::string_view("months"), months},
+         }) {
+        insert.bind(1, std::string(key));
+        insert.bind(2, std::string(value));
+        insert.exec();
+        insert.reset();
+    }
+}
+
+void write_text(const std::filesystem::path& path, std::string_view text) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary);
+    out << text;
+}
+
+std::string read_bytes(const std::filesystem::path& path) {
+    const std::ifstream in(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
+
+// The names in the directory, sorted, to show what an import left there.
+std::string listing(const std::filesystem::path& directory) {
+    std::vector<std::string> names;
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator(directory, error)) {
+        names.push_back(entry.path().filename().string());
+    }
+    std::ranges::sort(names);
+    std::string text;
+    for (const auto& name : names) {
+        text += name + ' ';
+    }
+    return text;
+}
+
+} // namespace
+
+TEST_CASE("The locator takes --db, there or not, else the data directory's file, else the bundle's",
+          "[locator]") {
+    const Scratch scratch("order");
+    const auto explicit_db = scratch.path("mine.db");
+    const auto data_dir = scratch.path("data");
+    const auto bundle = scratch.path("bundle");
+    const auto locate = [&](bool with_explicit, bool with_bundle) {
+        return chesscoach::locate_opening_database(LocatorInput{
+            .explicit_db = with_explicit ? std::optional(explicit_db) : std::nullopt,
+            .data_dir = data_dir,
+            .bundle_resources = with_bundle ? std::optional(bundle) : std::nullopt,
+        });
+    };
+    // An explicit path is the answer whenever it is given, though nothing is there.
+    CHECK(locate(true, true) == explicit_db);
+    CHECK_FALSE(locate(false, true).has_value());
+    write_openings(bundle / "openings.db", "1", "1");
+    CHECK(locate(false, true) == bundle / "openings.db");
+    CHECK_FALSE(locate(false, false).has_value());
+    CHECK(locate(true, true) == explicit_db);
+    write_openings(data_dir / "openings.db", "1", "2");
+    CHECK(locate(false, true) == data_dir / "openings.db");
+    CHECK(locate(false, false) == data_dir / "openings.db");
+    CHECK(locate(true, true) == explicit_db);
+    write_openings(explicit_db, "1", "3");
+    CHECK(locate(true, true) == explicit_db);
+    // Without one, a directory where the data directory's file should be is not a file.
+    std::filesystem::remove(data_dir / "openings.db");
+    std::filesystem::create_directories(data_dir / "openings.db");
+    CHECK(locate(false, true) == bundle / "openings.db");
+}
+
+TEST_CASE("An import puts a copy in place and keeps the file it replaces", "[locator]") {
+    const Scratch scratch("round-trip");
+    const auto data_dir = scratch.path("data");
+    const auto first = scratch.path("first.db");
+    const auto second = scratch.path("second.db");
+    write_openings(first, "1", "3", "2013-01");
+    write_openings(second, "1", "4", "2013-01,2013-02");
+
+    const auto put = chesscoach::import_opening_database(data_dir, first);
+    REQUIRE(put.has_value());
+    CHECK(put->path == data_dir / "openings.db");
+    CHECK(put->data_version == 3);
+    CHECK(put->months == "2013-01");
+    CHECK_FALSE(put->replaced);
+    CHECK(read_bytes(data_dir / "openings.db") == read_bytes(first));
+    CHECK(listing(data_dir) == "openings.db ");
+
+    const auto replaced = chesscoach::import_opening_database(data_dir, second);
+    REQUIRE(replaced.has_value());
+    CHECK(replaced->data_version == 4);
+    CHECK(replaced->months == "2013-01,2013-02");
+    CHECK(replaced->replaced);
+    CHECK(read_bytes(data_dir / "openings.db") == read_bytes(second));
+    CHECK(read_bytes(data_dir / "openings.db.previous") == read_bytes(first));
+    CHECK(listing(data_dir) == "openings.db openings.db.previous ");
+    // The sources are only read.
+    CHECK(chesscoach::OpeningStore::open(first).has_value());
+    CHECK(chesscoach::OpeningStore::open(second).has_value());
+}
+
+TEST_CASE("An import that cannot be used is refused and changes nothing", "[locator]") {
+    const Scratch scratch("refused");
+    const auto data_dir = scratch.path("data");
+    write_openings(data_dir / "openings.db", "1", "7");
+    write_openings(data_dir / "openings.db.previous", "1", "6");
+    const auto before = read_bytes(data_dir / "openings.db");
+    const auto refusal = [&](const std::filesystem::path& source) {
+        const auto result = chesscoach::import_opening_database(data_dir, source);
+        REQUIRE_FALSE(result.has_value());
+        return result.error();
+    };
+    using Reason = ImportError::Reason;
+
+    CHECK(refusal(scratch.path("missing.db")).reason == Reason::missing_source);
+    write_text(scratch.path("notes.txt"), "not a database\n");
+    const auto text = refusal(scratch.path("notes.txt"));
+    CHECK(text.reason == Reason::not_openings);
+    CHECK(text.store_error == StoreError::unreadable);
+    {
+        SQLite::Database db(scratch.path("no-meta.db"), create_flags());
+        db.exec("CREATE TABLE notes (text TEXT)");
+    }
+    CHECK(refusal(scratch.path("no-meta.db")).store_error == StoreError::no_meta);
+    write_openings(scratch.path("newer.db"), "2", "9");
+    const auto newer = refusal(scratch.path("newer.db"));
+    CHECK(newer.reason == Reason::newer_version);
+    CHECK(newer.source_version == 2);
+    write_openings(scratch.path("older.db"), "0", "9");
+    const auto older = refusal(scratch.path("older.db"));
+    CHECK(older.reason == Reason::not_openings);
+    CHECK(older.store_error == StoreError::wrong_version);
+    CHECK(older.source_version == 0);
+    CHECK(refusal(data_dir / "openings.db").reason == Reason::already_in_place);
+    CHECK(refusal(data_dir / "openings.db.previous").reason == Reason::inside_data_dir);
+    write_openings(data_dir / "sub" / "other.db", "1", "8");
+    CHECK(refusal(data_dir / "sub" / "other.db").reason == Reason::inside_data_dir);
+
+    CHECK(read_bytes(data_dir / "openings.db") == before);
+    CHECK(listing(data_dir) == "openings.db openings.db.previous sub ");
+}

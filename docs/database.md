@@ -152,7 +152,11 @@ below. Keys are §5.2's, moves §5.3's, tiers §4's.
 
 ### 6.1 `meta`
 
-`meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)`, one row per key:
+`meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)`, one row per key. The app and the CLI read the
+file the user names (`--db`), else `openings.db` in the data directory, else, for the app, the
+one its bundle ships (§12 item 2 of `PLAN.md`), and an import puts a new one in the data directory
+beside `openings.db.previous`, the one it replaced (`docs/reference/core.md`, **Where the
+opening database is**).
 
 | Key | Value |
 |---|---|
