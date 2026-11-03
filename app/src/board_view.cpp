@@ -75,7 +75,7 @@ bool BoardView::flipped() const { return scene_->flipped(); }
 
 bool BoardView::animating() const {
     return std::ranges::any_of(animations_, [](const QPointer<QVariantAnimation>& animation) {
-        return animation && animation->state() == QAbstractAnimation::Running;
+        return !animation.isNull() && animation->state() == QAbstractAnimation::Running;
     });
 }
 
@@ -198,7 +198,7 @@ void BoardView::animate_piece(int from, int to) {
 
 void BoardView::stop_animations() {
     for (const QPointer<QVariantAnimation>& animation : animations_) {
-        if (animation) {
+        if (!animation.isNull()) {
             animation->disconnect();
             animation->stop();
         }
