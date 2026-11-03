@@ -64,6 +64,8 @@ fi
 # Homebrew's llvm keg holds clang-tidy and run-clang-tidy without linking them into the PATH.
 # The tidy step names the clang-tidy binary explicitly: a distribution's versioned driver
 # (Ubuntu's run-clang-tidy-18) otherwise runs its own clang-tidy-18, not the one on the PATH.
+# CMAKE_BUILD_PARALLEL_LEVEL, when set, also caps the tidy jobs, so a throttled gate stays
+# throttled through its slowest step.
 for p in /opt/homebrew/opt/llvm/bin /usr/local/opt/llvm/bin; do
   [ -d "$p" ] && PATH="$PATH:$p"
 done
@@ -201,6 +203,7 @@ elif ! command -v run-clang-tidy >/dev/null; then
   echo "run-clang-tidy not found on the PATH nor under Homebrew's llvm (brew install llvm)" >"$scratch/tidy.txt"
   report tidy FAILED "no run-clang-tidy" "$scratch/tidy.txt"
 elif run-clang-tidy -clang-tidy-binary "$(command -v clang-tidy)" -p "build/$preset" -quiet \
+    ${CMAKE_BUILD_PARALLEL_LEVEL:+-j "$CMAKE_BUILD_PARALLEL_LEVEL"} \
     "$PWD/(core|pipeline|cli|app)/" >"$scratch/tidy.txt" 2>&1; then
   report tidy ok ""
 else
