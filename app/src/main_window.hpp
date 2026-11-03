@@ -90,6 +90,14 @@ class MainWindow : public QMainWindow {
 
   signals:
     void open_requested(const QString& path);
+    // The three below are connected with Qt::BlockingQueuedConnection: the emit returns once the
+    // worker has run the slot (closing stores before a file swap, saving the session and the
+    // pending grade before the threads stop). Signals, not QMetaObject::invokeMethod with a
+    // functor: Qt 6.4's functor overloads allocate in the header, which clang's analyzer
+    // reports as a leak.
+    void close_stores_requested();
+    void end_session_requested();
+    void review_record_requested(qint64 card_id, bool white, quint64 key, int grade);
     void query_requested(const QVector<quint64>& line_keys, int tier);
     void configure_requested(const chesscoach::app::EngineSettings& settings);
     void evaluate_requested(quint64 key, const QString& fen, int request_id);

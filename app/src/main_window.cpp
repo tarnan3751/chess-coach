@@ -232,6 +232,14 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(this, &MainWindow::due_requested, profile_worker_, &ProfileWorker::due_cards);
     connect(this, &MainWindow::review_requested, profile_worker_, &ProfileWorker::record_review);
     connect(this, &MainWindow::database_changed, profile_worker_, &ProfileWorker::set_database);
+    connect(this, &MainWindow::close_stores_requested, engine_worker_, &EngineWorker::close_stores,
+            Qt::BlockingQueuedConnection);
+    connect(this, &MainWindow::close_stores_requested, spar_worker_, &SparWorker::close_stores,
+            Qt::BlockingQueuedConnection);
+    connect(this, &MainWindow::end_session_requested, spar_worker_, &SparWorker::end_session,
+            Qt::BlockingQueuedConnection);
+    connect(this, &MainWindow::review_record_requested, profile_worker_,
+            &ProfileWorker::record_review, Qt::BlockingQueuedConnection);
     connect(this, &MainWindow::profile_import_requested, profile_worker_,
             &ProfileWorker::import_profiles);
     connect(profile_worker_, &ProfileWorker::profiles_imported, this,
@@ -265,8 +273,7 @@ MainWindow::~MainWindow() {
     // once, and the window waits for the worker to save the session before it joins the thread.
     if (spar_running_) {
         spar_worker_->stop_coach();
-        QMetaObject::invokeMethod(spar_worker_, &SparWorker::end_session,
-                                  Qt::BlockingQueuedConnection);
+        emit end_session_requested();
     }
     spar_thread_.quit();
     spar_thread_.wait();
@@ -275,12 +282,7 @@ MainWindow::~MainWindow() {
         recorded_ = true;
         const DrillCard card = *card_;
         const int grade = grade_;
-        QMetaObject::invokeMethod(
-            profile_worker_,
-            [this, card, grade] {
-                profile_worker_->record_review(card.id, card.white, card.key, grade);
-            },
-            Qt::BlockingQueuedConnection);
+        emit review_record_requested(card.id, card.white, card.key, grade);
     }
     profile_thread_.quit();
     profile_thread_.wait();
@@ -650,10 +652,7 @@ void MainWindow::import_profile(const QString& path) {
     if (answered_ && !recorded_) {
         drill_record();
     }
-    QMetaObject::invokeMethod(engine_worker_, &EngineWorker::close_stores,
-                              Qt::BlockingQueuedConnection);
-    QMetaObject::invokeMethod(spar_worker_, &SparWorker::close_stores,
-                              Qt::BlockingQueuedConnection);
+    emit close_stores_requested();
     // The busy dialog keeps the window from sending anything while the file is swapped: no move
     // opens the engine cache and no End session saves a session meanwhile.
     begin_import(tr("Importing the profile\u2026"), QStringLiteral("profile_import_progress"));
@@ -663,8 +662,7 @@ void MainWindow::import_profile(const QString& path) {
 void MainWindow::profile_import_done(const QString& path, const QString& error) {
     end_import();
     // A store opened while the import ran holds the replaced file: they all open the path again.
-    QMetaObject::invokeMethod(engine_worker_, &EngineWorker::close_stores, Qt::QueuedConnection);
-    QMetaObject::invokeMethod(spar_worker_, &SparWorker::close_stores, Qt::QueuedConnection);
+    emit close_stores_requested();
     if (!error.isEmpty()) {
         show_profile_error(error);
     } else {
@@ -712,7 +710,10 @@ void MainWindow::begin_import(const QString& text, const QString& name) {
 
 void MainWindow::end_import() {
     if (!import_progress_.isNull()) {
-        // Hidden, not closed: the dialog refuses a close while the import runs.
+        // Hidden, not closed: the dialog refuses a close while the import runs. The filter goes
+        // first: the dying dialog's child-removed events would otherwise reach eventFilter, whose
+        // QPointer downcast of a half-destroyed object UBSan's vptr check reports.
+        import_progress_->removeEventFilter(this);
         import_progress_->hide();
         import_progress_->deleteLater();
     }
@@ -753,13 +754,15 @@ void MainWindow::database_import_failed(const QString& message) {
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     // The busy dialog stays until the import answers: Escape would reject it and a close would
     // close it, so both are eaten.
-    if (!import_progress_.isNull() && watched == import_progress_.data()) {
+    const auto type = event->type();
+    if ((type == QEvent::Close || type == QEvent::KeyPress) && !import_progress_.isNull() &&
+        watched == import_progress_.data()) {
         const auto* key = dynamic_cast<const QKeyEvent*>(event);
-        if (event->type() == QEvent::Close) {
+        if (type == QEvent::Close) {
             event->ignore();
             return true;
         }
-        if (event->type() == QEvent::KeyPress && key != nullptr && key->key() == Qt::Key_Escape) {
+        if (type == QEvent::KeyPress && key != nullptr && key->key() == Qt::Key_Escape) {
             return true;
         }
     }

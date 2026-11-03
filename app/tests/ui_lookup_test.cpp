@@ -257,8 +257,10 @@ class LookupTest : public QObject {
         qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "normal");
         {
             const MainWindow window(places.data_dir, QString());
-            QTRY_COMPARE_WITH_TIMEOUT(text(window, QStringLiteral("engine_status")),
-                                      QStringLiteral("Engine: FakeUCI 1.0"), 30000);
+            const auto status = QStringLiteral("engine_status");
+            const auto expected = QStringLiteral("Engine: FakeUCI 1.0");
+            // NOLINTNEXTLINE(readability-math-missing-parentheses)
+            QTRY_COMPARE_WITH_TIMEOUT(text(window, status), expected, 30000);
             child<QAction>(window, QStringLiteral("settings_action")).trigger();
             auto& dialog = child<QDialog>(window, QStringLiteral("settings_dialog"));
             QCOMPARE(child<QLineEdit>(dialog, QStringLiteral("engine_binary")).placeholderText(),
