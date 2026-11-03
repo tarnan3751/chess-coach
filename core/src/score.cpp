@@ -19,7 +19,11 @@ bool evaluated(const PositionRow& row) {
 // §7.2's value of an evaluated position, in centipawns from white's side.
 std::int64_t value_of(const PositionRow& row) {
     if (row.eval_mate) {
+        // sign(m) * (100000 - |m|): a mate of 0, whose sign is 0, is worth 0.
         const std::int64_t mate = *row.eval_mate;
+        if (mate == 0) {
+            return 0;
+        }
         const std::int64_t magnitude = mate_value - (mate < 0 ? -mate : mate);
         return mate < 0 ? -magnitude : magnitude;
     }

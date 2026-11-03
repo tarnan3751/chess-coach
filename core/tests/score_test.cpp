@@ -189,6 +189,9 @@ TEST_CASE("evaluation_loss reads both evaluations from the mover's side, mates i
     CHECK(evaluation_loss(position(true, std::nullopt, 2), position(false, 0)) == 99998);
     // Black is mated in 3 after the move: from black's side -99997 against 0.
     CHECK(evaluation_loss(position(false, 0), position(true, std::nullopt, 3)) == 99997);
+    // A mate of 0 is worth 0, as sign(m) * (100000 - |m|) gives: level against level.
+    CHECK(evaluation_loss(position(true, std::nullopt, 0), position(false, 0)) == 0);
+    CHECK(evaluation_loss(position(true, 0), position(false, std::nullopt, 0)) == 0);
     CHECK_FALSE(evaluation_loss(position(true), position(false, 0)).has_value());
     CHECK_FALSE(evaluation_loss(position(true, 0), std::nullopt).has_value());
 }
