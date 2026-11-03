@@ -5,7 +5,7 @@
 # with `git am`, checks the result against that tree, runs the gate, and leaves the
 # commits in place for the owner to push.
 #
-#   tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--dry-run]
+#   tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--dry-run] [--no-gate]
 #
 # It refuses a working tree that is not clean, a HEAD that is not the base commit, a
 # branch other than main, a patch directory with no NNNN-*.patch files, a subject that is
@@ -14,20 +14,25 @@
 # carries a trailer, a patch that does not apply, and a final tree that differs from the
 # reported one. Each refusal after `git am` started resets
 # the branch back to the base, so the tree is left as it was found. `--dry-run` applies and
-# checks the chain, then resets to the base without running the gate. A gate failure leaves
-# the commits in place and says how to undo them.
+# checks the chain, then resets to the base without running the gate. `--no-gate` applies and
+# checks the chain and leaves the commits in place without running the gate: the batch landing
+# (CLAUDE.md, **Pace**), where every series but the last lands with it and the last runs the
+# gate over the whole batch. A gate failure leaves the commits in place and says how to undo
+# them.
 set -uo pipefail
 
 usage() {
-  echo "usage: tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--dry-run]" >&2
+  echo "usage: tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--dry-run] [--no-gate]" >&2
   exit 2
 }
 
 dry_run=0
+no_gate=0
 positional=()
 for arg in "$@"; do
   case "$arg" in
     --dry-run) dry_run=1 ;;
+    --no-gate) no_gate=1 ;;
     -*) echo "land_series: unknown option $arg" >&2; usage ;;
     *) positional+=("$arg") ;;
   esac
@@ -130,10 +135,15 @@ if [ "$dry_run" -eq 1 ]; then
   exit 0
 fi
 
+new_head="$(git rev-parse HEAD)"
+if [ "$no_gate" -eq 1 ]; then
+  echo "main: ${base:0:10} -> ${new_head:0:10} (${#patches[@]} commits), gate skipped (--no-gate): the batch's last landing or tools/gates.sh runs it; not pushed"
+  exit 0
+fi
+
 echo "running the gate"
 if ! "$tools_dir/gates.sh"; then
-  echo "land_series: the gate failed; the commits are in place. To undo: git reset --hard ${base:0:10}" >&2
+  echo "land_series: the gate failed; the commits are in place. To undo this series: git reset --hard ${base:0:10} (a batch: to the commit before its first series)" >&2
   exit 1
 fi
-new_head="$(git rev-parse HEAD)"
 echo "main: ${base:0:10} -> ${new_head:0:10} (${#patches[@]} commits), not pushed"
