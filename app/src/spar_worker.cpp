@@ -5,6 +5,8 @@
 #include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 
+#include "default_profile.hpp"
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
@@ -198,18 +200,6 @@ ProfileStore* SparWorker::open_profiles(bool create) {
         return nullptr;
     }
     return &profiles_.emplace(std::move(*profiles));
-}
-
-std::optional<std::int64_t> SparWorker::default_profile(const ProfileStore& profiles) {
-    const std::vector<Profile> all = profiles.profiles();
-    const auto named = std::ranges::find(all, std::string("Default"), &Profile::name);
-    if (named != all.end()) {
-        return named->id;
-    }
-    if (all.empty()) {
-        return std::nullopt;
-    }
-    return all.front().id;
 }
 
 SparState SparWorker::state() const {

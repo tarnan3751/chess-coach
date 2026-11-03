@@ -70,7 +70,6 @@ class SparWorker : public QObject {
 
     [[nodiscard]] const OpeningStore* open_store();
     [[nodiscard]] ProfileStore* open_profiles(bool create);
-    [[nodiscard]] static std::optional<std::int64_t> default_profile(const ProfileStore& profiles);
     [[nodiscard]] SparState state() const;
     void coach_turn();
     void finish();

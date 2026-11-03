@@ -17,6 +17,8 @@ add_library(app_lib STATIC
   src/board_view.hpp
   src/db_worker.cpp
   src/db_worker.hpp
+  src/default_profile.cpp
+  src/default_profile.hpp
   src/engine_worker.cpp
   src/engine_worker.hpp
   src/eval_bar.cpp
