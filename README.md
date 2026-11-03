@@ -1,36 +1,51 @@
 # chess-coach
 
-An offline desktop chess opening coach. It carries a comprehensive opening database built from
-the Lichess monthly game dumps, split into rating tiers so a 1200 and a 2200 each see what is
-actually played and what actually works at their level, with every move badged as Book, Popular
-or Dubious from top-tier popularity and engine evaluation. A local Stockfish evaluates anything
-off book. Four screens make it a coach rather than a reference: Explore the tree, Spar against
-replies sampled from your tier, build a Repertoire with coverage against what you will face, and
-Drill it by spaced repetition. No account, no network. Built with C++20, Qt 6 Widgets, CMake and
-vcpkg, SQLite. `chess-coach` is a working name.
+An offline desktop chess opening coach. It reads an opening database that its own pipeline builds
+from the Lichess monthly game dumps, split into seven rating tiers, so that a 1200 and a 2200 each
+see what is played and what works at their level, with every move badged Book, Popular or
+Dubious from how often it is played, at the tier and at the top tier, and from the engine's
+evaluation. A local Stockfish evaluates whatever is off book. There is no account and no network
+connection, ever. Built with C++20, Qt 6 Widgets, CMake with vcpkg and SQLite; packaged for
+macOS, and it also builds and passes its tests on Linux. MIT-licensed; `chess-coach` is a working
+name.
 
 ## Status
 
-Pre-alpha and private. The four modules (`core`, `pipeline`, `cli`, `app`) configure, build and
-test on macOS and Linux; the ingestion pipeline builds the tiered database from the Lichess
-dumps, the CLI queries it, and the app's Explore screen shows it at any tier on a playable
-board, with Stockfish's lines beside it. Its Spar screen plays sessions against replies drawn
-from the tier and, off book, from Stockfish at limited strength, interrupting a Dubious or an
-off-book move with the better choices, and keeps each session to replay. The next milestones are
-Repertoire and Drill.
+As of 3 November 2026: pre-alpha, version 0.1.0, not yet released. The pipeline builds the
+tiered database from the Lichess dumps and the CLI queries it; the app has its Explore and Spar
+screens; Repertoire and Drill work in the CLI, and their screens in the app are still
+placeholders. The macOS package and the release workflow are in place, and no release has been
+published yet. The next milestones are the Repertoire and Drill screens, the first release
+database and version 1.0.
 
-Explore at the start position and the 1600–1799 tier, in the light and the dark theme, as the UI
-harness (`tools/ui_tests.sh`) renders it on the tests' small fixture database and a stand-in
-engine: the moves with their badges, results and scores, and the engine's lines below them:
+## The four screens
+
+The screenshots are the UI harness's (`tools/ui_tests.sh`), on the tests' small fixture database
+and a stand-in engine.
+
+**Explore** shows the moves from any position at the chosen tier: their games and results, their
+badges, their recommendation score and the top tier's share, the position's opening name and
+evaluation, and Stockfish's lines below them. Transpositions merge, so two move orders to one
+position show the same moves. Here at the start position and the 1600–1799 tier, in the light and
+the dark theme:
 
 ![Explore in the light theme: the board, the table of moves with badges and result bars, and three engine lines](docs/images/explore-light.png)
 
 ![The same in the dark theme](docs/images/explore-dark.png)
 
-Spar interrupting 1. a3, a Dubious move at the 1800–1999 tier of the same fixture, with the
-better choices; the move stands and the coach has replied:
+**Spar** plays a session against replies drawn from what players at your tier really play and,
+once the game leaves the book, from Stockfish at limited strength. It interrupts a Dubious or an
+off-book move with the better choices, and keeps each session to replay. Here interrupting 1. a3,
+a Dubious move at the 1800–1999 tier of the same fixture; the move stands and the coach has
+replied:
 
 ![Spar: the board after 1. a3 e5 and the interruption panel with the reason, the badges and loss of a3, and e4 and d4 as better choices](docs/images/spar-interruption.png)
+
+**Repertoire** holds your lines per colour and per profile and shows how much of what you will
+face at a tier they cover, with the largest gaps; lines can be imported from PGN. **Drill** turns
+every repertoire move into a card scheduled by spaced repetition (SM-2). Both work today through
+`chess-coach-cli repertoire` and `chess-coach-cli drill` (**The CLI**); their screens in the app
+come next.
 
 ## Install
 
@@ -38,8 +53,7 @@ On macOS, download `chess-coach-<version>-macos-<arch>.dmg` from the repository'
 arch is the CPU it was built for: `arm64` for Apple silicon), open it and drag `chess-coach.app`
 onto the Applications link beside it. The app carries Qt, a Stockfish binary with its licence
 and a link to its source (`Contents/Resources/engine/`), and the licence of every component it
-ships (`Contents/Resources/legal/`, listed in `NOTICE`). The opening database is a separate
-file, built by the pipeline (**The pipeline**) and given to the app with `--db`.
+ships (`Contents/Resources/legal/`, listed in `NOTICE`).
 
 The app is not signed or notarized, so Gatekeeper refuses its first start. Either right-click
 (or Control-click) it in Applications and choose Open, then Open again in the dialog; on macOS 15
@@ -50,25 +64,20 @@ Security. Or clear the quarantine flag once from a terminal:
 xattr -dr com.apple.quarantine /Applications/chess-coach.app
 ```
 
+The opening database is a separate file, built by the pipeline (**The pipeline**), and this
+version of the app opens only the one it is given with `--db`, so start it from a terminal:
+
+```
+open -a chess-coach --args --db /path/to/openings.db
+```
+
+Nor does it find the bundled Stockfish by itself yet: choose
+`/Applications/chess-coach.app/Contents/Resources/engine/stockfish` once under Engine in
+Edit > Settings.
+
 The app keeps profiles, repertoires, settings and the engine cache in its data directory,
 `~/Library/Application Support/chess-coach`, or the directory `--data-dir` names; replacing or
 deleting the app leaves it in place.
-
-## How it will work
-
-- **The pipeline** (`chess-coach-pipeline`) streams one or more monthly Lichess dumps, keeps
-  rated blitz, rapid and classical games, buckets each by the average of the two players'
-  ratings into seven tiers, keys every position in the first thirty plies by a Zobrist hash so
-  transpositions merge, counts exactly every position that reaches a hundred games at a tier
-  while keeping its memory bounded, merges the Lichess evaluation database for every kept
-  position, names positions from the Lichess opening list, and writes one SQLite file.
-- **The app** (`chess-coach`) opens that file beside a bundled Stockfish. Explore shows the moves
-  from any position at your tier with their results, badges, names and evaluation. Spar plays
-  replies drawn from what people at your tier really play and interrupts when you go wrong.
-  Repertoire holds your lines per colour and shows how much of what you will face they cover.
-  Drill schedules the moves by spaced repetition.
-- **The CLI** (`chess-coach-cli`) does the same queries from a terminal and is how the database
-  is inspected and verified.
 
 ## Building and running
 
@@ -122,12 +131,14 @@ build/release/pipeline/chess-coach-pipeline build \
   --eval lichess_db_eval.jsonl.zst --out openings.db
 ```
 
-It streams each dump twice and never decompresses one to disk: the first pass counts position
-visits per tier in a fixed-size count-min sketch, the second counts exactly only the positions
-the sketch says can reach the threshold (a hundred games at a tier by default), so its memory is
-the sketch plus the survivors. It then merges the evaluation database for the surviving
-positions, names them from the Lichess opening list, and badges every move. The same inputs give
-the same database whatever the thread count; the knobs, the report and the internals are in
+It keeps rated blitz, rapid and classical games, puts each in a tier by the average of the two
+players' ratings, and keys every position of the first thirty plies by a Zobrist hash, so that
+transpositions merge. It streams each dump twice and never decompresses one to disk: the first pass
+counts position visits per tier in a fixed-size count-min sketch, the second counts exactly only the
+positions the sketch says can reach the threshold (a hundred games at a tier by default), so its
+memory is the sketch plus the survivors. It then merges the evaluation database for the surviving
+positions, names them from the Lichess opening list, and badges every move. The same inputs give the
+same database whatever the thread count; the knobs, the report and the internals are in
 [docs/reference/pipeline.md](docs/reference/pipeline.md), the data contract in
 [docs/database.md](docs/database.md).
 
@@ -138,29 +149,48 @@ the sketch is 64 MiB. A recent month holds about eight hundred times as many gam
 
 ## The CLI
 
-`chess-coach-cli` queries a built database from the terminal:
+`chess-coach-cli` does the same work from a terminal, and is how a database is inspected and
+verified. One line per command:
 
 ```
-chess-coach-cli stats   --db openings.db                            # meta and counts per tier
-chess-coach-cli explore --db openings.db --tier 3 --moves "e4 c5"   # the moves at a tier
-chess-coach-cli name    --db openings.db --moves "e4 c5 Nf3 d6 d4"  # the opening's name
-chess-coach-cli dump    --db openings.db                            # the canonical dump
+chess-coach-cli dump       --db openings.db                          # the canonical dump
+chess-coach-cli stats      --db openings.db                          # meta, counts per tier
+chess-coach-cli explore    --db openings.db --tier 3 --moves "e4 c5" # the moves at a tier
+chess-coach-cli name       --db openings.db --moves "e4 c5 Nf3 d6"   # the opening's name
+chess-coach-cli eval       --data-dir <dir> --moves "e4 e5"          # Stockfish's lines
+chess-coach-cli spar       --db openings.db --data-dir <dir> --tier 3 --colour white
+chess-coach-cli repertoire --data-dir <dir> --colour white add --moves "e4 e5 Nf3"
+chess-coach-cli drill      --data-dir <dir> --colour white list      # the cards due
+chess-coach-cli profile    --data-dir <dir> list                     # the profiles
 ```
 
 Tiers are 0 (under 1200) to 6 (2200 and above); moves are UCI or SAN from the start position,
-or `--fen` gives a position. [docs/reference/cli.md](docs/reference/cli.md) describes every
-command and its output.
+or `--fen` gives a position. `spar` plays a session in the terminal and lists and replays saved
+ones; `repertoire` also removes, lists, measures coverage and gaps, and imports PGN; `drill` also
+grades a card; `profile` also creates, removes, exports and imports.
+[docs/reference/cli.md](docs/reference/cli.md) describes every command and its output.
 
 ## Data
 
 The opening database is built from data Lichess publishes under the Creative Commons CC0
 licence: the [monthly game dumps and the evaluation database](https://database.lichess.org/) and
 the [opening names](https://github.com/lichess-org/chess-openings). The downloads are not part of
-the repository; the pipeline reads them from a directory you point it at. A small sample is
-committed for the tests.
+the repository; the pipeline reads them from wherever you put them. A small sample is committed
+for the tests.
 
-## Licence
+## Licences and attributions
 
-MIT; see [LICENSE](LICENSE). Stockfish is distributed with the application as a separate program
-under the GNU General Public License version 3; its licence text and a link to its source ship
-beside it.
+chess-coach is MIT-licensed; see [LICENSE](LICENSE). It builds on Qt 6 (LGPL-3.0, linked
+dynamically), chess-library, SQLite and SQLiteC++, zstd, {fmt}, spdlog, CLI11, toml++,
+nlohmann/json, tl::expected and reproc, and the macOS application also carries the libraries Qt
+links. Stockfish (GPL-3.0) is a separate program it runs over UCI and never links; the
+application bundles a binary with its licence and a link to its exact source. The pieces are
+Colin M.L. Burnett's cburnett set from Wikimedia Commons, under CC BY-SA 3.0; the data is
+Lichess's, under CC0. [NOTICE](NOTICE) lists every component with its licence, and
+[legal/](legal/) holds each licence's full text.
+
+## Contributing
+
+Issues and pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) says how to build, what
+the gate checks and how commits are written, and everyone follows the
+[code of conduct](CODE_OF_CONDUCT.md).
