@@ -280,10 +280,12 @@ Stockfish speaks it, a `go` answered after its movetime or on `stop`), `late-rea
 `readyok` after the first `delay_ms` late), `interleaved-info` (junk, `info string`, multipv 2
 before 1, repeated depths, a bound score, a line with two scores, a multipv above the request
 and a mate score), `no-bestmove`, `chatty-after-stop` (info every 10 ms after a stop and never
-`bestmove`), `multipv-max-2` (a `MultiPV` maximum of 2), `die-mid-search` and `garbage` (non-UCI
-lines before `uciok`, no options, `uciok` and `readyok` padded with spaces and a carriage
-return). The tests set `reply_timeout` to fractions of a second, so the timeouts are tested in
-well under one.
+`bestmove`), `multipv-max-2` (a `MultiPV` maximum of 2), `legal` (every `go` answered at once
+with the first legal move of the last position sent, through `core`'s `Position`, as one depth-1
+info line and `bestmove`, or `bestmove (none)` without a legal move, for tests that play the
+engine's replies), `die-mid-search` and `garbage` (non-UCI lines before `uciok`, no options,
+`uciok` and `readyok` padded with spaces and a carriage return). The tests set `reply_timeout` to
+fractions of a second, so the timeouts are tested in well under one.
 `core_engine_stockfish_test` (label `engine`) drives the real Stockfish, found through
 `CHESS_COACH_STOCKFISH` or the `PATH`, with one thread and a 16 MB hash, and skips with a message
 when there is none.

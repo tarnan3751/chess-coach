@@ -49,7 +49,7 @@ chesscoach_assert_no_qt(core)
 if(BUILD_TESTING)
   # fake-uci: the scripted UCI engine core_engine_test drives; an executable, not a test.
   add_executable(fake-uci tests/fake_uci.cpp)
-  target_link_libraries(fake-uci PRIVATE chesscoach::warnings)
+  target_link_libraries(fake-uci PRIVATE chesscoach::core chesscoach::warnings)
   chesscoach_assert_no_qt(fake-uci)
 
   chesscoach_add_test(core_badges_test MODULE core KIND unit

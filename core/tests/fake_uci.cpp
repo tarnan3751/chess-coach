@@ -12,11 +12,17 @@
 //   no-bestmove       infos, then never bestmove, even after stop
 //   chatty-after-stop normal until stop, then info lines every 10 ms and never bestmove
 //   multipv-max-2     normal, but its MultiPV option's max is 2
+//   legal             answers every go at once with one info line (depth 1, cp 0) and bestmove,
+//                     both the first legal move of the last position it was sent (core's
+//                     Position), or bestmove (none) when there is none
 //   die-mid-search    exits after the first info of a search
 //   garbage           non-UCI lines (an early readyok and bestmove among them) before uciok, and
 //                     no options advertised; uciok and readyok padded with spaces and a carriage
 //                     return; normal afterwards
-// The scores and moves are fixed, not chess: the client is under test, not the engine.
+// The scores and moves are fixed, not chess, but for legal's: the client is under test, not the
+// engine.
+#include <chesscoach/position.hpp>
+
 #include <array>
 #include <charconv>
 #include <chrono>
@@ -170,6 +176,7 @@ int run(const std::vector<std::string>& args) {
     Search search;
     int multipv = 1;
     int readyoks = 0;
+    std::string position_fen; // the last position sent; empty for the start position
     std::string line;
     while (std::getline(std::cin, line)) {
         if (log.is_open()) {
@@ -205,6 +212,10 @@ int run(const std::vector<std::string>& args) {
             }
             ++readyoks;
             say(script == "garbage" ? " readyok  \r" : "readyok");
+        } else if (line.starts_with("position fen ")) {
+            position_fen = line.substr(std::string_view("position fen ").size());
+        } else if (line.starts_with("position startpos")) {
+            position_fen.clear();
         } else if (line.starts_with("setoption name MultiPV value ")) {
             multipv = value_after(line, "value ", 1);
         } else if (line.starts_with("go")) {
@@ -213,7 +224,19 @@ int run(const std::vector<std::string>& args) {
                 say("info depth 1 multipv 1 score cp 10 pv e2e4");
                 return 0;
             }
-            if (script == "interleaved-info") {
+            if (script == "legal") {
+                const auto position = position_fen.empty()
+                                          ? chesscoach::Position::start()
+                                          : chesscoach::Position::from_fen(position_fen).value();
+                const auto legal = position.legal_moves_uci();
+                if (legal.empty()) {
+                    say("info depth 0 score mate 0");
+                    search.start(0, true, "bestmove (none)", false);
+                } else {
+                    say("info depth 1 multipv 1 score cp 0 pv " + legal.front());
+                    search.start(0, true, "bestmove " + legal.front(), false);
+                }
+            } else if (script == "interleaved-info") {
                 interleaved_infos();
                 search.start(movetime, true, "bestmove e2e4 ponder e7e5", false);
             } else {

@@ -392,3 +392,27 @@ TEST_CASE("UCI_Elo is sent only when its value changes", "[engine]") {
                                             "go movetime 20",
                                             "quit"}));
 }
+
+TEST_CASE("The legal script answers with the position's first legal move", "[engine]") {
+    const Log log("legal");
+    auto engine = start("legal", log);
+    const auto start_reply = engine.search(Position::start(), {.seconds = 1.0});
+    REQUIRE(start_reply.has_value());
+    CHECK(start_reply->best_move == "a2a3");
+    CHECK(start_reply->lines == std::vector{line(1, 1, 0, {"a2a3"})});
+    auto e4 = Position::start();
+    REQUIRE(e4.play_san("e4").has_value());
+    const auto reply = engine.search(e4, {.seconds = 1.0});
+    REQUIRE(reply.has_value());
+    CHECK(reply->best_move == e4.legal_moves_uci().front());
+    // Mated: no legal move.
+    const auto mated =
+        Position::from_fen("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq -");
+    REQUIRE(mated.has_value());
+    const auto none = engine.search(*mated, {.seconds = 1.0});
+    REQUIRE(none.has_value());
+    CHECK(none->best_move.empty());
+    REQUIRE(none->lines.size() == 1);
+    CHECK(none->lines.front().score_mate == 0);
+    CHECK(none->lines.front().pv.empty());
+}
