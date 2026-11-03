@@ -1,6 +1,7 @@
 // Unit tests of the CLI's commands (cli; unit), each run on the fixture database (fixture.hpp)
 // and compared with its whole expected output: dump, stats, explore and name, their error paths,
-// --moves in SAN and in UCI, and transpositions.
+// --moves in SAN and in UCI, and transpositions; and explore on a corrupted copy, whose failure
+// after the header lines writes nothing.
 #include <chesscoach/opening_store.hpp>
 
 #include "commands/common.hpp"
@@ -10,9 +11,12 @@
 #include "commands/stats.hpp"
 #include "fixture.hpp"
 
+#include <SQLiteCpp/SQLiteCpp.h>
 #include <catch2/catch_test_macros.hpp>
 #include <fmt/format.h>
 
+#include <bit>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <ostream>
@@ -276,6 +280,43 @@ TEST_CASE("explore reports a bad tier, FEN, move or database", "[cli]") {
     const std::string missing = db.path() + ".missing";
     CHECK(explore(missing, 3, std::nullopt) ==
           "error: cannot open the opening database " + missing + ": no such file");
+}
+
+TEST_CASE("explore that fails after its header lines writes nothing", "[cli]") {
+    const FixtureDb db;
+    const auto start = std::bit_cast<std::int64_t>(key_after(""));
+    const auto failing = [&db](bool score) {
+        const chesscoach::cli::ExploreOptions options{
+            .db = db.path(),
+            .tier = 3,
+            .fen = std::nullopt,
+            .moves = std::nullopt,
+            .score = score,
+        };
+        std::ostringstream out;
+        const auto result = chesscoach::cli::run_explore(options, out);
+        CHECK_FALSE(result.has_value());
+        return out.str();
+    };
+    SECTION("a stored move that is not legal") {
+        {
+            const SQLite::Database file(db.path(), SQLite::OPEN_READWRITE);
+            SQLite::Statement corrupt(file, "UPDATE moves SET move = 'e2e5' WHERE key = ?1 AND "
+                                            "tier = 3 AND move = 'f2f3'");
+            corrupt.bind(1, start);
+            REQUIRE(corrupt.exec() == 1);
+        }
+        CHECK(failing(false).empty());
+    }
+    SECTION("--score at a node without its positions row") {
+        {
+            const SQLite::Database file(db.path(), SQLite::OPEN_READWRITE);
+            SQLite::Statement corrupt(file, "DELETE FROM positions WHERE key = ?1");
+            corrupt.bind(1, start);
+            REQUIRE(corrupt.exec() == 1);
+        }
+        CHECK(failing(true).empty());
+    }
 }
 
 TEST_CASE("name prints the deepest named position along the moves", "[cli]") {

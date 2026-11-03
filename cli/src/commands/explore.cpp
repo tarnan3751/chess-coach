@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -67,10 +68,13 @@ Result<void> run_explore(const ExploreOptions& options, std::ostream& out) {
         engine = std::move(*answer);
     }
 
-    out << "fen: " << position.fen() << '\n';
-    out << "key: " << key << '\n';
+    // Written only once the whole answer is known, so a failure part way (a stored move that is
+    // not legal, a score without its position's row) leaves stdout empty.
+    std::ostringstream text;
+    text << "fen: " << position.fen() << '\n';
+    text << "key: " << key << '\n';
     if (const auto name = deepest_name(*store, resolved->path)) {
-        out << "name: " << name->eco << ' ' << name->name << '\n';
+        text << "name: " << name->eco << ' ' << name->name << '\n';
     }
     if (const auto row = store->position(key); row && row->eval_depth && row->best_move) {
         const auto best = san_of(position, *row->best_move);
@@ -79,18 +83,19 @@ Result<void> run_explore(const ExploreOptions& options, std::ostream& out) {
         }
         const std::string score = row->eval_mate ? fmt::format("mate {}", *row->eval_mate)
                                                  : fmt::format("cp {}", row->eval_cp.value_or(0));
-        out << fmt::format("eval: {} depth {} best {} {}\n", score, *row->eval_depth, *best,
-                           *row->best_move);
+        text << fmt::format("eval: {} depth {} best {} {}\n", score, *row->eval_depth, *best,
+                            *row->best_move);
     }
     if (engine) {
-        out << "engine: "
-            << (engine->search.lines.empty() ? std::string("none")
-                                             : line_text(position, engine->search.lines.front()))
-            << '\n';
+        text << "engine: "
+             << (engine->search.lines.empty() ? std::string("none")
+                                              : line_text(position, engine->search.lines.front()))
+             << '\n';
     }
 
     if (!store->node(key, *tier)) {
-        out << fmt::format("off book at tier {} ({})\n", tier_index(*tier), tier_label(*tier));
+        text << fmt::format("off book at tier {} ({})\n", tier_index(*tier), tier_label(*tier));
+        out << text.str();
         return {};
     }
     auto moves = store->moves(key, *tier);
@@ -125,11 +130,12 @@ Result<void> run_explore(const ExploreOptions& options, std::ostream& out) {
             }
             columns = score_columns(components->second);
         }
-        out << fmt::format("{} {} {} {} {}% {}% {}% {}% {}{}\n", *san, move.move,
-                           badge_letters(move.badges), total, percent(move.white, total),
-                           percent(move.draws, total), percent(move.black, total),
-                           percent(total, sum), in_book ? "yes" : "no", columns);
+        text << fmt::format("{} {} {} {} {}% {}% {}% {}% {}{}\n", *san, move.move,
+                            badge_letters(move.badges), total, percent(move.white, total),
+                            percent(move.draws, total), percent(move.black, total),
+                            percent(total, sum), in_book ? "yes" : "no", columns);
     }
+    out << text.str();
     return {};
 }
 

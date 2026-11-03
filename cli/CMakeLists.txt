@@ -47,7 +47,7 @@ if(BUILD_TESTING)
 
   chesscoach_add_test(cli_commands_test MODULE cli KIND unit
                       SOURCES tests/commands_test.cpp
-                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt)
+                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt SQLiteCpp)
   chesscoach_assert_no_qt(cli_commands_test)
 
   # eval and explore --engine against core's fake engine, through tests/fake-stockfish.sh.

@@ -109,8 +109,10 @@ Nc3 b1c3 P 100 40% 10% 50% 40% no
   the header, when there is no stored evaluation): the engine's first line, through the engine
   cache exactly as `eval` goes through it (below), with `--lines` 1, `--seconds` 1.0 and a
   minimum depth of 12 unless given, and the same engine options. `--data-dir` is required with
-  `--engine`; without `--engine` nothing changes. The engine runs before anything is written, so
-  a failing engine leaves stdout empty.
+  `--engine`; without `--engine` nothing changes. The output is written only once the whole
+  answer is known, so a failing engine, or a database that fails part way (a stored move that is
+  not legal in its position, a `--score` without the position's `positions` row), leaves stdout
+  empty.
 - A position that is off book at the tier (no `nodes` row there) prints, after the lines above,
   the one line `off book at tier <t> (<band>)`, and exits 0: an absent position is an answer,
   not an error.
