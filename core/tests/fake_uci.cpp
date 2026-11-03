@@ -6,6 +6,7 @@
 //                     uciok; readyok; on go, depths 1 to 3 for each multipv, then bestmove after
 //                     the movetime or on stop
 //   late-readyok      normal, but waits delay_ms before every readyok after the first
+//   slow-start        normal, but waits delay_ms before uciok, as a process starting slowly
 //   interleaved-info  on go, junk lines, info string, currmove and nps lines, multipv 2 before 1,
 //                     repeated depths with changed scores, a bound score, a line with two scores,
 //                     a multipv above the request and a mate score, then bestmove with ponder
@@ -204,6 +205,9 @@ int run(const std::vector<std::string>& args) {
                         : "option name MultiPV type spin default 1 min 1 max 500");
                 say("option name UCI_LimitStrength type check default false");
                 say("option name UCI_Elo type spin default 1320 min 1320 max 3190");
+            }
+            if (script == "slow-start") {
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
             }
             say(script == "garbage" ? "uciok \r" : "uciok");
         } else if (line == "isready") {

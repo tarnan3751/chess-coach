@@ -229,9 +229,10 @@ bool starts_with_token(std::string_view line, std::string_view word) {
     return !tokens.empty() && tokens.front() == word;
 }
 
-// Reads and drops lines up to one whose first token is `reply`, within reply_timeout.
-tl::expected<void, EngineError> await(EngineState& impl, std::string_view reply) {
-    const auto deadline = SteadyClock::now() + impl.reply_timeout;
+// Reads and drops lines up to one whose first token is `reply`, within the bound.
+tl::expected<void, EngineError> await(EngineState& impl, std::string_view reply,
+                                      std::chrono::milliseconds bound) {
+    const auto deadline = SteadyClock::now() + bound;
     while (true) {
         const auto line = read_line(impl, deadline);
         if (!line) {
@@ -243,8 +244,9 @@ tl::expected<void, EngineError> await(EngineState& impl, std::string_view reply)
     }
 }
 
-tl::expected<void, EngineError> ready(EngineState& impl) {
-    return send(impl, "isready").and_then([&] { return await(impl, "readyok"); });
+// isready, and readyok within the bound: reply_timeout but in start's handshake.
+tl::expected<void, EngineError> ready(EngineState& impl, std::chrono::milliseconds bound) {
+    return send(impl, "isready").and_then([&] { return await(impl, "readyok", bound); });
 }
 
 // The min and max of an option line's spin, when it gives both.
@@ -264,13 +266,13 @@ std::optional<std::pair<int, int>> spin_range(const std::vector<std::string_view
     return std::pair{*low, *high};
 }
 
-// The handshake's lines up to uciok: the id name, and UCI_Elo's range and MultiPV's maximum when
-// the engine offers them.
-tl::expected<void, EngineError> handshake(EngineState& impl) {
+// The handshake's lines up to uciok, within the bound: the id name, and UCI_Elo's range and
+// MultiPV's maximum when the engine offers them.
+tl::expected<void, EngineError> handshake(EngineState& impl, std::chrono::milliseconds bound) {
     if (const auto sent = send(impl, "uci"); !sent) {
         return sent;
     }
-    const auto deadline = SteadyClock::now() + impl.reply_timeout;
+    const auto deadline = SteadyClock::now() + bound;
     while (true) {
         const auto line = read_line(impl, deadline);
         if (!line) {
@@ -371,7 +373,7 @@ tl::expected<Engine, EngineError> Engine::start(const std::filesystem::path& bin
         return tl::unexpected(EngineError::start_failed);
     }
     const auto started =
-        handshake(*impl)
+        handshake(*impl, options.handshake_timeout)
             .and_then([&] {
                 return send(*impl,
                             "setoption name Threads value " + std::to_string(options.threads));
@@ -379,7 +381,7 @@ tl::expected<Engine, EngineError> Engine::start(const std::filesystem::path& bin
             .and_then([&] {
                 return send(*impl, "setoption name Hash value " + std::to_string(options.hash_mb));
             })
-            .and_then([&] { return ready(*impl); });
+            .and_then([&] { return ready(*impl, options.handshake_timeout); });
     if (!started) {
         return tl::unexpected(started.error());
     }
@@ -413,7 +415,7 @@ tl::expected<void, EngineError> Engine::new_game() {
     if (!impl_->alive) {
         return tl::unexpected(EngineError::died);
     }
-    return send(*impl_, "ucinewgame").and_then([&] { return ready(*impl_); });
+    return send(*impl_, "ucinewgame").and_then([&] { return ready(*impl_, impl_->reply_timeout); });
 }
 
 tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
@@ -471,7 +473,7 @@ tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
 
     const auto movetime = std::max<std::int64_t>(1, std::llround(request.seconds * 1000.0));
     const auto searched =
-        ready(impl)
+        ready(impl, impl.reply_timeout)
             .and_then([&] { return send(impl, "position fen " + position.fen() + " 0 1"); })
             .and_then([&] { return send(impl, "go movetime " + std::to_string(movetime)); });
     if (!searched) {

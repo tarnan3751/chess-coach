@@ -38,8 +38,11 @@ struct EngineOptions {
     int hash_mb = 16;
     // Passed to the binary after its path: the fake engine's script; Stockfish takes none.
     std::vector<std::string> arguments;
-    // The bound for uciok and readyok, for bestmove beyond the movetime, and for bestmove after a
-    // stop.
+    // The bound for start's handshake: every line up to uciok, and then readyok after the options.
+    // Generous, since a process starting on a loaded machine is slow rather than broken.
+    std::chrono::milliseconds handshake_timeout{30000};
+    // The bound for readyok after the handshake, for bestmove beyond the movetime, and for
+    // bestmove after a stop.
     std::chrono::milliseconds reply_timeout{5000};
 };
 

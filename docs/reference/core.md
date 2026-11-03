@@ -246,7 +246,7 @@ its own thread. `stop()` and `stop_before()` may come from any other thread.
 
 | Call | Sent | Awaited, within |
 |---|---|---|
-| `start(binary, options)` | `uci`; then `setoption name Threads`, `setoption name Hash`; `isready` | every line up to `uciok`, then `readyok`, each within `reply_timeout` |
+| `start(binary, options)` | `uci`; then `setoption name Threads`, `setoption name Hash`; `isready` | every line up to `uciok`, then `readyok`, each within `handshake_timeout` (30 s), a bound of its own because a process starting on a loaded machine is slow rather than broken |
 | `new_game()` | `ucinewgame`, `isready` | `readyok`, within `reply_timeout` |
 | `search(position, request)` | `setoption name MultiPV` when the line count, clamped to the engine's maximum, changed; `setoption name UCI_LimitStrength value true` or `false` when that changed, and `UCI_Elo` when its value changed; `isready`; `position fen <normalized FEN> 0 1`; `go movetime <ms>` | `readyok` within `reply_timeout`; then info lines up to `bestmove`, within the movetime plus `reply_timeout` |
 | `stop()` during a search | `stop`, written by the searching thread | `bestmove` within `reply_timeout` of the stop, however many lines keep coming |
@@ -291,15 +291,17 @@ its own thread. `stop()` and `stop_before()` may come from any other thread.
 drives: `fake-uci <script> [delay_ms] [log_path]`, logging every line it receives so the test
 checks exactly what the client sent and in which order. Its scripts: `normal` (the protocol as
 Stockfish speaks it, a `go` answered after its movetime or on `stop`), `late-readyok` (every
-`readyok` after the first `delay_ms` late), `interleaved-info` (junk, `info string`, multipv 2
-before 1, repeated depths, a bound score, a line with two scores, a multipv above the request
-and a mate score), `no-bestmove`, `chatty-after-stop` (info every 10 ms after a stop and never
+`readyok` after the first `delay_ms` late), `slow-start` (`uciok` `delay_ms` late),
+`interleaved-info` (junk, `info string`, multipv 2 before 1, repeated depths, a bound score, a
+line with two scores, a multipv above the request and a mate score), `no-bestmove`, `chatty-after-stop` (info every 10 ms after a stop and never
 `bestmove`), `multipv-max-2` (a `MultiPV` maximum of 2), `legal` (every `go` answered at once
 with the first legal move of the last position sent, through `core`'s `Position`, as one depth-1
 info line and `bestmove`, or `bestmove (none)` without a legal move, for tests that play the
 engine's replies), `die-mid-search` and `garbage` (non-UCI lines before `uciok`, no options,
-`uciok` and `readyok` padded with spaces and a carriage return). The tests set `reply_timeout` to
-fractions of a second, so the timeouts are tested in well under one.
+`uciok` and `readyok` padded with spaces and a carriage return). The tests that time a bound set
+`reply_timeout` or `handshake_timeout` to a second or less, so the timeouts are tested in about
+one; every other test keeps the default handshake bound and a 5 s reply bound, so a loaded machine
+still starts the fake in time.
 `core_engine_stockfish_test` (label `engine`) drives the real Stockfish, found through
 `CHESS_COACH_STOCKFISH` or the `PATH`, with one thread and a 16 MB hash, and skips with a message
 when there is none.

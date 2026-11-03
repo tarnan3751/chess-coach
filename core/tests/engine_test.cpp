@@ -67,8 +67,8 @@ class Log {
     std::filesystem::path path_;
 };
 
-// The tests' reply bound: generous, so that a loaded machine still starts the fake in time; a test
-// that times a bound sets its own.
+// The tests' reply bound: generous, so that a loaded machine still answers in time; a test that
+// times a bound sets its own. The handshake keeps EngineOptions' own, longer, bound.
 constexpr auto default_reply_timeout = 5000ms;
 
 EngineOptions fake(std::string_view script, const Log& log, int delay_ms = 0,
@@ -313,6 +313,29 @@ TEST_CASE("A late readyok is waited for within the bound, and past it is a timeo
         CHECK(engine.search(Position::start(), {}).error() == EngineError::died);
         CHECK(engine.new_game().error() == EngineError::died);
     }
+}
+
+TEST_CASE("The handshake has a bound of its own, apart from the reply bound", "[engine]") {
+    SECTION("a slow start within the handshake bound starts, whatever the reply bound") {
+        const Log log("slow-start-within");
+        EngineOptions options = fake("slow-start", log, 1500, 300ms);
+        options.handshake_timeout = 10s;
+        auto engine = Engine::start(CHESSCOACH_FAKE_UCI, options);
+        REQUIRE(engine.has_value());
+        CHECK(engine->is_alive());
+        CHECK(engine->search(Position::start(), {.seconds = 0.02}).has_value());
+    }
+    SECTION("past the handshake bound, a timeout") {
+        const Log log("slow-start-past");
+        EngineOptions options = fake("slow-start", log, 4000);
+        options.handshake_timeout = 1000ms;
+        const auto began = std::chrono::steady_clock::now();
+        const auto engine = Engine::start(CHESSCOACH_FAKE_UCI, options);
+        REQUIRE_FALSE(engine.has_value());
+        CHECK(engine.error() == EngineError::timeout);
+        CHECK(std::chrono::steady_clock::now() - began < 4000ms);
+    }
+    SECTION("thirty seconds by default") { CHECK(EngineOptions{}.handshake_timeout == 30s); }
 }
 
 TEST_CASE("Interleaved, repeated, bound and junk info lines leave the last exact one per line",
