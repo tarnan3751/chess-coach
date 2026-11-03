@@ -120,6 +120,37 @@ TEST_CASE("GameScanner counts a game whose header cannot be read as malformed", 
     CHECK(result.counts.skipped.count(SkipReason::malformed) == 1);
 }
 
+TEST_CASE("GameScanner counts a game that ends before its moves as malformed", "[scanner]") {
+    // The second game's headers end the text: no moves started, so no header verdict, and the
+    // first game's reason (speed) is not carried over.
+    const auto result = scan(game("Rated Bullet game", "1500", "1-0", "1. e4 1-0") +
+                             "[Event \"Rated Blitz game\"]\n[WhiteElo \"1500\"]\n");
+    CHECK(result.games.empty());
+    CHECK(result.counts.skipped.count(SkipReason::speed) == 1);
+    CHECK(result.counts.skipped.count(SkipReason::malformed) == 1);
+}
+
+TEST_CASE("GameScanner attributes a parser error in the moves as section 3 says", "[scanner]") {
+    // A token over the parser's 255 characters.
+    const std::string long_token(300, 'x');
+    // A game a header check failed keeps that check.
+    const auto bullet = scan(game("Rated Bullet game", "1500", "1-0", "1. e4 " + long_token));
+    CHECK(bullet.counts.skipped.count(SkipReason::speed) == 1);
+    CHECK(bullet.counts.skipped.total() == 1);
+    // Before the cap it is a move that cannot be read.
+    const auto before = scan(game("Rated Blitz game", "1500", "1-0", "1. e4 " + long_token));
+    CHECK(before.games.empty());
+    CHECK(before.counts.skipped.count(SkipReason::moves) == 1);
+    CHECK(before.counts.skipped.total() == 1);
+    // Past the cap it is never read: the game is admitted with what was collected.
+    const auto past =
+        scan(game("Rated Blitz game", "1500", "1-0", "1. e4 e5 2. " + long_token + " 1-0"), 2);
+    REQUIRE(past.games.size() == 1);
+    CHECK(past.games.front().moves.size() == 2);
+    CHECK(past.counts.admitted_total() == 1);
+    CHECK(past.counts.skipped.total() == 0);
+}
+
 TEST_CASE("GameScanner skips a bad move before the cap and keeps one past it", "[scanner]") {
     const std::string bad_at_five = "1. e4 e5 2. Nf3 Nc6 3. Qxh7 a6 1-0";
     const auto skipped = scan(game("Rated Blitz game", "1500", "1-0", bad_at_five));

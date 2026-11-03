@@ -60,7 +60,8 @@ if(BUILD_TESTING)
       CHESSCOACH_SAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/sample"
       CHESSCOACH_OPENINGS_DIR="${PROJECT_SOURCE_DIR}/data/chess-openings")
   chesscoach_add_test(pipeline_unit_test MODULE pipeline KIND unit
-                      SOURCES tests/badges_test.cpp
+                      SOURCES tests/aggregate_test.cpp
+                              tests/badges_test.cpp
                               tests/build_test.cpp
                               tests/chunker_test.cpp
                               tests/eval_merge_test.cpp
@@ -84,6 +85,11 @@ if(BUILD_TESTING)
                               tests/test_files.hpp
                       LIBS pipeline_lib)
   target_compile_definitions(pipeline_bench_test PRIVATE ${pipeline_test_definitions})
+  add_test(NAME pipeline_exit_status
+           COMMAND "${CMAKE_COMMAND}" "-DPIPELINE=$<TARGET_FILE:pipeline>"
+                   "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/test-scratch/exit_status"
+                   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/exit_status.cmake")
+  set_tests_properties(pipeline_exit_status PROPERTIES LABELS "pipeline;unit")
   chesscoach_assert_no_qt(pipeline_unit_test)
   chesscoach_assert_no_qt(pipeline_property_test)
   chesscoach_assert_no_qt(pipeline_bench_test)

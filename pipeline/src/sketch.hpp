@@ -4,23 +4,32 @@
 // is estimate(t, k) >= min(true visits of (t, k), saturation): every (tier, key) that reaches
 // min_games is a candidate, whatever the sketch's size, which sets only how many false
 // positives pass two counts and discards. add() is safe from many threads at once, and the
-// final counters do not depend on the order of the adds.
+// final counters do not depend on the order of the adds. A size the sketch cannot take is an
+// error value (create).
 #pragma once
+
+#include <tl/expected.hpp>
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace chesscoach::pipeline {
+
+// The largest sketch --sketch-mib accepts: 16 GiB (docs/reference/pipeline.md, **The sketch**).
+inline constexpr std::size_t max_sketch_bytes = std::size_t{1} << 34U;
 
 class VisitSketch {
   public:
     static constexpr std::size_t rows = 4;
 
     // A sketch of total_bytes bytes (rows * width counters of two bytes), total_bytes a power
-    // of two of at least 64; counters saturate at saturation, at least 1.
-    VisitSketch(std::size_t total_bytes, std::uint16_t saturation);
+    // of two from 64 to max_sketch_bytes, its counters saturating at saturation, at least 1; or
+    // why it cannot be made.
+    [[nodiscard]] static tl::expected<VisitSketch, std::string> create(std::size_t total_bytes,
+                                                                       std::uint16_t saturation);
 
     void add(std::uint8_t tier, std::uint64_t key);
     [[nodiscard]] std::uint16_t estimate(std::uint8_t tier, std::uint64_t key) const;
@@ -30,6 +39,8 @@ class VisitSketch {
     [[nodiscard]] std::uint16_t saturation() const { return saturation_; }
 
   private:
+    VisitSketch(std::size_t total_bytes, std::uint16_t saturation);
+
     [[nodiscard]] std::size_t cell(std::size_t row, std::uint8_t tier, std::uint64_t key) const;
 
     std::size_t width_;

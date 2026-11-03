@@ -6,7 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
-#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -14,7 +14,9 @@ using chesscoach::pipeline::default_sketch_bytes;
 using chesscoach::pipeline::VisitSketch;
 
 TEST_CASE("VisitSketch counts a few keys exactly and saturates", "[sketch]") {
-    VisitSketch sketch(std::size_t{1} << 20U, 100);
+    auto created = VisitSketch::create(std::size_t{1} << 20U, 100);
+    REQUIRE(created.has_value());
+    VisitSketch& sketch = *created;
     CHECK(sketch.width() == (std::size_t{1} << 20U) / 8);
     CHECK(sketch.bytes() == std::size_t{1} << 20U);
     for (int i = 0; i < 7; ++i) {
@@ -30,7 +32,9 @@ TEST_CASE("VisitSketch counts a few keys exactly and saturates", "[sketch]") {
 }
 
 TEST_CASE("VisitSketch loses no add under concurrency", "[sketch]") {
-    VisitSketch sketch(std::size_t{1} << 20U, 60000);
+    auto created = VisitSketch::create(std::size_t{1} << 20U, 60000);
+    REQUIRE(created.has_value());
+    VisitSketch& sketch = *created;
     std::vector<std::thread> threads;
     threads.reserve(4);
     for (int t = 0; t < 4; ++t) {
@@ -46,10 +50,12 @@ TEST_CASE("VisitSketch loses no add under concurrency", "[sketch]") {
     CHECK(sketch.estimate(1, 7) == 40000);
 }
 
-TEST_CASE("VisitSketch refuses a size that is not a power of two", "[sketch]") {
-    CHECK_THROWS_AS(VisitSketch(3000, 100), std::invalid_argument);
-    CHECK_THROWS_AS(VisitSketch(16, 100), std::invalid_argument);
-    CHECK_THROWS_AS(VisitSketch(1024, 0), std::invalid_argument);
+TEST_CASE("VisitSketch::create refuses a size it cannot take, as an error value", "[sketch]") {
+    CHECK_FALSE(VisitSketch::create(3000, 100).has_value());
+    CHECK_FALSE(VisitSketch::create(16, 100).has_value());
+    CHECK_FALSE(VisitSketch::create(1024, 0).has_value());
+    CHECK_FALSE(VisitSketch::create(chesscoach::pipeline::max_sketch_bytes * 2, 100).has_value());
+    CHECK(VisitSketch::create(3000, 100).error().find("power of two") != std::string::npos);
 }
 
 TEST_CASE("default_sketch_bytes is twice the input as a power of two, within its bounds",

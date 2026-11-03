@@ -35,7 +35,11 @@ std::int64_t evaluation_value(const Evaluation& evaluation) {
     if (evaluation.cp) {
         return *evaluation.cp;
     }
+    // sign(m) * (100000 - |m|): a mate of 0, whose sign is 0, is worth 0.
     const std::int64_t m = evaluation.mate.value_or(0);
+    if (m == 0) {
+        return 0;
+    }
     const std::int64_t magnitude = mate_value - (m < 0 ? -m : m);
     return m < 0 ? -magnitude : magnitude;
 }

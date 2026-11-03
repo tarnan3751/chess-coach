@@ -209,7 +209,11 @@ tl::expected<void, std::string> run_build(const BuildOptions& options, Report& r
     const auto min_games = static_cast<std::uint16_t>(options.min_games);
 
     // Pass one: the sketch.
-    auto sketch = std::make_unique<VisitSketch>(sketch_bytes, min_games);
+    auto created = VisitSketch::create(sketch_bytes, min_games);
+    if (!created) {
+        return tl::unexpected(created.error());
+    }
+    auto sketch = std::make_unique<VisitSketch>(std::move(*created));
     std::vector<GameScanner> first(threads, GameScanner(options.max_ply, nullptr));
     Progress first_progress(progress, "pass one");
     const auto pass_one = scan_inputs(
@@ -249,6 +253,10 @@ tl::expected<void, std::string> run_build(const BuildOptions& options, Report& r
     }
     if (total_counts(second) != counts) {
         return tl::unexpected("the inputs read differently in pass two than in pass one");
+    }
+    if (aggregate.overflowed()) {
+        return tl::unexpected(std::string(
+            "a count passed 2^32 - 1, the most a counter holds: build from fewer months"));
     }
     const double pass_two_seconds = seconds_since(start) - pass_one_seconds;
     batches.clear();

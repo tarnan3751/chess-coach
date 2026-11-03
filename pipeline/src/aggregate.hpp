@@ -4,7 +4,8 @@
 // candidate key. Each worker adds its batch's games to a BatchCounts of its own, which merges
 // the batch's repeats, and flushes it into the shared counts, which are split into 256 shards
 // under a mutex each. Sums commute, so the counts do not depend on the number of threads or the
-// order of the batches. A counter that would pass 2^32 - 1 is a fatal error, never a wrap.
+// order of the batches. A counter that would pass 2^32 - 1 stops at it and marks the aggregate
+// overflowed, which run_build reports as an error: never a wrap.
 #pragma once
 
 #include <chesscoach/position.hpp>
@@ -15,6 +16,7 @@
 #include "sketch.hpp"
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -31,8 +33,9 @@ struct Results {
     std::uint32_t draws = 0;
     std::uint32_t black = 0;
 
-    void add(GameResult result, std::uint32_t count = 1);
-    void add(const Results& other);
+    // False when a counter would pass 2^32 - 1; it then stops there.
+    [[nodiscard]] bool add(GameResult result, std::uint32_t count = 1);
+    [[nodiscard]] bool add(const Results& other);
     [[nodiscard]] std::uint64_t total() const {
         return std::uint64_t{white} + std::uint64_t{draws} + std::uint64_t{black};
     }
@@ -50,7 +53,8 @@ struct NodeCounts {
     Results visits;
     std::vector<MoveCounts> moves;
 
-    void add_play(MoveCode move, Key child, const Results& results);
+    // False when a counter would pass 2^32 - 1.
+    [[nodiscard]] bool add_play(MoveCode move, Key child, const Results& results);
 };
 
 struct NodeId {
@@ -86,6 +90,7 @@ class BatchCounts {
     std::unordered_map<NodeId, NodeCounts, NodeIdHash> nodes_;
     std::unordered_map<Key, std::string> fens_;
     std::unordered_set<Key> fen_known_; // keys whose FEN the aggregate holds
+    bool overflowed_ = false;
 };
 
 // A surviving (key, tier) and its moves, ready to write.
@@ -107,6 +112,10 @@ class Aggregate {
 
     [[nodiscard]] std::size_t candidate_count() const;
 
+    // Whether a counter would have passed 2^32 - 1: the counts are not exact.
+    [[nodiscard]] bool overflowed() const { return overflowed_.load(); }
+    void mark_overflowed() { overflowed_.store(true); }
+
     // Moves out the (key, tier) with at least min_games visits, sorted by key as stored in SQLite
     // (signed) then tier, and the FENs of their keys; the aggregate is left empty.
     struct Survivors {
@@ -127,6 +136,7 @@ class Aggregate {
     }
 
     std::vector<std::unique_ptr<Shard>> shards_;
+    std::atomic<bool> overflowed_{false};
 };
 
 } // namespace chesscoach::pipeline

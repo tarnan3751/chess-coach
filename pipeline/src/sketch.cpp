@@ -1,9 +1,10 @@
 // VisitSketch and default_sketch_bytes (sketch.hpp).
 #include "sketch.hpp"
 
+#include <fmt/format.h>
+
 #include <array>
 #include <bit>
-#include <stdexcept>
 
 namespace chesscoach::pipeline {
 
@@ -23,15 +24,24 @@ constexpr std::size_t max_bytes = std::size_t{1} << 30U;
 
 } // namespace
 
+tl::expected<VisitSketch, std::string> VisitSketch::create(std::size_t total_bytes,
+                                                           std::uint16_t saturation) {
+    if (!std::has_single_bit(total_bytes) || total_bytes < 64 || total_bytes > max_sketch_bytes) {
+        return tl::unexpected(fmt::format(
+            "the sketch's size must be a power of two from 64 bytes to {} bytes, not {}",
+            max_sketch_bytes, total_bytes));
+    }
+    if (saturation == 0) {
+        return tl::unexpected(
+            std::string("the sketch's saturation (min_games) must be at least 1"));
+    }
+    return VisitSketch(total_bytes, saturation);
+}
+
 VisitSketch::VisitSketch(std::size_t total_bytes, std::uint16_t saturation)
     : width_(total_bytes / (rows * sizeof(std::uint16_t))),
-      shift_(64U - static_cast<unsigned>(std::countr_zero(width_))), saturation_(saturation) {
-    if (!std::has_single_bit(total_bytes) || total_bytes < 64 || saturation == 0) {
-        throw std::invalid_argument("VisitSketch: the size must be a power of two of at least 64 "
-                                    "bytes and the saturation at least 1");
-    }
-    cells_ = std::vector<std::atomic<std::uint16_t>>(width_ * rows);
-}
+      shift_(64U - static_cast<unsigned>(std::countr_zero(width_))), saturation_(saturation),
+      cells_(width_ * rows) {}
 
 std::size_t VisitSketch::cell(std::size_t row, std::uint8_t tier, std::uint64_t key) const {
     const std::uint64_t mixed =

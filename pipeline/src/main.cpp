@@ -7,6 +7,7 @@
 #include "build.hpp"
 #include "options.hpp"
 #include "report.hpp"
+#include "sketch.hpp"
 
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
@@ -71,9 +72,10 @@ int main(int argc, char** argv) {
                     const auto [end, parsed] =
                         std::from_chars(text.data(), text.data() + text.size(), value);
                     const bool whole = parsed == std::errc{} && end == text.data() + text.size();
-                    return whole && value != 0 && value <= 1024 && std::has_single_bit(value)
+                    constexpr std::size_t max_mib = pipeline::max_sketch_bytes >> 20U;
+                    return whole && value != 0 && value <= max_mib && std::has_single_bit(value)
                                ? std::string{}
-                               : std::string("must be a power of two from 1 to 1024");
+                               : fmt::format("must be a power of two from 1 to {}", max_mib);
                 },
                 "POWER OF TWO"));
 
@@ -81,7 +83,14 @@ int main(int argc, char** argv) {
             fmt::print("{}", app.help());
             return 0;
         }
-        CLI11_PARSE(app, argc, argv);
+        try {
+            app.parse(argc, argv);
+        } catch (const CLI::ParseError& error) {
+            // --help and --version exit 0 as CLI11 prints them; every rejected command line
+            // exits 1, the pipeline's one failure status.
+            const int status = app.exit(error);
+            return error.get_exit_code() == static_cast<int>(CLI::ExitCodes::Success) ? status : 1;
+        }
         if (!build->parsed()) {
             fmt::print("{}", app.help());
             return 0;

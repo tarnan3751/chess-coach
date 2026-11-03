@@ -24,7 +24,9 @@ TEST_CASE("VisitSketch never underestimates below its saturation", "[sketch][pro
                 rc::gen::pair(rc::gen::inRange<std::uint8_t>(0, 7),
                               rc::gen::oneOf(rc::gen::inRange<std::uint64_t>(0, 40),
                                              rc::gen::arbitrary<std::uint64_t>())));
-        VisitSketch sketch(std::size_t{1} << log_bytes, saturation);
+        auto created = VisitSketch::create(std::size_t{1} << log_bytes, saturation);
+        RC_ASSERT(created.has_value());
+        VisitSketch& sketch = *created;
         std::map<std::pair<std::uint8_t, std::uint64_t>, std::uint64_t> truth;
         for (const auto& [tier, key] : visits) {
             sketch.add(tier, key);

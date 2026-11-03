@@ -3,48 +3,49 @@
 
 #include <algorithm>
 #include <limits>
-#include <stdexcept>
 
 namespace chesscoach::pipeline {
 
 namespace {
 
-void add_checked(std::uint32_t& counter, std::uint32_t count) {
+// Adds count to counter, or stops it at 2^32 - 1 and returns false.
+bool add_checked(std::uint32_t& counter, std::uint32_t count) {
     if (counter > std::numeric_limits<std::uint32_t>::max() - count) {
-        throw std::overflow_error("a count passed 2^32 - 1");
+        counter = std::numeric_limits<std::uint32_t>::max();
+        return false;
     }
     counter += count;
+    return true;
 }
 
 } // namespace
 
-void Results::add(GameResult result, std::uint32_t count) {
+bool Results::add(GameResult result, std::uint32_t count) {
     switch (result) {
     case GameResult::white:
-        add_checked(white, count);
-        break;
+        return add_checked(white, count);
     case GameResult::draw:
-        add_checked(draws, count);
-        break;
+        return add_checked(draws, count);
     case GameResult::black:
-        add_checked(black, count);
-        break;
+        return add_checked(black, count);
     }
+    return true;
 }
 
-void Results::add(const Results& other) {
-    add_checked(white, other.white);
-    add_checked(draws, other.draws);
-    add_checked(black, other.black);
+bool Results::add(const Results& other) {
+    const bool white_fits = add_checked(white, other.white);
+    const bool draws_fit = add_checked(draws, other.draws);
+    const bool black_fits = add_checked(black, other.black);
+    return white_fits && draws_fit && black_fits;
 }
 
-void NodeCounts::add_play(MoveCode move, Key child, const Results& results) {
+bool NodeCounts::add_play(MoveCode move, Key child, const Results& results) {
     const auto found = std::ranges::find(moves, move, &MoveCounts::move);
     if (found != moves.end()) {
-        found->results.add(results);
-    } else {
-        moves.push_back(MoveCounts{.move = move, .child = child, .results = results});
+        return found->results.add(results);
     }
+    moves.push_back(MoveCounts{.move = move, .child = child, .results = results});
+    return true;
 }
 
 std::size_t NodeIdHash::operator()(const NodeId& id) const noexcept {
@@ -74,17 +75,18 @@ bool BatchCounts::fen_wanted(std::uint8_t tier, Key key) {
 
 void BatchCounts::add(const ScannedGame& game) {
     Results one;
-    one.add(game.result);
+    static_cast<void>(one.add(game.result)); // one game: never near 2^32
     for (std::size_t ply = 0; ply < game.keys.size(); ++ply) {
         const Key key = game.keys.at(ply);
         if (!candidate(game.tier, key)) {
             continue;
         }
         NodeCounts& node = nodes_[NodeId{.key = key, .tier = game.tier}];
-        node.visits.add(one);
+        bool fits = node.visits.add(one);
         if (ply < game.moves.size()) {
-            node.add_play(game.moves.at(ply), game.keys.at(ply + 1), one);
+            fits = node.add_play(game.moves.at(ply), game.keys.at(ply + 1), one) && fits;
         }
+        overflowed_ = overflowed_ || !fits;
     }
     for (const auto& [key, fen] : game.fens) {
         fens_.try_emplace(key, fen);
@@ -98,9 +100,13 @@ void BatchCounts::flush(Aggregate& aggregate) {
     for (const auto& [key, fen] : fens_) {
         aggregate.merge_fen(key, fen);
     }
+    if (overflowed_) {
+        aggregate.mark_overflowed();
+    }
     nodes_.clear();
     fens_.clear();
     fen_known_.clear();
+    overflowed_ = false;
 }
 
 Aggregate::Aggregate() {
@@ -120,9 +126,12 @@ void Aggregate::merge(const NodeId& id, const NodeCounts& counts) {
     Shard& shard = *shards_.at(shard_of(id.key));
     const std::scoped_lock lock(shard.mutex);
     NodeCounts& node = shard.nodes[id];
-    node.visits.add(counts.visits);
+    bool fits = node.visits.add(counts.visits);
     for (const MoveCounts& play : counts.moves) {
-        node.add_play(play.move, play.child, play.results);
+        fits = node.add_play(play.move, play.child, play.results) && fits;
+    }
+    if (!fits) {
+        mark_overflowed();
     }
 }
 

@@ -44,11 +44,12 @@ chess-coach-pipeline build --in <lichess_db_standard_rated_YYYY-MM.pgn.zst>... -
 | `--threads` | the hardware's | Worker threads; the output does not depend on it |
 | `--data-version` | 0 | meta's `data_version` |
 | `--report` | stdout | Where the report goes |
-| `--sketch-mib` | from the inputs | The sketch's size, a power of two from 1 to 1024; the output does not depend on it |
+| `--sketch-mib` | from the inputs | The sketch's size, a power of two from 1 to 16384; the output does not depend on it (**The sketch** says how large a build needs) |
 
-Progress goes to stderr every million games of a pass. The exit status is 0 on success and 1 on
-a fatal error: an unreadable or truncated input, a refused option, a write failure. A bad game is
-counted, never fatal. On a fatal error no output is left behind: the writer writes
+Progress goes to stderr every million games of a pass. The exit status is 0 on success, and on
+`--version`, `--help` and no arguments, and 1 on a fatal error: a command line CLI11 rejects, an
+unreadable or truncated input, a refused option, a count past 2^32 − 1, a write failure. A bad
+game is counted, never fatal. On a fatal error no output is left behind: the writer writes
 `<out>.partial` and renames it only once the write succeeded.
 
 ## Passes
@@ -76,9 +77,12 @@ thread in the queue and in each worker; never the stream, never every distinct p
 ## The scanner
 
 `GameScanner` parses each game with its own `chess::pgn::StreamParser<64>` (a 4 KiB read
-buffer), so a parser error, which ends a parser's stream, marks that game alone `malformed`:
-a header the parser cannot read, a string token over its 255 characters. At `startMoves` it
-runs the §3 checks 2 to 6 (`check_headers`); a failing game is skipped unparsed. An admitted
+buffer), so a parser error, which ends a parser's stream, touches that game alone. It counts as
+§3 says: a header the parser cannot read (a string token over its 255 characters), or a game
+that ends before its moves start, is `malformed`; a game a header check had already failed keeps
+that check's counter; a move token over the limit before the cap is a move that cannot be read,
+`moves`; one past the cap is never read, so the game is admitted with what was collected. At
+`startMoves` it runs the §3 checks 2 to 6 (`check_headers`); a failing game is skipped unparsed. An admitted
 game's tier is core's `tier_of`, its result the `Result` header. Each move token has its glyph
 stripped (`strip_glyphs`) and a NAG (`$n`) or a comment-only token ignored, then is played with
 `Position::play_san_fast`, which gives the UCI and the child key; after `max_ply` moves the
@@ -102,7 +106,19 @@ checks a 1 KiB sketch gives the same database. Saturating increments commute, so
 counters do not depend on the order of the adds or the number of threads.
 
 The default size is the least power of two of at least twice the compressed input, within 1 MiB
-and 1 GiB: 64 MiB for a 2013 month, 1 GiB for a recent one; `--sketch-mib` overrides it.
+and 1 GiB: 64 MiB for a 2013 month, 1 GiB for a recent one; `--sketch-mib` overrides it, up to
+16 GiB, and a size the sketch cannot take is an error value (`VisitSketch::create`).
+
+**Sizing.** A row holds `width` = bytes / 8 counters, so each counter takes, on average, total
+visits / width of the visits; that load must stay well under `min_games`, or most cells saturate
+and pass two counts nearly every position. One recent month (on the order of a hundred million
+games, some thirty visits each) fits the 1 GiB default. Twelve recent months do not: they are
+projected at about 1.3 × 10^10 distinct (tier, key) pairs, so at least that many visits, which
+at 1 GiB (width 2^27, about 1.3 × 10^8) is about a hundred per counter, `min_games` itself, and
+nearly every cell saturates; at 16 GiB (width 2^31) it is about six. A twelve-month build
+therefore passes `--sketch-mib 16384`. If the machine cannot hold that, the two further options
+are 8-bit counters saturating at `min_games`, which halve the memory for the same width, and a
+per-depth frontier pass (`PLAN.md` §12, item 6).
 
 ## Pass two's counts
 
@@ -113,7 +129,8 @@ to the visits by result and a small vector of moves (`MoveCode`, child, counts b
 worker asks the aggregate whether a candidate key has a FEN once per batch, and records the FEN
 from the scanner's `Position` when it has none; a FEN asked for in a game that is then skipped
 is asked for again at the key's next visit. Counters are 32-bit; one that would pass 2^32 − 1
-stops the build, never wraps (twelve months stay far below it). Sums commute, and the survivors
+stops there and marks the aggregate, and `run_build` returns the error after pass two, so a
+count never wraps (twelve months stay far below it). Sums commute, and the survivors
 are sorted before they are written, so the output does not depend on the thread count.
 
 ## The evaluation merge
@@ -185,10 +202,13 @@ the same load:
 empty and corrupt files), `chunker_test` and `chunker_property_test`, `game_filter_test` (every
 §3 row and the check order), `game_scanner_test` (Lichess's comments, NAGs and glyphs, every §3
 row through the parser, a malformed header, a bad move before and past the cap, games without
-moves, keys equal to core's replay), `move_code_test`, `sketch_test` and
-`sketch_property_test`, `work_pool_test`, `badges_test` (thresholds at their boundaries, Book's
+moves, a game ending before its moves, a parser error before and past the cap and after a failed
+header check, keys equal to core's replay), `move_code_test`, `sketch_test` and
+`sketch_property_test`, `aggregate_test` (a count stopping at 2^32 − 1 and the overflow
+reported), `work_pool_test`, `badges_test` (thresholds at their boundaries, Book's
 tier-6 zero sum, the loss from both sides and with mates), `eval_merge_test` (the tie-breaks,
 both castling forms, the no-fallback rule, unreadable and non-surviving lines, en passant
 normalization, a file read by one and three threads), `options_test`, `report_test`, and
 `build_test` on the sample: the golden dump, two runs, one and four threads and a tiny sketch
-alike, the §6.4 invariants at `min_games` 1 and 2, and the refusals.
+alike, the §6.4 invariants at `min_games` 1 and 2, and the refusals; and `pipeline_exit_status`
+(`exit_status.cmake`), the executable's exit statuses.

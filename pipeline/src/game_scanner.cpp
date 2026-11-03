@@ -24,8 +24,11 @@ class GameVisitor final : public chess::pgn::Visitor {
     void startPgn() override {
         headers_.clear();
         in_game_ = true;
+        checked_ = false;
         admitted_ = false;
         bad_move_ = false;
+        // A game that ends before its moves start has no header verdict: malformed.
+        skip_reason_ = SkipReason::malformed;
         game_.keys.clear();
         game_.moves.clear();
         game_.fens.clear();
@@ -34,6 +37,7 @@ class GameVisitor final : public chess::pgn::Visitor {
     void header(std::string_view key, std::string_view value) override { headers_.set(key, value); }
 
     void startMoves() override {
+        checked_ = true;
         const auto checked = check_headers(headers_);
         if (!checked) {
             skip_reason_ = checked.error();
@@ -75,20 +79,36 @@ class GameVisitor final : public chess::pgn::Visitor {
         } else if (bad_move_) {
             counts_->skipped.add(SkipReason::moves);
         } else {
-            counts_->admitted.at(game_.tier) += 1;
-            (*sink_)(game_);
+            admit();
         }
     }
 
-    // A game the parser started and could not finish is malformed.
+    // A game the parser started and stopped on (a token over its limit) counts as §3 says: a
+    // header it could not read is malformed; a game a header check failed keeps that check;
+    // a token before the cap is a move that cannot be read; one past the cap is never read, so
+    // the game is admitted with what was collected.
     void finish_unended() {
-        if (in_game_) {
-            in_game_ = false;
+        if (!in_game_) {
+            return;
+        }
+        in_game_ = false;
+        if (!checked_) {
             counts_->skipped.add(SkipReason::malformed);
+        } else if (!admitted_) {
+            counts_->skipped.add(skip_reason_);
+        } else if (bad_move_ || game_.moves.size() < max_ply_) {
+            counts_->skipped.add(SkipReason::moves);
+        } else {
+            admit();
         }
     }
 
   private:
+    void admit() {
+        counts_->admitted.at(game_.tier) += 1;
+        (*sink_)(game_);
+    }
+
     void visit() {
         const Key key = position_.key();
         game_.keys.push_back(key);
@@ -106,6 +126,7 @@ class GameVisitor final : public chess::pgn::Visitor {
     ScannedGame game_;
     SkipReason skip_reason_ = SkipReason::malformed;
     bool in_game_ = false;
+    bool checked_ = false; // the header checks ran: the moves started
     bool admitted_ = false;
     bool bad_move_ = false;
 };

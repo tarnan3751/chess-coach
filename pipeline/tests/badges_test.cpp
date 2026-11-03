@@ -90,6 +90,7 @@ TEST_CASE("evaluation_value maps a mate to 100000 less its distance, signed", "[
     CHECK(evaluation_value(cp(35)) == 35);
     CHECK(evaluation_value(mate(3)) == 99997);
     CHECK(evaluation_value(mate(-2)) == -99998);
+    CHECK(evaluation_value(mate(0)) == 0); // sign(0) is 0
 }
 
 TEST_CASE("evaluation_loss reads both evaluations from the mover's side", "[badges]") {
