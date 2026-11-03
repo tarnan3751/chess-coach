@@ -3,8 +3,8 @@
 #         -P exit_status.cmake
 # Every rejected command line and every command error prints exactly one line on stderr, nothing
 # on stdout, and exits 2; --version, --help and no arguments exit 0. No case needs a database:
-# the ones that open one name a file that does not exist. eval's cases may create profiles.db in
-# DATA_DIR, and none of them finds an engine.
+# the ones that open one name a file that does not exist. eval's and spar's cases may create
+# profiles.db in DATA_DIR, and none of them finds an engine.
 cmake_minimum_required(VERSION 3.28)
 
 if(NOT CLI OR NOT MISSING_DB OR NOT DATA_DIR)
@@ -66,6 +66,18 @@ expect(2 eval --data-dir "${DATA_DIR}" --seconds nan --stockfish "${MISSING_DB}"
 expect(2 eval --data-dir "${DATA_DIR}" --seconds inf --stockfish "${MISSING_DB}")
 expect(2 eval --data-dir "${DATA_DIR}" --seconds 1s --stockfish "${MISSING_DB}")
 expect(2 explore --db "${MISSING_DB}" --tier 3 --engine --data-dir "${DATA_DIR}" --seconds 3601)
+expect(0 spar --help)
+expect(2 spar --db "${MISSING_DB}" --tier 3 --colour white)
+expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --tier 3)
+expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --tier 3 --colour green)
+expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --tier 7 --colour white)
+expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --tier 3 --colour white)
+expect(2 spar --data-dir "${DATA_DIR}" --tier 3 --colour white)
+expect(2 spar --data-dir "${DATA_DIR}" --list --replay 1)
+expect(2 spar --data-dir "${DATA_DIR}" --list --script "e4")
+expect(2 spar --data-dir "${DATA_DIR}" --list --profile Nobody)
+expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --replay 1)
+expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --tier 3 --colour white --seconds 0)
 
 if(failures)
   list(JOIN failures "\n  " listing)

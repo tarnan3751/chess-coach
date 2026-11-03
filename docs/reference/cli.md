@@ -21,11 +21,16 @@ chess-coach-cli name    --db <file> (--fen "<fen>" | --moves "<moves>")
 chess-coach-cli eval    --data-dir <dir> [--fen "<fen>" | --moves "<moves>"] [--db <file>]
                         [--lines N] [--seconds S] [--min-depth D] [--stockfish <path>]
                         [--threads T] [--hash M]
+chess-coach-cli spar    --db <file> --data-dir <dir> --tier <0-6> --colour white|black
+                        [--seed N] [--end-move M] [--profile <name>] [--script "<moves>"]
+                        [--seconds S] [--stockfish <path>] [--threads T] [--hash M]
+chess-coach-cli spar    --data-dir <dir> [--profile <name>] --list
+chess-coach-cli spar    --db <file> --data-dir <dir> [--profile <name>] --replay <id>
 chess-coach-cli --version | --help | <command> --help
 ```
 
-Every command but `eval` takes `--db`, the opening database, and requires it; `eval` requires
-`--data-dir` and takes `--db` as an option. A position is given by
+Every command but `eval` and `spar --list` takes `--db`, the opening database, and requires it;
+`eval` and `spar` require `--data-dir`, and `eval` takes `--db` as an option. A position is given by
 `--fen`, a FEN of four or six fields, normalized as `docs/database.md` §5.1 states; or by
 `--moves`, moves from the start position separated by spaces, each in UCI (`e2e4`, `e7e8q`,
 `e1g1`) or SAN (`e4`, `Nf3`, `O-O`, `exd5`), which may be mixed; without either, `explore` and
@@ -150,18 +155,64 @@ score order (`docs/reference/core.md`, **The engine**).
   names, else `stockfish` on the `PATH`; it runs with `--threads` (1) and `--hash` (16 MB).
   Nothing is written to stdout unless the whole command succeeds.
 
+### spar
+
+A sparring session against the coach at a tier (`docs/reference/core.md`, **The spar session**),
+saved under a profile (`--profile`, `Default` unless given) in the data directory's
+`profiles.db` (`docs/database.md` §12.3):
+
+```
+seed: 1
+coach: e4 (e2e4)
+you: e6 (e7e6)
+coach: Dubious move: e6 (e7e6), badges PD, loss -
+  better: e5 (e7e5) P 300 games 47% 10% 43%
+  better: c5 (c7c5) BP 250 games 44% 8% 48%
+out of book at tier 3 (1600-1799): the engine plays from here
+coach: d4 (d2d4)
+...
+session ended at move 3
+summary: 5 moves, 1 interruptions, reached off book, result none
+moves: 1. e4 e6 2. d4 a6 3. Nd2
+saved: session 1 under Default
+```
+
+- `--tier` and `--colour` (the user's) are required for a new session. The seed (`--seed`, else
+  the clock's seconds) is printed first; with the same seed, tier, colour and moves, the coach's
+  book replies are the same.
+- The user's moves come from `--script`, moves separated by spaces, or else from stdin, one at
+  a time after a prompt that is the game so far in SAN (`1. e4 > `). A move is UCI or SAN; a
+  move that is not legal is refused (`not a legal move here: <move>`) and asked again, and in a
+  script it is an error. The session stops early when the script or the input ends.
+- `you:` and `coach:` lines give each move in SAN and UCI. While in book the coach's replies
+  come from the sampler; an interruption (a Dubious move, or one out of book) gives the reason,
+  the move, its badges, its loss in centipawns or `-`, and the better choices with their badges,
+  games and white, draw and black shares. The line `out of book at tier ...` marks where the
+  engine takes over: Stockfish at limited strength (core's `EngineReplyProvider`, `--seconds`
+  per move, 0.5 by default), started only then, so a session that stays in book needs no engine.
+- The session ends when the user is to move at `--end-move` (25), or at mate or stalemate, then
+  prints its summary and is saved: `saved: session <id> under <profile>`. A session stopped
+  early is saved too, as stopped.
+- `--list` prints the profile's saved sessions, `id date tier colour moves interruptions result`
+  (the date of its start, UTC; `-` for no result).
+- `--replay <id>` plays a saved session again from its seed and moves, with the end move and
+  sampler minimum it was played with (`docs/database.md` §12.3), needing no engine (the engine's
+  moves are replayed as recorded), and prints its interruptions and its summary. A record the
+  session does not reproduce is an error, and so is a database of another `data_version` than the
+  session played against, whose book replies may differ.
+
 ## Exit statuses
 
 | Status | When |
 |---|---|
 | 0 | The command ran, including an off-book or unnamed position; `--version`, `--help`, or no arguments (which print the help) |
-| 2 | The command line is rejected (an unknown command or option, a missing `--db`, `--tier` or `--data-dir`, `explore --engine` without `--data-dir`, a tier that is not a number, `--fen` with `--moves`), or a command fails: a database that does not open, a tier outside 0 to 6, a FEN that does not parse, a move that is neither UCI nor SAN or is not legal where it is played, `name` without a position, a `profiles.db` that does not open, `--lines` below 1 or `--seconds` not above 0, no engine to be found on a cache miss, an engine that does not start, dies or does not answer in time. One line on stderr, `chess-coach-cli: <reason>`, and nothing on stdout |
+| 2 | The command line is rejected (an unknown command or option, a missing `--db`, `--tier` or `--data-dir`, `explore --engine` without `--data-dir`, a tier that is not a number, `--fen` with `--moves`), or a command fails: a database that does not open, a tier outside 0 to 6, a FEN that does not parse, a move that is neither UCI nor SAN or is not legal where it is played, `name` without a position, a `profiles.db` that does not open, `--lines` below 1 or `--seconds` not above 0, no engine to be found on a cache miss, an engine that does not start, dies or does not answer in time; for `spar`, a missing `--tier` or `--colour`, a colour other than `white` or `black`, `--list` with `--replay` or `--script`, no profile of that name, no saved session of that id, an illegal move in a script, a record that does not replay or a database of another `data_version` for `--replay`, a session that cannot be saved. One line on stderr, `chess-coach-cli: <reason>`, and nothing on stdout |
 | 1 | An unexpected exception reached `main`; its message is printed on stderr |
 
 ## Code
 
 `cli/src/main.cpp` only wires CLI11 to the commands. Each command is a function over its parsed
-options and an `std::ostream` (`cli/src/commands/{dump,stats,explore,name,eval}`), returning a
+options and an `std::ostream` (`cli/src/commands/{dump,stats,explore,name,eval,spar}`), returning a
 `CommandError` as a value; `commands/common` opens the store, resolves `--fen` or `--moves` to a
 position and the keys along the way, finds the deepest name and rounds percentages;
 `commands/engine_common` opens the profile store, finds the engine binary, searches through the
@@ -186,6 +237,12 @@ are the `cli_commands` library, which the executable and the tests link.
   the stored evaluation; a missing engine, `--lines 0` and a bad move are errors; the data
   directory holds `profiles.db` and nothing else. The engine's lines vary, so there are no golden
   queries for them.
+- `cli_spar_test` (labels `cli;unit`) runs `spar` on the fixture database with `core`'s fake
+  engine answering the first legal move (`cli/tests/fake-stockfish-legal.sh`, the fake's `legal`
+  script): a scripted session meets a Dubious interruption with its better choices, leaves the
+  book, ends at its move and is saved, listed and replayed to the same summary; moves read from
+  an input stream are refused when illegal and the session stops when the input ends; the errors
+  come before any file is opened or created.
 - `cli_exit_status` (labels `cli;unit`) runs the executable on rejected command lines and
   failing commands and checks the status 2, the one line on stderr and the empty stdout, and
   status 0 for `--version`, `--help` and no arguments.

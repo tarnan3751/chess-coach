@@ -11,12 +11,14 @@
 #include "commands/eval.hpp"
 #include "commands/explore.hpp"
 #include "commands/name.hpp"
+#include "commands/spar.hpp"
 #include "commands/stats.hpp"
 
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
@@ -42,6 +44,16 @@ std::string check_seconds(const std::string& text) {
         return fmt::format("must be above 0 and at most {}", chesscoach::maximum_search_seconds);
     }
     return {};
+}
+
+// The spar subcommand with its database and data directory options.
+CLI::App* spar_command_of(CLI::App& app, chesscoach::cli::SparOptions& spar) {
+    CLI::App* command = app.add_subcommand(
+        "spar", "Play a sparring session against the coach at a tier, or list or replay one.");
+    command->add_option("--db", spar.db, "The opening database (not needed for --list)");
+    command->add_option("--data-dir", spar.data_dir, "The data directory holding profiles.db")
+        ->required();
+    return command;
 }
 
 int report(const chesscoach::cli::Result<void>& result) {
@@ -147,6 +159,43 @@ int main(int argc, char** argv) {
         eval_command->add_option("--hash", eval.engine.hash_mb, "The engine's hash in MB")
             ->capture_default_str();
 
+        chesscoach::cli::SparOptions spar;
+        CLI::App* spar_command = spar_command_of(app, spar);
+        int spar_tier = 0;
+        std::string spar_colour;
+        std::uint64_t spar_seed = 0;
+        std::string spar_script;
+        std::string spar_stockfish;
+        std::int64_t spar_replay = 0;
+        const CLI::Option* spar_tier_option =
+            spar_command->add_option("--tier", spar_tier, "The tier, 0 to 6");
+        const CLI::Option* spar_colour_option =
+            spar_command->add_option("--colour", spar_colour, "The user's colour: white or black");
+        const CLI::Option* spar_seed_option = spar_command->add_option(
+            "--seed", spar_seed, "The session's seed (default: the clock's seconds)");
+        spar_command->add_option("--end-move", spar.end_move, "The move number the session ends at")
+            ->capture_default_str();
+        spar_command
+            ->add_option("--profile", spar.profile, "The profile the session is saved under")
+            ->capture_default_str();
+        const CLI::Option* spar_stockfish_option = spar_command->add_option(
+            "--stockfish", spar_stockfish,
+            "The engine binary (else CHESS_COACH_STOCKFISH, else stockfish on the PATH)");
+        spar_command->add_option("--threads", spar.engine.threads, "The engine's threads")
+            ->capture_default_str();
+        spar_command->add_option("--hash", spar.engine.hash_mb, "The engine's hash in MB")
+            ->capture_default_str();
+        spar_command->add_option("--seconds", spar.seconds, "The engine's time per reply")
+            ->check(CLI::Validator(check_seconds, "SECONDS"))
+            ->capture_default_str();
+        CLI::Option* spar_script_option = spar_command->add_option(
+            "--script", spar_script, "The user's moves, UCI or SAN, separated by spaces");
+        CLI::Option* spar_list_option =
+            spar_command->add_flag("--list", spar.list, "List the profile's saved sessions");
+        const CLI::Option* spar_replay_option =
+            spar_command->add_option("--replay", spar_replay, "Replay a saved session by its id");
+        spar_list_option->excludes(spar_script_option);
+
         chesscoach::cli::NameOptions name;
         CLI::App* name_command = app.add_subcommand(
             "name", "Print the name of the deepest named position along the moves.");
@@ -192,6 +241,27 @@ int main(int argc, char** argv) {
                 explore.engine = explore_engine_options;
             }
             return report(chesscoach::cli::run_explore(explore, std::cout));
+        }
+        if (*spar_command) {
+            if (*spar_tier_option) {
+                spar.tier = spar_tier;
+            }
+            if (*spar_colour_option) {
+                spar.colour = spar_colour;
+            }
+            if (*spar_seed_option) {
+                spar.seed = spar_seed;
+            }
+            if (*spar_stockfish_option) {
+                spar.engine.stockfish = spar_stockfish;
+            }
+            if (*spar_script_option) {
+                spar.script = spar_script;
+            }
+            if (*spar_replay_option) {
+                spar.replay = spar_replay;
+            }
+            return report(chesscoach::cli::run_spar(spar, std::cin, std::cout));
         }
         if (*eval_command) {
             if (*eval_fen) {

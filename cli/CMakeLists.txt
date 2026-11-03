@@ -15,6 +15,8 @@ add_library(cli_commands STATIC
   src/commands/explore.hpp
   src/commands/name.cpp
   src/commands/name.hpp
+  src/commands/spar.cpp
+  src/commands/spar.hpp
   src/commands/stats.cpp
   src/commands/stats.hpp)
 add_library(chesscoach::cli_commands ALIAS cli_commands)
@@ -53,6 +55,17 @@ if(BUILD_TESTING)
                              CHESSCOACH_FAKE_STOCKFISH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fake-stockfish.sh"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_assert_no_qt(cli_engine_commands_test)
+
+  # spar against core's fake engine, through tests/fake-stockfish-legal.sh.
+  chesscoach_add_test(cli_spar_test MODULE cli KIND unit
+                      SOURCES tests/spar_command_test.cpp
+                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt)
+  add_dependencies(cli_spar_test fake-uci)
+  target_compile_definitions(cli_spar_test PRIVATE
+                             CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
+                             CHESSCOACH_FAKE_STOCKFISH_LEGAL="${CMAKE_CURRENT_SOURCE_DIR}/tests/fake-stockfish-legal.sh"
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_assert_no_qt(cli_spar_test)
 
   # Writes the fixture database for driving the CLI and the golden runner by hand; not a test.
   add_executable(cli_write_fixture tests/write_fixture.cpp)
