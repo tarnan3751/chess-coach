@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -104,6 +105,17 @@ TEST_CASE("from_fen drops an en passant target with no legal capture", "[positio
     // The pawn is there, but the square it passed is occupied, so it did not just double push.
     CHECK(parse("rnbqkbnr/ppp1pppp/3b4/3pP3/8/8/PPPP1PPP/RNBQK1NR w KQkq d6").fen() ==
           "rnbqkbnr/ppp1pppp/3b4/3pP3/8/8/PPPP1PPP/RNBQK1NR w KQkq -");
+    // The push was impossible: with the pawn back on g2, white to move would have the black king
+    // on h3 in check, so the position before it was illegal.
+    const auto impossible = parse("2Q5/K1Q5/8/8/5pPp/7k/8/8 b - g3");
+    CHECK(impossible.fen() == "2Q5/K1Q5/8/8/5pPp/7k/8/8 b - -");
+    const auto moves = impossible.legal_moves_uci();
+    CHECK(std::ranges::find(moves, "f4g3") == moves.end());
+    CHECK(std::ranges::find(moves, "h4g3") == moves.end());
+    CHECK(impossible.key() == parse("2Q5/K1Q5/8/8/5pPp/7k/8/8 b - -").key());
+    // A double check by the pushed pawn and a queen: with the pawn back on e2 the queen alone
+    // checks the black king, white to move, so the push never happened.
+    CHECK(parse("8/3Q4/1q6/5k2/4Pp2/6PK/8/8 b - e3").fen() == "8/3Q4/1q6/5k2/4Pp2/6PK/8/8 b - -");
     // The capture would expose the king along the rank.
     CHECK(parse("8/8/8/KPp4r/8/8/8/7k w - c6").fen() == "8/8/8/KPp4r/8/8/8/7k w - -");
     CHECK(parse("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3").key() ==

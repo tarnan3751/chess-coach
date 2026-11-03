@@ -116,23 +116,66 @@ std::optional<FenError> check_castling(std::string_view field, const std::array<
     return std::nullopt;
 }
 
-// The en passant field as the library should see it: '-' unless a pawn of the side not to move
-// stands where a double push just put it, with the target and the square it passed empty.
-// chess-library checks the capture's legality but not that the pawn is there, so a target without
-// one would give a capture of an empty square; without the pawn there is no legal capture, and the
-// contract drops the target (§5.1).
+// A placement field from 64 squares (a1 = 0), each a piece letter or '.'.
+std::string placement_of(const std::array<char, 64>& squares) {
+    std::string placement;
+    for (int rank = 7; rank >= 0; --rank) {
+        int empty = 0;
+        for (int file = 0; file < 8; ++file) {
+            const char c = at(squares, (rank * 8) + file);
+            if (c == '.') {
+                ++empty;
+                continue;
+            }
+            if (empty > 0) {
+                placement += static_cast<char>('0' + empty);
+                empty = 0;
+            }
+            placement += c;
+        }
+        if (empty > 0) {
+            placement += static_cast<char>('0' + empty);
+        }
+        if (rank > 0) {
+            placement += '/';
+        }
+    }
+    return placement;
+}
+
+// The en passant field as the library should see it: '-' unless the double push it records was
+// possible. A pawn of the side not to move must stand where the push put it, with the target and
+// the square it passed empty; chess-library checks the capture's legality but not that the pawn
+// is there, so a target without one would give a capture of an empty square. And the position
+// before the push must have been legal: with the pawn back on its origin square and the pushing
+// side to move, the side now to move's king must not be attacked, which chess-library's own check
+// (pins and the lines the captured pawn's removal opens) does not look at. Without a possible
+// push there is no legal capture, and the contract drops the target (§5.1).
 std::string_view normalize_en_passant(std::string_view field, bool white_to_move,
                                       const std::array<char, 64>& squares) {
     if (field == "-") {
         return field;
     }
     const int file = field.at(0) - 'a';
+    const int pushed = white_to_move ? 32 + file : 24 + file;
+    const int origin = white_to_move ? 48 + file : 8 + file;
     const bool shaped = white_to_move
-                            ? (field.at(1) == '6' && at(squares, 32 + file) == 'p' &&
-                               at(squares, 40 + file) == '.' && at(squares, 48 + file) == '.')
-                            : (field.at(1) == '3' && at(squares, 24 + file) == 'P' &&
-                               at(squares, 16 + file) == '.' && at(squares, 8 + file) == '.');
-    return shaped ? field : std::string_view("-");
+                            ? (field.at(1) == '6' && at(squares, pushed) == 'p' &&
+                               at(squares, 40 + file) == '.' && at(squares, origin) == '.')
+                            : (field.at(1) == '3' && at(squares, pushed) == 'P' &&
+                               at(squares, 16 + file) == '.' && at(squares, origin) == '.');
+    if (!shaped) {
+        return "-";
+    }
+    auto before = squares;
+    std::swap(before.at(static_cast<std::size_t>(pushed)),
+              before.at(static_cast<std::size_t>(origin)));
+    chess::Board board;
+    if (!board.setFen(placement_of(before) + (white_to_move ? " b - -" : " w - -"))) {
+        return "-";
+    }
+    const auto capturer = white_to_move ? chess::Color::WHITE : chess::Color::BLACK;
+    return board.isAttacked(board.kingSq(capturer), ~capturer) ? std::string_view("-") : field;
 }
 
 // SAN as Lichess and the chess-openings files write it, and 0-0 for castling: the move without
