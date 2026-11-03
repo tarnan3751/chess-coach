@@ -2,7 +2,10 @@
 // which app/ cannot link), and a small tree at tier 4 for the Spar tests. The counts are consistent
 // with the counting rule of docs/database.md §6.4 at tier 3; tiers 0 and 6 hold only a few rows.
 // Badges are set by hand, as §7.3 gives them for these rows: Book only where the parent has a
-// tier-6 node, the move at least 5% of it and both positions evaluated within 50 cp.
+// tier-6 node, the move at least 5% of it and both positions evaluated within 50 cp. One row
+// breaks the survival rule on purpose: the tier-4 node after 1. d4 has 9 games, below the
+// fixture's min_games of 10, which the pipeline would have pruned, so that 1. d4 stays in book
+// at tier 4 while it is neither Popular nor a sampler candidate.
 #include "fixture_db.hpp"
 
 #include <chesscoach/opening_schema.hpp>

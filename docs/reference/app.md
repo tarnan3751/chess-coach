@@ -11,12 +11,15 @@ its own thread (**Database worker**); the engine and the engine cache belong to 
 another (**Engine worker**); a sparring session, with its own connection to the opening database and
 its own engine, belongs to the spar worker on a third (**Spar**); the repertoires and cards, with
 another connection to the opening database for coverage and the score, belong to the profile worker
-on a fourth (**Profile worker**). The app writes in `--data-dir` and nowhere else: `settings.ini`,
-only when a setting changes (**Settings**); `profiles.db`, only when the engine worker stores a
-search (**Engine worker**), the spar worker saves a session (**Spar**), the profile worker changes a
+on a fourth (**Profile worker**). The app writes these files in `--data-dir`: `settings.ini`, only
+when a setting changes (**Settings**); `profiles.db`, only when the engine worker stores a search
+(**Engine worker**), the spar worker saves a session (**Spar**), the profile worker changes a
 repertoire or a card (**Profile worker**), or a profile is imported (**Export and import**), which
-also leaves `profiles.db.previous`. Files are chosen with a chooser of the app's own, which writes
-nothing (**Files**).
+also leaves `profiles.db.previous`; and `openings.db` when a database is imported, which leaves
+`openings.db.previous` (**The database**). Each import copies its file in first as
+`profiles.db.importing` or `openings.db.importing`, which it renames into place. A profile export
+goes to the file the user picks. Files are chosen with a chooser of the app's own, which keeps no
+state (**Files**).
 
 ## Code
 
@@ -428,17 +431,20 @@ run that changes no setting leaves the data directory as it found it, or absent.
 
 ## Files
 
-The app chooses files with `FileChooser`, a dialog of its own (`file_chooser`), never
-`QFileDialog`: Qt's dialog keeps its last folder through `QSettings(UserScope, "QtProject")`,
-which on macOS always writes `~/Library/Preferences/com.qtproject.plist`, and the macOS panel keeps
-its own state in the app's defaults, both outside the data directory. The chooser is a
-`QFileSystemModel` in a `QTreeView` (`file_chooser_tree`) showing folders and the files its name
-filters match, a path line (`file_chooser_path`; Return goes to the folder or file typed), in save
-mode a file name (`file_chooser_name`), a message line (`file_chooser_message`), and *Open* or
-*Save* (`file_chooser_accept`) with *Cancel*. Open mode takes an existing file, and a double click
-on one; save mode takes a name that is not taken in the folder shown and refuses one that is, as an
-export never replaces a file. It starts in the folder last chosen in (`files/last_dir` in
-`settings.ini`), else the home folder, and keeps no state of its own. `choose_file_to_open` and
+The app chooses files with `FileChooser`, a dialog of its own (`file_chooser`), never `QFileDialog`:
+Qt's dialog keeps its last folder through `QSettings(UserScope, "QtProject")`, which on macOS always
+writes `~/Library/Preferences/com.qtproject.plist`, and the macOS panel keeps its own state in the
+app's defaults, both outside the data directory. The chooser is a `QFileSystemModel` in a
+`QTreeView` (`file_chooser_tree`) showing folders and the files its name filters match, a path line
+(`file_chooser_path`; Return there goes to the folder or file typed, never accepting, and in save
+mode a file that does not exist yet selects its folder and fills in its name; a leading `~` is the
+home folder), in save mode a file name (`file_chooser_name`), a message line
+(`file_chooser_message`), and *Open* or *Save* (`file_chooser_accept`) with *Cancel*. Open mode
+takes an existing file, and a double click on one; save mode takes the folder the path line names,
+or a file path typed there without Return, which gives the folder and, unless the name field was
+edited after it, the name (the user's last edit wins), and refuses a name that holds a slash or is
+taken, as an export never replaces a file. It starts in the folder last chosen in (`files/last_dir`
+in `settings.ini`), else the home folder, and keeps no state of its own. `choose_file_to_open` and
 `choose_file_to_save` run it for Browse… (every file), Import PGN… (`*.pgn`), Export profile… and
 Import profile… (`*.db`). As a second guard the window first sends Qt's settings for anything else
 that takes the default format to the data directory (`keep_qt_settings_in`:
@@ -565,8 +571,7 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   first line where nothing is stored; a cache seeded through `ProfileStore` served without
   starting the engine; a 30 s search stopped by a move while a timer keeps firing, and the window
   closing at once; a missing binary, and one that fails the handshake; a checkmated side to move,
-  white's and black's, read from the fake's mate 0; Browse writing Qt's dialog state in the data
-  directory and nothing in the platform's settings folder; the Settings dialog saving and applying
+  white's and black's, read from the fake's mate 0; the Settings dialog saving and applying
   its values, and a new window starting with them. Screenshots: `explore-engine`,
   `explore-engine-dark`, `settings-dialog`.
 - `ui_spar_test`, on the fixture database's tier-4 tree (the start position's e4, a Dubious a3
@@ -597,7 +602,9 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   and no `stockfish` on the `PATH`, named in the Settings dialog's placeholder. Screenshots:
   `lookup-no-database`, `lookup-imported`.
 - `ui_file_chooser_test`: open mode picking a file through the model, the name filter hiding the
-  others and a folder refused; save mode refusing a taken name and taking a new one; Browse in the
+  others and a folder refused; save mode refusing a taken name and taking a new one; Return in the
+  path line going to a folder, a file and `~` without accepting; save mode reading a full path typed
+  without Return, taking the name edited last, and refusing a name with a slash; Browse in the
   Settings dialog starting in `files/last_dir` and keeping the new folder; and the platform's
   settings folder gaining no entry, but the system's own `com.apple.` ones, while the tests run.
   Screenshot: `file-chooser-open`.

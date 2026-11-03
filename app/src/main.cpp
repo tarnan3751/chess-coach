@@ -1,9 +1,10 @@
 // chess-coach: the entry point. Parses --data-dir and --db and opens the main window. The data
 // directory is the option's, or the platform's application data location when it is absent
 // (QStandardPaths::AppDataLocation, the owner's real data, which is why tests and agents always
-// pass --data-dir). The window reads and writes there and nowhere else: settings.ini and
-// profiles.db, and profiles.db.previous after an import (docs/reference/app.md). Wiring only: the
-// window and the board are app_lib's.
+// pass --data-dir). The window writes there: settings.ini, profiles.db, and openings.db when a
+// database is imported, each import keeping the file it replaces as .previous; a profile export
+// goes where the user picks (docs/reference/app.md). Wiring only: the window and the board are
+// app_lib's.
 #include <chesscoach/version.hpp>
 
 #include "main_window.hpp"

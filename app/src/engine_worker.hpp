@@ -86,7 +86,7 @@ class EngineWorker : public QObject {
     Q_SLOT void evaluate(quint64 key, const QString& fen, int request_id);
 
   signals:
-    // "not found", the engine's name when it is idle, or "searching".
+    // "not found", "failed to start", the engine's name when it is idle, or "searching".
     void engine_state(const QString& text);
     void lines_ready(quint64 key, int request_id, const QVector<chesscoach::app::EngineLine>& lines,
                      bool cached);

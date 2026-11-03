@@ -40,7 +40,8 @@ class ExploreScreen : public QWidget {
     void show_no_database(const QString& message = QString());
 
     // The engine's part, under the table: its lines, marked when they came from the cache; that
-    // it is searching, which clears them; or another state ("not found") or failure.
+    // it is searching, which clears them; or another state ("not found", "failed to start") or
+    // failure.
     void show_engine_lines(const QVector<EngineLine>& lines, bool cached);
     void show_engine_searching();
     void show_engine_state(const QString& text);
