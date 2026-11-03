@@ -29,7 +29,7 @@ class ExploreScreen : public QWidget {
     explicit ExploreScreen(QWidget* parent = nullptr);
 
     // Shows a position at a tier, the tier named by its label.
-    void show_data(const ExploreData& data, const QString& tier_label);
+    void show_data(const ExploreData& explore, const QString& tier_label);
     // The empty state, without a database.
     void show_no_database();
 
