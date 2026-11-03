@@ -73,8 +73,19 @@ chesscoach_add_test(<target> MODULE <core|pipeline|cli|app>
   discovered tests (`build/<preset>/<module>/<target>_labels.cmake`), because
   `catch_discover_tests(PROPERTIES LABELS "a;b")` loses the list's semicolon.
 - **Property tests** are Catch2 test cases that `REQUIRE(rc::check("<name>", [] { ... }))`
-  with RapidCheck (`LIBS rapidcheck`); a failure prints the shrunk counterexample and the seed,
-  which the gate keeps in its failure logs.
+  with RapidCheck (`LIBS rapidcheck`). ctest runs every KIND `property` test with
+  `RC_PARAMS="max_success=2000 seed=20261103"` (set by the same labels script), so each property
+  checks two thousand cases from a fixed seed, the same ones on every run (`PLAN.md` §5.5). The
+  environment variable `CHESS_COACH_RC_PARAMS`, when set at configure time, replaces that value
+  verbatim: `CHESS_COACH_RC_PARAMS="max_success=10000 seed=7" cmake --preset dev` runs other
+  cases, and configuring again without it restores the default.
+- **A failing property** prints its shrunk counterexample, the configuration it ran with
+  (`Using configuration: seed=...`) and a line `To reproduce these, run with:
+  RC_PARAMS="reproduce=..."`; the gate keeps both in its failure logs. Re-run the one failing
+  case by running the test executable directly with that value, for example
+  `RC_PARAMS="reproduce=..." build/dev/core/core_key_property_test "<test case name>"` (ctest
+  would replace `RC_PARAMS` with its own), or re-run the whole property from its seed with
+  `RC_PARAMS="max_success=2000 seed=<seed>"` the same way.
 - **KIND `ui`** is a Qt Test executable (`QTEST_MAIN`) linking `Qt6::Test`: one ctest test,
   labelled `<module>;ui`, run with `QT_QPA_PLATFORM=offscreen`, so it needs no display. An `app`
   test compiles the sources it tests (`app/src/...`) into its own executable.
