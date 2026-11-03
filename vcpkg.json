@@ -1,0 +1,20 @@
+{
+  "name": "chess-coach",
+  "version": "0.1.0",
+  "description": "An offline desktop chess opening coach. Qt comes from the system (CMAKE_PREFIX_PATH), never from vcpkg.",
+  "license": "MIT",
+  "dependencies": [
+    "catch2",
+    "chess-library",
+    "cli11",
+    "fmt",
+    "nlohmann-json",
+    "rapidcheck",
+    "reproc",
+    "spdlog",
+    "sqlitecpp",
+    "tl-expected",
+    "tomlplusplus",
+    "zstd"
+  ]
+}

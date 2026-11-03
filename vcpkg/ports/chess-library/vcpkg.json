@@ -1,0 +1,7 @@
+{
+  "name": "chess-library",
+  "version-date": "2026-10-27",
+  "description": "Disservin's chess-library (0.9.10 at this commit): move generation, legality, SAN and UCI in one header.",
+  "homepage": "https://github.com/Disservin/chess-library",
+  "license": "MIT"
+}

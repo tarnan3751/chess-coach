@@ -1,0 +1,6 @@
+chess-library is header-only and ships no CMake package:
+
+    find_path(CHESS_LIBRARY_INCLUDE_DIR chess-library/chess.hpp REQUIRED)
+    target_include_directories(main SYSTEM PRIVATE "${CHESS_LIBRARY_INCLUDE_DIR}")
+
+    #include <chess-library/chess.hpp>
