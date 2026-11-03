@@ -3,7 +3,6 @@
 
 #include "tables.hpp"
 
-#include <QFileDialog>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -96,13 +95,7 @@ RepertoireScreen::RepertoireScreen(QWidget* parent)
 
     connect(white_, &QRadioButton::toggled, this,
             [this](bool checked) { emit colour_changed(checked); });
-    connect(import_, &QPushButton::clicked, this, [this] {
-        const QString path = QFileDialog::getOpenFileName(
-            this, tr("Import a repertoire"), QString(), tr("PGN files (*.pgn);;All files (*)"));
-        if (!path.isEmpty()) {
-            import_pgn(path);
-        }
-    });
+    connect(import_, &QPushButton::clicked, this, &RepertoireScreen::import_clicked);
     connect(tree_, &QTreeView::clicked, this, [this](const QModelIndex& index) {
         emit navigate_requested(model_->data(index, Qt::UserRole).toStringList());
     });

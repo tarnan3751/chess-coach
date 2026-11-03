@@ -1,9 +1,10 @@
 // The Settings dialog (settings_dialog.hpp).
 #include "settings_dialog.hpp"
 
+#include "file_chooser.hpp"
+
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
-#include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLineEdit>
@@ -16,7 +17,7 @@
 namespace chesscoach::app {
 
 SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings& spar,
-                               int repertoire_depth, QWidget* parent)
+                               int repertoire_depth, Settings& files, QWidget* parent)
     : QDialog(parent), binary_(new QLineEdit(engine.binary, this)), threads_(new QSpinBox(this)),
       hash_mb_(new QSpinBox(this)), seconds_(new QDoubleSpinBox(this)), lines_(new QSpinBox(this)),
       spar_end_move_(new QSpinBox(this)), spar_seconds_(new QDoubleSpinBox(this)),
@@ -29,9 +30,8 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
         tr("CHESS_COACH_STOCKFISH, stockfish on the PATH, or the bundled one"));
     auto* browse = new QPushButton(tr("Browse…"), this);
     browse->setObjectName(QStringLiteral("engine_browse"));
-    connect(browse, &QPushButton::clicked, this, [this] {
-        const QString chosen =
-            QFileDialog::getOpenFileName(this, tr("The engine"), binary_->text());
+    connect(browse, &QPushButton::clicked, this, [this, &files] {
+        const QString chosen = choose_file_to_open(this, files, tr("The engine"), {});
         if (!chosen.isEmpty()) {
             binary_->setText(chosen);
         }

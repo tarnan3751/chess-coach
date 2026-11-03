@@ -1,9 +1,8 @@
 // The app's settings: the theme, the last tier, the engine's, Spar's and Repertoire's, in
-// <data-dir>/settings.ini through
-// QSettings in INI format, never the registry or the platform's own settings store
-// (docs/reference/app.md,
-// **Settings**). Reading never creates anything; the first write creates the data directory and
-// the file, the first thing the app writes there. GUI thread only.
+// <data-dir>/settings.ini through QSettings in INI format, never the registry or the platform's
+// own settings store (docs/reference/app.md, **Settings**), with the file chooser's last folder;
+// and Qt's own settings sent to the data directory too. Reading never creates anything; the first
+// write creates the data directory and the file. GUI thread only.
 #pragma once
 
 #include "engine_worker.hpp"
@@ -21,6 +20,11 @@ struct SparSettings {
     int end_move = 25;    // 1 to 200
     double seconds = 0.5; // 0.1 to 60
 };
+
+// Qt's own settings, for any QSettings that takes the default format, go to INI files in the
+// data directory rather than the platform's settings store (setDefaultFormat and setPath); the
+// window calls this first. The app's file chooser uses none (file_chooser.hpp).
+void keep_qt_settings_in(const QString& data_dir);
 
 class Settings {
   public:
@@ -43,12 +47,15 @@ class Settings {
     [[nodiscard]] std::optional<quint64> spar_seed() const;
     // Repertoire's coverage depth in plies (20, 2 to 40).
     [[nodiscard]] int repertoire_depth() const;
+    // The folder the file chooser last chose in (files/last_dir), else the home folder.
+    [[nodiscard]] QString last_dir() const;
 
     void set_theme(const QString& theme);
     void set_last_tier(int tier);
     void set_engine(const EngineSettings& engine);
     void set_spar(const SparSettings& spar);
     void set_repertoire_depth(int depth);
+    void set_last_dir(const QString& directory);
 
     [[nodiscard]] QString file() const { return file_; }
 

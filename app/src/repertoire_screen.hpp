@@ -41,11 +41,13 @@ class RepertoireScreen : public QWidget {
     // The recommendation score of the current position's moves; empty clears it.
     void show_scores(const ScoreData& scores);
     void show_message(const QString& text);
-    // Asks for the import of the PGN file at path, as Import PGN does after its file dialog.
+    // Asks for the import of the PGN file at path, once the window's file chooser has given it.
     void import_pgn(const QString& path);
 
   signals:
     void colour_changed(bool white);
+    // Import PGN… was pressed: the window asks for the file.
+    void import_clicked();
     void import_requested(const QString& path);
     // The board to the position at the end of the line, UCI from the start.
     void navigate_requested(const QStringList& line);

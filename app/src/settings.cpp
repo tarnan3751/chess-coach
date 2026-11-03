@@ -12,6 +12,12 @@
 
 namespace chesscoach::app {
 
+void keep_qt_settings_in(const QString& data_dir) {
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, data_dir);
+    QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, data_dir);
+}
+
 Settings::Settings(const QString& data_dir)
     : data_dir_(data_dir), file_(QDir(data_dir).filePath(QStringLiteral("settings.ini"))) {}
 
@@ -93,6 +99,15 @@ int Settings::repertoire_depth() const {
     bool ok = false;
     const int depth = read(QStringLiteral("repertoire/depth")).toInt(&ok);
     return ok && depth >= 2 && depth <= 40 ? depth : 20;
+}
+
+QString Settings::last_dir() const {
+    const QString directory = read(QStringLiteral("files/last_dir"));
+    return !directory.isEmpty() && QFileInfo(directory).isDir() ? directory : QDir::homePath();
+}
+
+void Settings::set_last_dir(const QString& directory) {
+    write(QStringLiteral("files/last_dir"), directory);
 }
 
 void Settings::set_repertoire_depth(int depth) {

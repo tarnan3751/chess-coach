@@ -14,6 +14,7 @@
 #include "engine_worker.hpp"
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
+#include "file_chooser.hpp"
 #include "profile_worker.hpp"
 #include "repertoire_screen.hpp"
 #include "settings_dialog.hpp"
@@ -26,7 +27,6 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QFile>
-#include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QKeySequence>
@@ -66,6 +66,7 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
       repertoire_(new RepertoireScreen()), drill_(new DrillScreen()), tabs_(new QTabBar()),
       move_list_(new QListWidget()), tier_selector_(new QComboBox()),
       grade_timer_(new QTimer(this)) {
+    keep_qt_settings_in(data_dir);
     register_explore_types();
     register_engine_types();
     register_spar_types();
@@ -113,6 +114,13 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     connect(spar_, &SparScreen::replay_step, this, &MainWindow::spar_replay_step);
     connect(repertoire_, &RepertoireScreen::colour_changed, this,
             &MainWindow::repertoire_colour_changed);
+    connect(repertoire_, &RepertoireScreen::import_clicked, this, [this] {
+        const QString path = choose_file_to_open(this, settings_, tr("Import a repertoire"),
+                                                 {QStringLiteral("*.pgn")});
+        if (!path.isEmpty()) {
+            repertoire_->import_pgn(path);
+        }
+    });
     connect(repertoire_, &RepertoireScreen::import_requested, this,
             [this](const QString& path) { emit pgn_import_requested(path, repertoire_white_); });
     connect(repertoire_, &RepertoireScreen::navigate_requested, this, &MainWindow::repertoire_go);
@@ -314,11 +322,10 @@ void MainWindow::build_menus() {
     QAction* export_action = file->addAction(tr("&Export profile…"));
     export_action->setObjectName(QStringLiteral("export_action"));
     connect(export_action, &QAction::triggered, this, [this] {
-        // An export never replaces a file, so the dialog does not offer to.
-        const QString path = QFileDialog::getSaveFileName(
-            this, tr("Export the profile"), QStringLiteral("chess-coach-profile.db"),
-            tr("chess-coach profiles (*.db);;All files (*)"), nullptr,
-            QFileDialog::DontConfirmOverwrite);
+        // An export never replaces a file, which the chooser's save mode refuses.
+        const QString path =
+            choose_file_to_save(this, settings_, tr("Export the profile"), {QStringLiteral("*.db")},
+                                QStringLiteral("chess-coach-profile.db"));
         if (!path.isEmpty()) {
             export_profile(path);
         }
@@ -327,8 +334,7 @@ void MainWindow::build_menus() {
     import_action->setObjectName(QStringLiteral("import_action"));
     connect(import_action, &QAction::triggered, this, [this] {
         const QString path =
-            QFileDialog::getOpenFileName(this, tr("Import a profile"), QString(),
-                                         tr("chess-coach profiles (*.db);;All files (*)"));
+            choose_file_to_open(this, settings_, tr("Import a profile"), {QStringLiteral("*.db")});
         if (!path.isEmpty()) {
             import_profile(path);
         }
@@ -560,7 +566,7 @@ void MainWindow::update_eval_bar() {
 
 void MainWindow::show_settings() {
     auto* dialog = new SettingsDialog(settings_.engine(), settings_.spar(),
-                                      settings_.repertoire_depth(), this);
+                                      settings_.repertoire_depth(), settings_, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, dialog] {
         // Applying saves the settings and restarts the engines with them at the next search; a
