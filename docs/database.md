@@ -75,9 +75,12 @@ all-tiers row, and no lookup falls back to another tier.
 ### 5.1 The normalized position
 
 A position is its piece placement, side to move, castling rights and en passant target. The en
-passant target is kept only when the side to move has a legal en passant capture onto it, legal as
-chess-library's legal move generation decides (a capture that would leave the mover's king in
-check does not count); otherwise it is absent. The halfmove clock and the fullmove number are not
+passant target is kept only when the side to move has a legal en passant capture onto it in a
+position whose double push was legal: the pushed pawn stands just past the target, the target and
+the pawn's origin square are empty, the position with the pawn back on its origin square does not
+have the side to move's king in check, and the capture is not pinned and does not leave the
+mover's king in check, as chess-library's legal move generation decides once the push is known to
+have been legal; otherwise it is absent. The halfmove clock and the fullmove number are not
 part of the position. Castling rights are those chess-library holds.
 
 The **normalized FEN** is the first four FEN fields of the normalized position, separated by

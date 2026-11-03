@@ -76,10 +76,12 @@ a moved-from `Position` may only be assigned to or destroyed.
 | `kings` | not exactly one `K` and one `k` |
 | `illegal` | a castling letter without its king on e1 or e8 and its rook on its corner; a pawn on the first or last rank; the side not to move in check |
 
-It then **normalizes the en passant field** (§5.1): a target is kept only when a pawn of the side
-not to move stands where a double push would have put it, with the target and the square it
-passed empty; chess-library then drops it too unless a capture onto it is legal for the side to
-move, pins and checks included. The castling field's letters may come in any order; the library
+It then **normalizes the en passant field** (§5.1): a target is kept only when its double push was
+possible, which is that a pawn of the side not to move stands where the push would have put it,
+with the target and the square it passed empty, and that the position before the push was legal:
+with the pawn back on its origin square and the pushing side to move, the side now to move's king
+is not attacked (chess-library answers, on a board of that position). chess-library then drops the
+target too unless a capture onto it is legal for the side to move, pins and checks included. The castling field's letters may come in any order; the library
 prints them `KQkq`.
 
 **SAN.** Accepted: `O-O`, `O-O-O`, `0-0`, `0-0-0`; a piece move `[KQRBN][a-h]?[1-8]?x?[a-h][1-8]`;
@@ -112,7 +114,7 @@ includes it. What the wrapper neutralizes:
 | The library | The wrapper |
 |---|---|
 | `Board(fen)` ignores a parse failure; `setFen` returns `false` but accepts ranks of the wrong width, and asserts without a king | `from_fen` checks every field and the kings first, then calls `setFen` |
-| `setFen` keeps an en passant target whenever a capture would be legal, without checking that the pawn that double pushed is there, so a target without one gives a capture of an empty square | `from_fen` drops a target whose double push did not happen |
+| `setFen` keeps an en passant target whenever a capture would be legal, without checking that the pawn that double pushed is there (a target without one gives a capture of an empty square) or that the push was possible (the position before it may have had the side now to move in check: a double check, or a line the captured pawn's removal opens) | `from_fen` drops a target whose double push did not happen or could not have: the pawn must be there, and the position with it back on its origin square must not have the side to move's king attacked |
 | A castling letter with no rook on its corner grants the right with any rook on that side | `from_fen` refuses it as `illegal` |
 | `makeMove<false>` (the default) keeps an en passant target whenever an enemy pawn attacks it | every move is `makeMove<true>`, which keeps it only when the capture is legal: §5.1's rule |
 | `parseSan` throws `SanParseError` or `AmbiguousMoveError`, returns `NO_MOVE` (which is `a1a1`, value 0) for an empty string, and reads past the end of some malformed strings (`O`, `e8=`) | the SAN syntax check runs first; the exceptions become `illegal` and `ambiguous`; `NO_MOVE` is compared explicitly |
