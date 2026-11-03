@@ -153,7 +153,9 @@ major, the pinned wheel versions move with it.
 
 `.clang-tidy` enables `bugprone-*`, `cert-*`, `clang-analyzer-*`, `concurrency-*`,
 `cppcoreguidelines-*`, `misc-*`, `modernize-*`, `performance-*`, `portability-*` and
-`readability-*`, minus `modernize-use-trailing-return-type`, both magic-numbers checks,
+`readability-*` (minus `misc-const-correctness` and `bugprone-inc-dec-in-conditions`, two
+style checks whose findings differ between libc++ and libstdc++, so the macOS and Ubuntu jobs
+disagreed on nine test lines), minus `modernize-use-trailing-return-type`, both magic-numbers checks,
 `readability-identifier-length`, `cppcoreguidelines-pro-bounds-pointer-arithmetic`,
 `cppcoreguidelines-pro-bounds-array-to-pointer-decay`, `cppcoreguidelines-owning-memory` (Qt
 parent ownership), both non-private-member-variables checks,
