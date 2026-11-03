@@ -73,6 +73,21 @@ Without `--data-dir` the app uses the platform's application data directory (on 
 `~/Library/Application Support/chess-coach`). How the presets, the tests and the gate work is in
 [docs/reference/testing-tools.md](docs/reference/testing-tools.md).
 
+## The CLI
+
+`chess-coach-cli` queries a built database from the terminal:
+
+```
+chess-coach-cli stats   --db openings.db                            # meta and counts per tier
+chess-coach-cli explore --db openings.db --tier 3 --moves "e4 c5"   # the moves at a tier
+chess-coach-cli name    --db openings.db --moves "e4 c5 Nf3 d6 d4"  # the opening's name
+chess-coach-cli dump    --db openings.db                            # the canonical dump
+```
+
+Tiers are 0 (under 1200) to 6 (2200 and above); moves are UCI or SAN from the start position,
+or `--fen` gives a position. [docs/reference/cli.md](docs/reference/cli.md) describes every
+command and its output.
+
 ## Data
 
 The opening database is built from data Lichess publishes under the Creative Commons CC0

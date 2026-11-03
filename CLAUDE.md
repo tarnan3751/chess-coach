@@ -27,10 +27,10 @@ window titled with the version on the `--data-dir` it is given; the gate, the bo
 clang-format, clang-tidy and CI on macOS and Ubuntu are wired (`docs/reference/testing-tools.md`).
 The data contract is `docs/database.md`. **Phase 1 (data contract and pipeline) is in progress:**
 `core` holds the position key, `Position` over chess-library, tiers, badges, the opening names
-and the read-only opening store with the canonical dump (`docs/reference/core.md`); the
-pipeline and the CLI's commands are next. `PLAN.md` §7 lists the seven phases with their sizes,
-§6 the data, §9 the process, §11 the decisions, §12 the resolved questions and §14 the deferred
-path.
+and the read-only opening store with the canonical dump (`docs/reference/core.md`), and
+`chess-coach-cli` has `dump`, `stats`, `explore` and `name` (`docs/reference/cli.md`); the
+pipeline is next. `PLAN.md` §7 lists the seven phases with their sizes, §6 the data, §9 the
+process, §11 the decisions, §12 the resolved questions and §14 the deferred path.
 
 ## Stack (pinned)
 
