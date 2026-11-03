@@ -447,6 +447,14 @@ TEST_CASE("The store refuses a file it does not understand", "[store]") {
     }
     CHECK(open_error(dir.file("unversioned.db")) == StoreError::no_meta);
 
+    // A meta table without key and value columns is no meta table.
+    {
+        SQLite::Database db(dir.file("misshapen-meta.db"), create_flags());
+        db.exec("CREATE TABLE meta (name TEXT, data TEXT);"
+                "INSERT INTO meta VALUES ('schema_version', '1');");
+    }
+    CHECK(open_error(dir.file("misshapen-meta.db")) == StoreError::no_meta);
+
     for (const std::string_view version : {"2", "0", "01", " 1", ""}) {
         CAPTURE(version);
         const auto path = dir.file("versioned.db");

@@ -56,15 +56,20 @@ std::optional<std::int64_t> optional_integer(const SQLite::Column& column) {
     return column.isNull() ? std::nullopt : std::optional(column.getInt64());
 }
 
-// The meta table's rows. The statement is finalized on return, before the connection can move
-// into the store, so a connection closed by a failed open has no statement left on it.
-Meta read_meta(const SQLite::Database& db) {
-    Meta meta;
-    SQLite::Statement rows(db, "SELECT key, value FROM meta");
-    while (rows.executeStep()) {
-        meta.entries.emplace(rows.getColumn(0).getString(), rows.getColumn(1).getString());
+// The meta table's rows, or nullopt when the table is not one of key and value columns. The
+// statement is finalized on return, before the connection can move into the store, so a
+// connection closed by a failed open has no statement left on it.
+std::optional<Meta> read_meta(const SQLite::Database& db) {
+    try {
+        Meta meta;
+        SQLite::Statement rows(db, "SELECT key, value FROM meta");
+        while (rows.executeStep()) {
+            meta.entries.emplace(rows.getColumn(0).getString(), rows.getColumn(1).getString());
+        }
+        return meta;
+    } catch (const SQLite::Exception&) {
+        return std::nullopt;
     }
-    return meta;
 }
 
 // Every row of one table in the dump's order: a line per row, the record's name first, then each
@@ -128,7 +133,10 @@ tl::expected<OpeningStore, StoreError> OpeningStore::open(const std::filesystem:
             return tl::unexpected(StoreError::no_meta);
         }
         auto meta = read_meta(db);
-        const auto* version = meta.find("schema_version");
+        if (!meta) {
+            return tl::unexpected(StoreError::no_meta);
+        }
+        const auto* version = meta->find("schema_version");
         if (version == nullptr) {
             return tl::unexpected(StoreError::no_meta);
         }
@@ -136,7 +144,7 @@ tl::expected<OpeningStore, StoreError> OpeningStore::open(const std::filesystem:
             return tl::unexpected(StoreError::wrong_version);
         }
         try {
-            return OpeningStore(std::make_unique<Impl>(std::move(db), std::move(meta)));
+            return OpeningStore(std::make_unique<Impl>(std::move(db), std::move(*meta)));
         } catch (const SQLite::Exception&) {
             // A lookup does not prepare: positions, nodes or moves is missing or misshapen.
             return tl::unexpected(StoreError::schema_mismatch);
