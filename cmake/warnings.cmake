@@ -21,4 +21,6 @@ target_compile_options(
             -Wdouble-promotion
             -Wformat=2
             -Werror
-            "$<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond;-Wlogical-op;-Wuseless-cast>")
+            # Not -Wuseless-cast: it rejects the casts between uint64_t and size_t that macOS
+            # needs and Linux does not, which portable code must keep.
+            "$<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond;-Wlogical-op>")
