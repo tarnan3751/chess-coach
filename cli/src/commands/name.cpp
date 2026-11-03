@@ -11,7 +11,7 @@ Result<void> run_name(const NameOptions& options, std::ostream& out) {
     if (!resolved) {
         return tl::unexpected(resolved.error());
     }
-    auto store = open_store(options.db);
+    auto store = open_located_store(options.db, options.data_dir);
     if (!store) {
         return tl::unexpected(store.error());
     }

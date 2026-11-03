@@ -1,6 +1,7 @@
 // chess-coach-cli eval: a position's engine lines, served from the profile store's engine cache
 // when it holds them deep enough and otherwise searched by the engine and stored
-// (docs/reference/cli.md, **eval**). With --db, the stored evaluation of openings.db as well.
+// (docs/reference/cli.md, **eval**). With --db, or the data directory's openings.db when it has
+// one, the stored evaluation of openings.db as well.
 #pragma once
 
 #include "common.hpp"

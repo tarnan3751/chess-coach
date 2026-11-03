@@ -1,6 +1,8 @@
 // chess-coach-cli eval (eval.hpp).
 #include "eval.hpp"
 
+#include <chesscoach/opening_locator.hpp>
+
 #include <fmt/format.h>
 
 #include <sstream>
@@ -17,8 +19,15 @@ Result<void> run_eval(const EvalOptions& options, std::ostream& out) {
     std::ostringstream text;
     text << "fen: " << position.fen() << '\n';
     text << "key: " << position.key() << '\n';
-    if (options.db) {
-        auto store = open_store(*options.db);
+    // Without --db, the data directory's openings.db when it has one; without either, no stored
+    // evaluation.
+    const bool located = options.db || locate_opening_database(LocatorInput{
+                                           .explicit_db = std::nullopt,
+                                           .data_dir = options.data_dir,
+                                           .bundle_resources = std::nullopt,
+                                       });
+    if (located) {
+        auto store = open_located_store(options.db.value_or(""), options.data_dir);
         if (!store) {
             return tl::unexpected(store.error());
         }

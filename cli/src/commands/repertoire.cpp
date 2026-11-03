@@ -142,9 +142,6 @@ Result<void> import_pgn(ProfileStore& store, std::int64_t profile, Color colour,
 
 Result<void> report_coverage(const ProfileStore& store, std::int64_t profile, Color colour,
                              const RepertoireOptions& options, std::ostream& out) {
-    if (options.db.empty()) {
-        return fail(fmt::format("repertoire {} needs --db", options.action));
-    }
     if (options.depth < 0 || options.depth > max_depth) {
         return fail(fmt::format("--depth {} is not from 0 to {}", options.depth, max_depth));
     }
@@ -152,7 +149,7 @@ Result<void> report_coverage(const ProfileStore& store, std::int64_t profile, Co
     if (!tier) {
         return fail(fmt::format("tier {} is not one of 0 to 6", options.tier));
     }
-    const auto openings = open_store(options.db);
+    const auto openings = open_located_store(options.db, options.data_dir);
     if (!openings) {
         return tl::unexpected(openings.error());
     }

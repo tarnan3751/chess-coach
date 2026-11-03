@@ -1,30 +1,17 @@
 // What the CLI's commands share (common.hpp).
 #include "common.hpp"
 
+#include <chesscoach/opening_locator.hpp>
+
 #include <fmt/format.h>
 
+#include <filesystem>
 #include <ranges>
 #include <utility>
 
 namespace chesscoach::cli {
 
 namespace {
-
-std::string_view describe(StoreError error) {
-    switch (error) {
-    case StoreError::missing_file:
-        return "no such file";
-    case StoreError::unreadable:
-        return "not a readable SQLite database";
-    case StoreError::no_meta:
-        return "no meta table or schema_version";
-    case StoreError::wrong_version:
-        return "a schema_version this build does not read";
-    case StoreError::schema_mismatch:
-        return "its tables do not match the schema";
-    }
-    return "cannot open";
-}
 
 std::string_view describe(FenError error) {
     switch (error) {
@@ -68,6 +55,22 @@ std::vector<std::string_view> words(std::string_view text) {
 
 } // namespace
 
+std::string_view describe(StoreError error) {
+    switch (error) {
+    case StoreError::missing_file:
+        return "no such file";
+    case StoreError::unreadable:
+        return "not a readable SQLite database";
+    case StoreError::no_meta:
+        return "no meta table or schema_version";
+    case StoreError::wrong_version:
+        return "a schema_version this build does not read";
+    case StoreError::schema_mismatch:
+        return "its tables do not match the schema";
+    }
+    return "cannot open";
+}
+
 tl::unexpected<CommandError> fail(std::string message) {
     return tl::unexpected(CommandError{std::move(message)});
 }
@@ -79,6 +82,31 @@ Result<OpeningStore> open_store(const std::string& path) {
             fmt::format("cannot open the opening database {}: {}", path, describe(store.error())));
     }
     return std::move(*store);
+}
+
+Result<std::string> resolve_db(const std::string& db, const std::optional<std::string>& data_dir) {
+    if (db.empty() && !data_dir) {
+        return fail("no opening database: give --db, or --data-dir with an openings.db in it");
+    }
+    // An explicit --db is the file read, there or not (PLAN.md §11): one that is not there is
+    // open_store's error, never a fall back to the data directory's file.
+    const auto located = locate_opening_database(LocatorInput{
+        .explicit_db = db.empty() ? std::nullopt : std::optional<std::filesystem::path>(db),
+        .data_dir = data_dir.value_or(""),
+        .bundle_resources = std::nullopt,
+    });
+    if (located) {
+        return located->string();
+    }
+    return fail(
+        fmt::format("no opening database: {} does not exist (give --db, or put one there "
+                    "with database import)",
+                    (std::filesystem::path(data_dir.value_or("")) / "openings.db").string()));
+}
+
+Result<OpeningStore> open_located_store(const std::string& db,
+                                        const std::optional<std::string>& data_dir) {
+    return resolve_db(db, data_dir).and_then(open_store);
 }
 
 Result<Resolved> resolve_position(const std::optional<std::string>& fen,

@@ -5,6 +5,8 @@
 add_library(cli_commands STATIC
   src/commands/common.cpp
   src/commands/common.hpp
+  src/commands/database.cpp
+  src/commands/database.hpp
   src/commands/drill.cpp
   src/commands/drill.hpp
   src/commands/dump.cpp
@@ -71,6 +73,14 @@ if(BUILD_TESTING)
                              CHESSCOACH_FAKE_STOCKFISH_LEGAL="${CMAKE_CURRENT_SOURCE_DIR}/tests/fake-stockfish-legal.sh"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_assert_no_qt(cli_spar_test)
+
+  # Where the CLI finds the opening database, and database info and import.
+  chesscoach_add_test(cli_database_command_test MODULE cli KIND unit
+                      SOURCES tests/database_command_test.cpp
+                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt SQLiteCpp)
+  target_compile_definitions(cli_database_command_test PRIVATE
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_assert_no_qt(cli_database_command_test)
 
   # repertoire, drill and profile on scratch data directories and the fixture database.
   chesscoach_add_test(cli_repertoire_commands_test MODULE cli KIND unit

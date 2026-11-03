@@ -236,12 +236,9 @@ Result<void> run_spar(const SparOptions& options, std::istream& in, std::ostream
     if (session_wanted && *options.colour != "white" && *options.colour != "black") {
         return fail(fmt::format("--colour must be white or black, not {}", *options.colour));
     }
-    if (!options.list && options.db.empty()) {
-        return fail("--db is required, the opening database");
-    }
     std::optional<OpeningStore> store;
     if (!options.list) {
-        auto opened = open_store(options.db);
+        auto opened = open_located_store(options.db, options.data_dir);
         if (!opened) {
             return tl::unexpected(opened.error());
         }

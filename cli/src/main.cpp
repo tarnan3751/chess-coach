@@ -1,12 +1,15 @@
 // chess-coach-cli: the entry point, wiring only (docs/reference/cli.md). It parses the command
-// line with CLI11 and runs one subcommand: dump, stats, explore or name, each over --db <file>;
-// eval, spar, repertoire, drill or profile, over the profile store of --data-dir <dir>.
+// line with CLI11 and runs one subcommand: dump, stats, explore or name, each over the opening
+// database of --db <file> or of --data-dir <dir>; eval, spar, repertoire, drill or profile, over
+// the profile store of --data-dir <dir>; or database, which shows or imports a data directory's
+// opening database.
 // --version, --help, and the help when run without arguments, exit 0. A command line CLI11
 // rejects and an error a command returns each print one line on stderr and exit 2; an exception
 // that reaches main is reported on stderr with exit status 1.
 #include <chesscoach/engine.hpp>
 #include <chesscoach/version.hpp>
 
+#include "commands/database.hpp"
 #include "commands/drill.hpp"
 #include "commands/dump.hpp"
 #include "commands/eval.hpp"
@@ -155,6 +158,22 @@ CLI::App* profile_command_of(CLI::App& app, chesscoach::cli::ProfileOptions& opt
     return command;
 }
 
+// database and its subcommands, over a data directory's opening database.
+CLI::App* database_command_of(CLI::App& app, chesscoach::cli::DatabaseOptions& options) {
+    CLI::App* command = app.add_subcommand(
+        "database",
+        "Show the opening database the CLI reads, or import one into a data directory.");
+    command->require_subcommand(1);
+    command->add_option("--data-dir", options.data_dir,
+                        "The data directory, whose openings.db is read or replaced");
+    command->add_option("--db", options.db, "The opening database (info)");
+    action_of(*command, "info", "Print where the opening database is and what its meta records");
+    action_of(*command, "import", "Put a copy of an opening database in the data directory")
+        ->add_option("file", options.file, "The openings.db to import")
+        ->required();
+    return command;
+}
+
 int report(const chesscoach::cli::Result<void>& result) {
     if (!result) {
         fmt::print(stderr, "chess-coach-cli: {}\n", result.error().message);
@@ -177,12 +196,20 @@ int main(int argc, char** argv) {
         chesscoach::cli::DumpOptions dump;
         CLI::App* dump_command =
             app.add_subcommand("dump", "Write the canonical dump of the database to stdout.");
-        dump_command->add_option("--db", dump.db, "The opening database")->required();
+        dump_command->add_option("--db", dump.db, "The opening database");
+        std::string dump_data_dir;
+        const CLI::Option* dump_data_dir_option =
+            dump_command->add_option("--data-dir", dump_data_dir,
+                                     "The data directory, whose openings.db is read without --db");
 
         chesscoach::cli::StatsOptions stats;
         CLI::App* stats_command =
             app.add_subcommand("stats", "Print the database's meta and its counts per tier.");
-        stats_command->add_option("--db", stats.db, "The opening database")->required();
+        stats_command->add_option("--db", stats.db, "The opening database");
+        std::string stats_data_dir;
+        const CLI::Option* stats_data_dir_option =
+            stats_command->add_option("--data-dir", stats_data_dir,
+                                      "The data directory, whose openings.db is read without --db");
 
         // --fen and --moves are read as text and set in the options only when given, so that
         // --moves "" is the start position rather than no position.
@@ -192,7 +219,8 @@ int main(int argc, char** argv) {
         chesscoach::cli::ExploreOptions explore;
         CLI::App* explore_command =
             app.add_subcommand("explore", "Print a position's moves at one tier.");
-        explore_command->add_option("--db", explore.db, "The opening database")->required();
+        explore_command->add_option("--db", explore.db,
+                                    "The opening database (else --data-dir's openings.db)");
         explore_command->add_option("--tier", explore.tier, "The tier, 0 to 6")->required();
         CLI::Option* explore_fen =
             explore_command->add_option("--fen", fen, "The position as a FEN");
@@ -209,7 +237,8 @@ int main(int argc, char** argv) {
             "--engine", explore_engine, "Add the engine's first line, through the engine cache");
         CLI::Option* explore_data_dir =
             explore_command->add_option("--data-dir", explore_engine_options.data_dir,
-                                        "The data directory holding profiles.db (--engine)");
+                                        "The data directory: its openings.db without --db, and "
+                                        "its profiles.db for --engine");
         explore_engine_flag->needs(explore_data_dir);
         explore_command->add_option("--lines", explore_engine_options.query.lines,
                                     "The engine's line count (--engine)");
@@ -303,10 +332,17 @@ int main(int argc, char** argv) {
         chesscoach::cli::ProfileOptions profile;
         const CLI::App* profile_command = profile_command_of(app, profile);
 
+        chesscoach::cli::DatabaseOptions database;
+        const CLI::App* database_command = database_command_of(app, database);
+
         chesscoach::cli::NameOptions name;
         CLI::App* name_command = app.add_subcommand(
             "name", "Print the name of the deepest named position along the moves.");
-        name_command->add_option("--db", name.db, "The opening database")->required();
+        name_command->add_option("--db", name.db, "The opening database");
+        std::string name_data_dir;
+        const CLI::Option* name_data_dir_option =
+            name_command->add_option("--data-dir", name_data_dir,
+                                     "The data directory, whose openings.db is read without --db");
         CLI::Option* name_fen = name_command->add_option("--fen", fen, "The position as a FEN");
         const CLI::Option* name_moves =
             name_command
@@ -329,10 +365,20 @@ int main(int argc, char** argv) {
         }
 
         if (*dump_command) {
+            if (*dump_data_dir_option) {
+                dump.data_dir = dump_data_dir;
+            }
             return report(chesscoach::cli::run_dump(dump, std::cout));
         }
         if (*stats_command) {
+            if (*stats_data_dir_option) {
+                stats.data_dir = stats_data_dir;
+            }
             return report(chesscoach::cli::run_stats(stats, std::cout));
+        }
+        if (*database_command) {
+            database.action = parsed_action(*database_command);
+            return report(chesscoach::cli::run_database(database, std::cout));
         }
         if (*explore_command) {
             if (*explore_fen) {
@@ -346,6 +392,9 @@ int main(int argc, char** argv) {
             }
             if (explore_engine) {
                 explore.engine = explore_engine_options;
+            }
+            if (*explore_data_dir) {
+                explore.data_dir = explore_engine_options.data_dir;
             }
             return report(chesscoach::cli::run_explore(explore, std::cout));
         }
@@ -399,6 +448,9 @@ int main(int argc, char** argv) {
         if (*profile_command) {
             profile.action = parsed_action(*profile_command);
             return report(chesscoach::cli::run_profile(profile, std::cout));
+        }
+        if (*name_data_dir_option) {
+            name.data_dir = name_data_dir;
         }
         if (*name_fen) {
             name.fen = fen;

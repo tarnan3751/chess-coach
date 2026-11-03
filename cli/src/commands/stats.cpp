@@ -11,7 +11,7 @@
 namespace chesscoach::cli {
 
 Result<void> run_stats(const StatsOptions& options, std::ostream& out) {
-    auto store = open_store(options.db);
+    auto store = open_located_store(options.db, options.data_dir);
     if (!store) {
         return tl::unexpected(store.error());
     }

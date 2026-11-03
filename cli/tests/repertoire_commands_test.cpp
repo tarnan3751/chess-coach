@@ -220,7 +220,10 @@ TEST_CASE("repertoire coverage and gaps print core's coverage at the tier", "[cl
     CHECK(run(deep).starts_with("covered: "));
     RepertoireOptions no_db = coverage_options;
     no_db.db.clear();
-    CHECK(run(no_db) == "error: repertoire coverage needs --db");
+    CHECK(run(no_db) ==
+          fmt::format("error: no opening database: {} does not exist (give --db, or put one there "
+                      "with database import)",
+                      (std::filesystem::path(scratch.data()) / "openings.db").string()));
     gaps.tier = 7;
     CHECK(run(gaps) == "error: tier 7 is not one of 0 to 6");
 }

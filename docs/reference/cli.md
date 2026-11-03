@@ -2,31 +2,31 @@
 
 `chess-coach-cli` queries the opening database (`openings.db`, `docs/database.md` §6) from a
 terminal: the canonical dump, the database's counts, a position's moves at a tier, and opening
-names; the engine, through the engine cache of a data directory's `profiles.db` (§12); and the
-profiles, their repertoires and their drill cards in that file. It is
-how a database is inspected and verified, and its output is plain text, without colour, stable
-from run to run, so that it can be golden-tested (the engine's lines excepted). It reads the
-database only through `core`'s `OpeningStore`, opened read-only, plays moves only through
-`core`'s `Position`, runs the engine only through `core`'s `Engine` and reads and writes
-`profiles.db` only through `core`'s `ProfileStore`.
+names, from `--db` or a data directory's `openings.db`, which it also imports; the engine, through
+the engine cache of a data directory's `profiles.db` (§12); and the profiles, their repertoires and
+their drill cards in that file. It is how a database is inspected and verified, and its output is
+plain text, without colour, stable from run to run, so that it can be golden-tested (the engine's
+lines excepted). It reads the database only through `core`'s `OpeningStore`, opened read-only, plays
+moves only through `core`'s `Position`, runs the engine only through `core`'s `Engine` and reads and
+writes `profiles.db` only through `core`'s `ProfileStore`.
 
 ## Commands
 
 ```
-chess-coach-cli dump    --db <file>
-chess-coach-cli stats   --db <file>
-chess-coach-cli explore --db <file> --tier <0-6> [--fen "<fen>" | --moves "<moves>"] [--score]
-                        [--engine --data-dir <dir> [--lines N] [--seconds S] [--stockfish <path>]
-                         [--threads T] [--hash M]]
-chess-coach-cli name    --db <file> (--fen "<fen>" | --moves "<moves>")
+chess-coach-cli dump    --db <file> | --data-dir <dir>
+chess-coach-cli stats   --db <file> | --data-dir <dir>
+chess-coach-cli explore --db <file> | --data-dir <dir>  --tier <0-6> [--fen "<fen>" | --moves
+                        "<moves>"] [--score] [--engine --data-dir <dir> [--lines N] [--seconds S]
+                        [--stockfish <path>] [--threads T] [--hash M]]
+chess-coach-cli name    --db <file> | --data-dir <dir>  (--fen "<fen>" | --moves "<moves>")
 chess-coach-cli eval    --data-dir <dir> [--fen "<fen>" | --moves "<moves>"] [--db <file>]
                         [--lines N] [--seconds S] [--min-depth D] [--stockfish <path>]
                         [--threads T] [--hash M]
-chess-coach-cli spar    --db <file> --data-dir <dir> --tier <0-6> --colour white|black
+chess-coach-cli spar    [--db <file>] --data-dir <dir> --tier <0-6> --colour white|black
                         [--seed N] [--end-move M] [--profile <name>] [--script "<moves>"]
                         [--seconds S] [--stockfish <path>] [--threads T] [--hash M]
 chess-coach-cli spar    --data-dir <dir> [--profile <name>] --list
-chess-coach-cli spar    --db <file> --data-dir <dir> [--profile <name>] --replay <id>
+chess-coach-cli spar    [--db <file>] --data-dir <dir> [--profile <name>] --replay <id>
 chess-coach-cli repertoire --data-dir <dir> --colour white|black [--profile <name>] [--db <file>]
                         add --moves "<moves>" | remove --moves "<moves>" | list
                         | coverage --tier <0-6> [--depth P] [--limit N]
@@ -35,17 +35,33 @@ chess-coach-cli drill   --data-dir <dir> --colour white|black [--profile <name>]
                         list | review <card> again|hard|good|easy | sync
 chess-coach-cli profile --data-dir <dir> list | create <name> --tier <0-6> | remove <name>
                         | export <file> | import <file>
+chess-coach-cli database [--data-dir <dir>] [--db <file>] info
+chess-coach-cli database --data-dir <dir> import <file>
 chess-coach-cli --version | --help | <command> --help
 ```
 
-`dump`, `stats`, `explore`, `name` and `spar` but `spar --list` take `--db`, the opening database,
-and require it; `eval`, `spar`, `repertoire`, `drill` and `profile` require `--data-dir`, `eval`
-takes `--db` as an option, and `repertoire coverage` and `repertoire gaps` need it. The options of
-`repertoire`, `drill` and `profile` may come before or after their subcommand. A position is given by
+`dump`, `stats`, `explore`, `name`, `spar` but `spar --list`, `repertoire coverage` and
+`repertoire gaps` read the opening database, which `--db` names or `--data-dir`'s `openings.db`
+is (**The opening database**, below); `eval` reads it when either gives one. `eval`, `spar`,
+`repertoire`, `drill` and `profile` require `--data-dir`. The options of `repertoire`, `drill`,
+`profile` and `database` may come before or after their subcommand. A position is given by
 `--fen`, a FEN of four or six fields, normalized as `docs/database.md` §5.1 states; or by
 `--moves`, moves from the start position separated by spaces, each in UCI (`e2e4`, `e7e8q`,
 `e1g1`) or SAN (`e4`, `Nf3`, `O-O`, `exd5`), which may be mixed; without either, `explore` and
 `eval` use the start position. `--fen` and `--moves` exclude each other.
+
+### The opening database
+
+A command that reads the opening database finds it through `core`'s `locate_opening_database`
+(`docs/reference/core.md`, **Where the opening database is**): the `--db` file when `--db` is
+given, there or not, so a `--db` that is not there is an error (`cannot open the opening database
+<db>: no such file`), never a fall back to the data directory's file (`PLAN.md` §11); without
+`--db`, `<data-dir>/openings.db`, so `--db` may be left out once a data directory holds a
+database; when that file is not there the command fails with `no opening
+database: <data-dir>/openings.db does not exist (give --db, or put one there with database
+import)`, and with neither option with `no opening database: give --db, or --data-dir with an
+openings.db in it`. `eval` without `--db` reads the
+data directory's `openings.db` only when it is there, and otherwise prints no stored evaluation.
 
 ### dump
 
@@ -150,7 +166,8 @@ score order (`docs/reference/core.md`, **The engine**).
 - `--data-dir` is required: `profiles.db` is opened there, and created, with the directory, when
   it is missing, which makes `eval` the CLI's one command that writes. It writes nothing else
   there.
-- `fen` and `key` as `explore` prints them. With `--db`, when the database holds an evaluation of
+- `fen` and `key` as `explore` prints them. With an opening database (`--db`, or the data
+  directory's `openings.db`), when it holds an evaluation of
   the position, `stored: <cp n | mate n> depth <d> best <SAN>` follows, from white's side as
   §6.2 stores it.
 - `engine` is the engine's `id name`, as the cache recorded it for a cached answer. Then one line
@@ -228,10 +245,10 @@ profile store**). Every choice made also makes or resets its drill card.
   `removed: 1`, or `removed: 0` when there was none.
 - `list` prints one line per choice, by key: the key in unsigned decimal, the move in UCI and in
   SAN, and the position's FEN.
-- `coverage --tier T` prints `compute_coverage` (`docs/reference/core.md`, **Repertoire
-  coverage**) on `--db` at the tier, to `--depth` plies (20, at most 40): the share of the start position's
-  games the repertoire answers, the positions visited, the number of gaps, and the largest gaps,
-  `--limit` of them (10), each as its share, its first line in SAN and its FEN:
+- `coverage --tier T` prints `compute_coverage` (`docs/reference/core.md`, **Repertoire coverage**)
+  on the opening database at the tier, to `--depth` plies (20, at most 40): the share of the start
+  position's games the repertoire answers, the positions visited, the number of gaps, and the
+  largest gaps, `--limit` of them (10), each as its share, its first line in SAN and its FEN:
 
 ```
 covered: 8.3%
@@ -270,32 +287,59 @@ The profiles of the data directory (§12.2, §12.5).
 - `list` prints `id name tier T (label)` per profile, by id; `create <name> --tier T` prints
   `created: id name tier T`; `remove <name>` removes the profile with its sessions, repertoires and
   cards (the last profile stays).
-- `export <file>` writes a copy of `profiles.db`, which must exist, to a file that must not; `import <file>`
-  replaces `profiles.db` with an exported file of this version or an earlier one, migrated, and
-  keeps the replaced one as `profiles.db.previous`. Neither may run while the app has the data
+- `export <file>` writes a copy of `profiles.db`, which must exist, to a file that must not; `import
+  <file>` replaces `profiles.db` with an exported file of this version or an earlier one, migrated,
+  and keeps the replaced one as `profiles.db.previous`. Neither may run while the app has the data
   directory open.
+
+### database
+
+The opening database of a data directory (`docs/database.md` §6.1). It has its own command rather
+than one under `profile`, because `openings.db` is not a profile's: the profiles are
+`profiles.db`'s, and the opening database is the same for every one of them.
+
+- `info` prints the database the CLI resolves from `--db` and `--data-dir`, as above, and what
+  its meta records:
+
+```
+path: data/openings.db
+schema_version: 1
+data_version: 0
+months: 2013-01
+min_games: 10
+max_ply: 8
+```
+
+- `import <file>` puts a copy of the file in place as `<data-dir>/openings.db` through `core`'s
+  `import_opening_database`, keeping the one it replaces as `openings.db.previous`, and prints
+  `imported: <path>`, `data_version: <n>`, `months: <months>`, and `previous: <path>` when a file
+  was replaced. It refuses, changing nothing, a file that is not there, one that is not an opening
+  database (with the reason `stats` would give), a newer one (`<file> has schema_version 2, newer
+  than the 1 this build reads`), the data directory's `openings.db` itself, and any other file
+  inside the data directory. It must not run while the app has the data directory open: Explore
+  would keep reading the old file while Spar and coverage read the new one.
 
 ## Exit statuses
 
 | Status | When |
 |---|---|
 | 0 | The command ran, including an off-book or unnamed position; `--version`, `--help`, or no arguments (which print the help) |
-| 2 | The command line is rejected (an unknown command or option, a missing `--db`, `--tier` or `--data-dir`, `explore --engine` without `--data-dir`, a tier that is not a number, `--fen` with `--moves`), or a command fails: a database that does not open, a tier outside 0 to 6, a FEN that does not parse, a move that is neither UCI nor SAN or is not legal where it is played, `name` without a position, a `profiles.db` that does not open, `--lines` below 1 or `--seconds` not above 0 or above 3600, no engine to be found on a cache miss, an engine that does not start, dies or does not answer in time; for `spar`, a missing `--tier` or `--colour`, a colour other than `white` or `black`, `--list` with `--replay` or `--script`, no profile of that name, no saved session of that id, an illegal move in a script, a record that does not replay or a database of another `data_version` for `--replay`, a session that cannot be saved; for `repertoire`, `drill` and `profile`, no subcommand, a colour other than `white` or `black`, no profile of that name, a line that ends where the other colour is to move for `remove`, `coverage` or `gaps` without `--db`, a PGN file that cannot be read or has a broken header, a grade other than the four, a card that is not the repertoire's, `--at` outside 0 to 253402300799, `--depth` outside 0 to 40, a duplicate or empty profile name, the last profile removed, an export from a data directory without `profiles.db` or to a file that exists, an import of a file that is not a `profiles.db`, is newer or cannot be migrated, and an export or import whose files another program keeps locked. One line on stderr, `chess-coach-cli: <reason>`, and nothing on stdout |
+| 2 | The command line is rejected (an unknown command or option, a missing `--tier` or `--data-dir`, `explore --engine` without `--data-dir`, a tier that is not a number, `--fen` with `--moves`), or a command fails: a database that does not open, a tier outside 0 to 6, a FEN that does not parse, a move that is neither UCI nor SAN or is not legal where it is played, `name` without a position, a `profiles.db` that does not open, `--lines` below 1 or `--seconds` not above 0 or above 3600, no engine to be found on a cache miss, an engine that does not start, dies or does not answer in time; for `spar`, a missing `--tier` or `--colour`, a colour other than `white` or `black`, `--list` with `--replay` or `--script`, no profile of that name, no saved session of that id, an illegal move in a script, a record that does not replay or a database of another `data_version` for `--replay`, a session that cannot be saved; for `repertoire`, `drill` and `profile`, no subcommand, a colour other than `white` or `black`, no profile of that name, a line that ends where the other colour is to move for `remove`, a PGN file that cannot be read or has a broken header, a grade other than the four, a card that is not the repertoire's, `--at` outside 0 to 253402300799, `--depth` outside 0 to 40, a duplicate or empty profile name, the last profile removed, an export from a data directory without `profiles.db` or to a file that exists, an import of a file that is not a `profiles.db`, is newer or cannot be migrated, and an export or import whose files another program keeps locked; for a command that reads the opening database, no `--db` there and no `openings.db` in `--data-dir`, or neither option; for `database`, no subcommand, `import` without `--data-dir`, and an import refused as above. One line on stderr, `chess-coach-cli: <reason>`, and nothing on stdout |
 | 1 | An unexpected exception reached `main`; its message is printed on stderr |
 
 ## Code
 
 `cli/src/main.cpp` only wires CLI11 to the commands. Each command is a function over its parsed
 options and an `std::ostream`
-(`cli/src/commands/{dump,stats,explore,name,eval,spar,repertoire,drill,profiles}`), returning a
-`CommandError` as a value; the commands over `profiles.db` also take the clock, so tests inject
-it. `commands/common` opens the store, resolves `--fen` or `--moves` to a position, the keys along
-the way and the moves in UCI, finds the deepest name and rounds percentages;
-`commands/engine_common` opens the profile store and words its errors, finds the engine binary,
-searches through the cache (a lookup, and on a miss the engine started, searched and the result
-stored) and writes an engine line with its pv in SAN; `commands/profiles` opens a profile by name
-and reads a colour. The commands are the `cli_commands` library, which the executable and the
-tests link.
+(`cli/src/commands/{dump,stats,explore,name,eval,spar,repertoire,drill,profiles,database}`),
+returning a `CommandError` as a value; the commands over `profiles.db` also take the clock, so
+tests inject it. `commands/common` finds and opens the opening database (`resolve_db`,
+`open_located_store`), resolves `--fen` or `--moves` to a position, the keys along the way and
+the moves in UCI, finds the deepest name and rounds percentages; `commands/engine_common` opens
+the profile store and words its errors, finds the engine binary, searches through the cache (a
+lookup, and on a miss the engine started, searched and the result stored) and writes an engine
+line with its pv in SAN; `commands/profiles` opens a profile by name and reads a colour. The
+commands are the `cli_commands` library, which the executable and the tests link.
 
 ## Tests
 
@@ -320,6 +364,11 @@ tests link.
   book, ends at its move and is saved, listed and replayed to the same summary; moves read from
   an input stream are refused when illegal and the session stops when the input ends; the errors
   come before any file is opened or created.
+- `cli_database_command_test` (labels `cli;unit`) checks `resolve_db`'s order, an explicit `--db`
+  that is not there as an error rather than a fall back, its errors, a command reading
+  `--data-dir`'s `openings.db` as it reads `--db`, `database info`, and `database import`'s round
+  trip with `openings.db.previous` and each of its refusals, on the fixture database and scratch
+  data directories.
 - `cli_repertoire_commands_test` (labels `cli;unit`) runs `repertoire`, `drill` and `profile` on
   scratch data directories with the clock injected: a line's choices added, replaced (UCI and SAN
   mixed), listed by key and removed one position at a time with its card; `coverage` and `gaps` on

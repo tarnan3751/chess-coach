@@ -29,10 +29,11 @@ names, the read-only opening store and the canonical dump, the recommendation sc
 engine client with its fake engine, the profile store with the engine cache, spar sessions,
 repertoires, cards and reviews across `profiles.db` versions 1 to 3, the sampler, the spar
 session, the engine reply provider, the SM-2 scheduler, repertoire coverage, PGN import, profile
-export and import; `docs/reference/core.md`); the pipeline (`chess-coach-pipeline build`, two
-passes with a count-min sketch, the evaluation merge, badges, names, the sample corpus and its
-golden dump, the benchmark; `docs/reference/pipeline.md`); the CLI (`dump`, `stats`, `explore`
-with `--score` and `--engine`, `name`, `eval`, `spar`, `repertoire`, `drill`, `profile`;
+export and import, the opening database's locator and import; `docs/reference/core.md`); the
+pipeline (`chess-coach-pipeline build`, two passes with a count-min sketch, the evaluation merge,
+badges, names, the sample corpus and its golden dump, the benchmark; `docs/reference/pipeline.md`);
+the CLI (`dump`, `stats`, `explore` with `--score` and `--engine`, `name`, `eval`, `spar`,
+`repertoire`, `drill`, `profile`, `database`, with `--db` optional beside `--data-dir`;
 `docs/reference/cli.md`); the app (the board, the shell, Explore on a database worker with the
 engine worker's lines and cancellation, the Spar screen on a spar worker, the Repertoire and
 Drill screens on a profile worker with profile export and import, themes, settings in
@@ -94,7 +95,8 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | Format; check only | `tools/format.sh`; `tools/format.sh --check` |
 | Configure and build (dev preset) | `cmake --preset dev && cmake --build --preset dev` |
 | Run the app on an isolated data directory and a given database (the owner alone may omit `--data-dir`: it opens the real user data directory) | `build/dev/app/chess-coach --data-dir <dir> --db <file>` |
-| The CLI | `build/dev/cli/chess-coach-cli <command> [options]` |
+| The CLI; a command that reads the opening database takes `--db <file>`, or `--data-dir <dir>` with an `openings.db` in it | `build/dev/cli/chess-coach-cli <command> [options]` |
+| Put an opening database into a data directory; show the one the CLI reads | `build/dev/cli/chess-coach-cli database --data-dir <dir> import <file>`; `... database --data-dir <dir> info` |
 | The pipeline on the sample dump | `build/dev/pipeline/chess-coach-pipeline build --in pipeline/tests/sample/lichess_db_standard_rated_2013-01.pgn.zst --out <file>` |
 | Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` |

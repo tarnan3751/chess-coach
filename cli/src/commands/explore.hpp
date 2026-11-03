@@ -27,6 +27,8 @@ struct ExploreOptions {
     bool score = false; // append the recommendation score's components to each move line
     // --engine: an engine line after the eval line, through the engine cache.
     std::optional<ExploreEngine> engine = std::nullopt;
+    // --data-dir: its openings.db is read when --db is not given.
+    std::optional<std::string> data_dir = std::nullopt;
 };
 
 // At most one of fen and moves is set; neither is the start position. With engine, the engine's

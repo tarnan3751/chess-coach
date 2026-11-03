@@ -1,7 +1,7 @@
-// What the CLI's commands share (docs/reference/cli.md): the error a command returns, opening the
-// opening database, resolving --fen or --moves to a position and the path of keys that reached
-// it, the deepest name along that path, and the number formats of the output. Reads the database
-// only through core's OpeningStore; chess rules only through core's Position.
+// What the CLI's commands share (docs/reference/cli.md): the error a command returns, finding and
+// opening the opening database, resolving --fen or --moves to a position and the path of keys that
+// reached it, the deepest name along that path, and the number formats of the output. Reads the
+// database only through core's OpeningStore; chess rules only through core's Position.
 #pragma once
 
 #include <chesscoach/badges.hpp>
@@ -30,8 +30,23 @@ template <typename T> using Result = tl::expected<T, CommandError>;
 // A failed Result carrying the message.
 [[nodiscard]] tl::unexpected<CommandError> fail(std::string message);
 
+// What an OpeningStore error says after "cannot open the opening database <path>: ".
+[[nodiscard]] std::string_view describe(StoreError error);
+
 // Opens the opening database read-only through core's store.
 [[nodiscard]] Result<OpeningStore> open_store(const std::string& path);
+
+// The opening database a command reads (docs/reference/cli.md, **The opening database**), as core's
+// locate_opening_database finds it: db (the --db path, empty when not given) when given, there or
+// not, so a missing one is open_store's error; else <data_dir>/openings.db when it is there. An
+// error names the file looked for when it is not there, or asks for --db or --data-dir when
+// neither was given.
+[[nodiscard]] Result<std::string> resolve_db(const std::string& db,
+                                             const std::optional<std::string>& data_dir);
+
+// resolve_db, then open_store.
+[[nodiscard]] Result<OpeningStore> open_located_store(const std::string& db,
+                                                      const std::optional<std::string>& data_dir);
 
 // A position resolved from the command line, with the keys of every position from the one it
 // started at to it: the start position and each position after a move of --moves, or the FEN's

@@ -10,7 +10,9 @@
 namespace chesscoach::cli {
 
 struct DumpOptions {
-    std::string db;
+    std::string db; // empty when --db is not given
+    // --data-dir: its openings.db is read when --db is not given.
+    std::optional<std::string> data_dir = std::nullopt;
 };
 
 [[nodiscard]] Result<void> run_dump(const DumpOptions& options, std::ostream& out);

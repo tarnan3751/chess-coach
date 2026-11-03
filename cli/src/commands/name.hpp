@@ -11,9 +11,11 @@
 namespace chesscoach::cli {
 
 struct NameOptions {
-    std::string db;
+    std::string db; // empty when --db is not given
     std::optional<std::string> fen;
     std::optional<std::string> moves;
+    // --data-dir: its openings.db is read when --db is not given.
+    std::optional<std::string> data_dir = std::nullopt;
 };
 
 // Exactly one of fen and moves must be set.
