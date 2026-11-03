@@ -88,7 +88,9 @@ chesscoach_add_test(<target> MODULE <core|pipeline|cli|app>
   `RC_PARAMS="max_success=2000 seed=<seed>"` the same way.
 - **KIND `ui`** is a Qt Test executable (`QTEST_MAIN`) linking `Qt6::Test`: one ctest test,
   labelled `<module>;ui`, run with `QT_QPA_PLATFORM=offscreen`, so it needs no display. An `app`
-  test compiles the sources it tests (`app/src/...`) into its own executable.
+  test links `app_lib`, the library the executable links, and saves screenshots under
+  `build/<preset>/ui-screenshots/`; `tools/ui_tests.sh` runs these tests in the `dev` preset and
+  lists the screenshots (`docs/reference/app.md`, **UI harness**).
 - Every test target links `chesscoach::warnings`, like every other target of ours.
 
 ## The module boundary
