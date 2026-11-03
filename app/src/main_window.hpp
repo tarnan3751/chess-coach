@@ -64,7 +64,7 @@ class MainWindow : public QMainWindow {
     void request_query();
     void database_opened(const QString& data_version);
     void database_failed(const QString& message);
-    void position_ready(const ExploreData& data);
+    void position_ready(const ExploreData& explore);
     void choose_theme(const QString& theme);
     void apply_theme(const QString& theme);
     void show_about();

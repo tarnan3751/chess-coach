@@ -141,18 +141,18 @@ ExploreScreen::ExploreScreen(QWidget* parent)
     show_no_database();
 }
 
-void ExploreScreen::show_data(const ExploreData& data, const QString& tier_label) {
-    name_->setText(data.name.isEmpty() ? tr("Unnamed") : data.name);
-    evaluation_->setText(tr("Evaluation: %1").arg(evaluation_text(data.position)));
-    if (!data.node) {
+void ExploreScreen::show_data(const ExploreData& explore, const QString& tier_label) {
+    name_->setText(explore.name.isEmpty() ? tr("Unnamed") : explore.name);
+    evaluation_->setText(tr("Evaluation: %1").arg(evaluation_text(explore.position)));
+    if (!explore.node) {
         games_->clear();
         model_->set_moves({});
         message_->setText(tr("Off book at %1: %2 games").arg(tier_label).arg(0));
         content_->setCurrentWidget(message_);
         return;
     }
-    games_->setText(tr("%1 games at %2").arg(data.node->games).arg(tier_label));
-    model_->set_moves(data.moves);
+    games_->setText(tr("%1 games at %2").arg(explore.node->games).arg(tier_label));
+    model_->set_moves(explore.moves);
     content_->setCurrentWidget(table_);
 }
 

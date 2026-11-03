@@ -273,15 +273,15 @@ void MainWindow::database_failed(const QString& message) {
     box->open();
 }
 
-void MainWindow::position_ready(const ExploreData& data) {
+void MainWindow::position_ready(const ExploreData& explore) {
     // An answer for a position or a tier the window has left behind is dropped.
-    if (data.key != line_keys_.back() || data.tier != tier()) {
+    if (explore.key != line_keys_.back() || explore.tier != tier()) {
         return;
     }
-    explore_->show_data(data, tier_text(data.tier));
-    const bool evaluated = data.position && data.position->eval_depth;
-    eval_bar_->set_evaluation(evaluated ? data.position->eval_cp : std::nullopt,
-                              evaluated ? data.position->eval_mate : std::nullopt);
+    explore_->show_data(data, tier_text(explore.tier));
+    const bool evaluated = explore.position && explore.position->eval_depth;
+    eval_bar_->set_evaluation(evaluated ? explore.position->eval_cp : std::nullopt,
+                              evaluated ? explore.position->eval_mate : std::nullopt);
 }
 
 void MainWindow::choose_theme(const QString& theme) {
