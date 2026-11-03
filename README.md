@@ -11,10 +11,10 @@ vcpkg, SQLite. `chess-coach` is a working name.
 
 ## Status
 
-Pre-alpha and private. The skeleton is in place: the four modules (`core`, `pipeline`, `cli`,
-`app`) configure, build and test on macOS and Linux, the two command-line tools print their
-version, and the app opens an empty window titled with it. The next milestone is the ingestion
-pipeline that turns the Lichess dumps into the tiered database.
+Pre-alpha and private. The four modules (`core`, `pipeline`, `cli`, `app`) configure, build and
+test on macOS and Linux; the ingestion pipeline builds the tiered database from the Lichess
+dumps, the CLI queries it, and the app opens an empty window titled with its version. The next
+milestones are the engine and the app's first screen.
 
 ## How it will work
 
@@ -72,6 +72,31 @@ build/dev/app/chess-coach --data-dir <dir> --db <file>  # the app on a scratch d
 Without `--data-dir` the app uses the platform's application data directory (on macOS
 `~/Library/Application Support/chess-coach`). How the presets, the tests and the gate work is in
 [docs/reference/testing-tools.md](docs/reference/testing-tools.md).
+
+## The pipeline
+
+`chess-coach-pipeline build` reads one or more monthly dumps, named as Lichess names them
+(`lichess_db_standard_rated_YYYY-MM.pgn.zst`), and writes a new `openings.db`:
+
+```
+build/release/pipeline/chess-coach-pipeline build \
+  --in lichess_db_standard_rated_2013-01.pgn.zst lichess_db_standard_rated_2013-02.pgn.zst \
+  --eval lichess_db_eval.jsonl.zst --out openings.db
+```
+
+It streams each dump twice and never decompresses one to disk: the first pass counts position
+visits per tier in a fixed-size count-min sketch, the second counts exactly only the positions
+the sketch says can reach the threshold (a hundred games at a tier by default), so its memory is
+the sketch plus the survivors. It then merges the evaluation database for the surviving
+positions, names them from the Lichess opening list, and badges every move. The same inputs give
+the same database whatever the thread count; the knobs, the report and the internals are in
+[docs/reference/pipeline.md](docs/reference/pipeline.md), the data contract in
+[docs/database.md](docs/database.md).
+
+On the development machine (ten cores, release build, other builds running), the 2013-01 month
+(121,332 games) builds at the default knobs in 4.4 s on one thread (27,000 games per second) and
+0.8 s on eight (158,000 games per second), with a peak resident size of about 115 MB, of which
+the sketch is 64 MiB. A recent month holds about eight hundred times as many games.
 
 ## The CLI
 

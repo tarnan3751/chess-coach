@@ -130,6 +130,5 @@ given another binary, prints a diff for every query that differs, and exits 1 wh
 The queries: the dump's first 30 lines, `stats`, `explore` of the start position at tiers 0 and
 6, `explore` after 1. e4 c5 at tier 3, and `name` of an open Sicilian line. Their expected output
 belongs to the sample corpus's database (`pipeline/tests/sample/`), which `tools/run_corpus.sh`
-builds and runs the queries against. Until the sample corpus lands, the `.out` files hold the
-output on the fixture database (`cli_write_fixture`), and the corpus's series regenerates them
-with `--update`.
+builds and runs the queries against; a change that regenerates the sample's golden dump
+regenerates them too, with `--update` on that database (`build/dev/corpus/sample.db`).

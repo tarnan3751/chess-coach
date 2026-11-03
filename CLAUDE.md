@@ -28,9 +28,11 @@ clang-format, clang-tidy and CI on macOS and Ubuntu are wired (`docs/reference/t
 The data contract is `docs/database.md`. **Phase 1 (data contract and pipeline) is in progress:**
 `core` holds the position key, `Position` over chess-library, tiers, badges, the opening names
 and the read-only opening store with the canonical dump (`docs/reference/core.md`), and
-`chess-coach-cli` has `dump`, `stats`, `explore` and `name` (`docs/reference/cli.md`); the
-pipeline is next. `PLAN.md` §7 lists the seven phases with their sizes, §6 the data, §9 the
-process, §11 the decisions, §12 the resolved questions and §14 the deferred path.
+`chess-coach-cli` has `dump`, `stats`, `explore` and `name` (`docs/reference/cli.md`), and
+`chess-coach-pipeline build` builds `openings.db` from monthly dumps in two passes, with the
+sample corpus and its golden dump (`docs/reference/pipeline.md`). `PLAN.md` §7 lists the seven
+phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the resolved
+questions and §14 the deferred path.
 
 ## Stack (pinned)
 
@@ -81,7 +83,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | Configure and build (dev preset) | `cmake --preset dev && cmake --build --preset dev` |
 | Run the app on an isolated data directory and a given database (the owner alone may omit `--data-dir`: it opens the real user data directory) | `build/dev/app/chess-coach --data-dir <dir> --db <file>` |
 | The CLI | `build/dev/cli/chess-coach-cli <command> [options]` |
-| The pipeline on the sample dump | `build/dev/pipeline/chess-coach-pipeline --in pipeline/tests/sample --out <file>` |
+| The pipeline on the sample dump | `build/dev/pipeline/chess-coach-pipeline build --in pipeline/tests/sample/lichess_db_standard_rated_2013-01.pgn.zst --out <file>` |
 | Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` (Phase 1) |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` (Phase 3) |
 | Package | `cmake --build --preset release --target package` (Phase 6) |
