@@ -35,6 +35,8 @@ class ProfileWorker : public QObject {
 
     // Closes the profile store, so that another may replace profiles.db; the next slot reopens it.
     Q_SLOT void close_stores();
+    // The opening database to read coverage and scores from now on.
+    Q_SLOT void set_database(const QString& path);
     // The colour's choice at the position, replacing any: repertoire_changed.
     Q_SLOT void set_choice(bool white, quint64 key, const QString& fen, const QString& uci);
     Q_SLOT void remove_choice(bool white, quint64 key);

@@ -23,6 +23,7 @@
 
 #include <QHash>
 #include <QMainWindow>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QThread>
@@ -39,6 +40,7 @@ class QTabBar;
 class QComboBox;
 class QLabel;
 class QListWidget;
+class QProgressDialog;
 class QTimer;
 
 namespace chesscoach::app {
@@ -76,6 +78,15 @@ class MainWindow : public QMainWindow {
     // reading it. Errors in a message box (profile_error).
     void export_profile(const QString& path);
     void import_profile(const QString& path);
+    // File > Import database once its chooser has answered: the opening database at path put in
+    // place as <data-dir>/openings.db by the database worker (core's import_opening_database) and
+    // read by every worker from then on, a busy dialog showing meanwhile (database_import_progress)
+    // and both imports disabled. Errors in a message box (database_error); the months it holds in
+    // another (database_imported).
+    void import_database(const QString& path);
+
+    // Keeps an import's busy dialog up: Escape and a close do nothing to it.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   signals:
     void open_requested(const QString& path);
@@ -98,6 +109,9 @@ class MainWindow : public QMainWindow {
     void due_requested(bool white);
     void review_requested(qint64 card_id, bool white, quint64 key, int grade);
     void export_requested(const QString& path);
+    void database_changed(const QString& path);
+    void database_import_requested(const QString& data_dir, const QString& source,
+                                   const QString& current);
 
   private:
     void build_toolbar();
@@ -151,6 +165,10 @@ class MainWindow : public QMainWindow {
     void profile_failed(const QString& message);
     void show_profile_error(const QString& message);
     void show_database_label();
+    void database_imported(const QString& path, qint64 data_version, const QString& months);
+    void database_import_failed(const QString& message);
+    void end_database_import();
+    void set_imports_enabled(bool enabled);
     void jump_to(qsizetype ply);
     void rebuild_move_list();
     void request_query();
@@ -193,6 +211,9 @@ class MainWindow : public QMainWindow {
     QTabBar* tabs_;
     QAction* new_game_action_ = nullptr;
     QAction* back_action_ = nullptr;
+    QAction* import_action_ = nullptr;          // File > Import profile…
+    QAction* import_database_action_ = nullptr; // File > Import database…
+    QPointer<QProgressDialog> import_progress_; // while a database import runs
     QListWidget* move_list_;
     QComboBox* tier_selector_;
     QLabel* database_label_ = nullptr;

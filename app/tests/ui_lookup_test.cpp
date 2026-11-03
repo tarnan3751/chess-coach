@@ -1,15 +1,21 @@
 // UI tests of where the app finds the opening database and the engine (app; ui): the database
 // --db names, else the data directory's openings.db, else the app bundle's, the status bar saying
-// which, and the message naming the three places when there is none; and the engine found in the
-// bundle's resources when nothing else names one. The bundle is a
+// which, and the message naming the three places when there is none; File > Import database…
+// through the file chooser, the data version changing, openings.db.previous left behind and
+// Explore reading the new file, and a file that is not a database refused with the old one kept;
+// and the engine found in the bundle's resources when nothing else names one. The bundle is a
 // scratch folder named by CHESS_COACH_BUNDLE_RESOURCES, the app's test hook (ui_harness.hpp,
 // fixture_db.hpp).
+#include "board_view.hpp"
+#include "explore_model.hpp"
+#include "file_chooser.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
 #include "settings.hpp"
 #include "ui_harness.hpp"
 
 #include <QAction>
+#include <QApplication>
 #include <QByteArray>
 #include <QComboBox>
 #include <QDialog>
@@ -18,15 +24,23 @@
 #include <QFileInfo>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QObject>
+#include <QPushButton>
+#include <QSettings>
+#include <QTableView>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 #include <filesystem>
 #include <memory>
 
+using chesscoach::app::FileChooser;
 using chesscoach::app::MainWindow;
 using chesscoach::app::test::child;
+using chesscoach::app::test::click;
 using chesscoach::app::test::save_screenshot;
+using chesscoach::app::test::set_data_version;
 using chesscoach::app::test::write_fixture_db;
 
 namespace {
@@ -110,6 +124,29 @@ class LookupTest : public QObject {
                         .contains(none));
             QCOMPARE(text(window, QStringLiteral("database_status")),
                      QStringLiteral("No database"));
+            QVERIFY(text(window, QStringLiteral("explore_message"))
+                        .startsWith(QStringLiteral("There is no opening database at")));
+        }
+        {
+            // An import that fails there reports the failure alone, with no second box for the
+            // missing file, which the worker does not try to open again.
+            const QString none = places.root.filePath(QStringLiteral("none.db"));
+            MainWindow window(places.data_dir, none);
+            QTRY_VERIFY(window.findChild<QWidget*>(QStringLiteral("database_error")) != nullptr);
+            window.findChild<QWidget*>(QStringLiteral("database_error"))->close();
+            QTRY_VERIFY(window.findChild<QWidget*>(QStringLiteral("database_error")) == nullptr);
+            const QString junk = places.root.filePath(QStringLiteral("junk.db"));
+            {
+                QFile file(junk);
+                QVERIFY(file.open(QIODevice::WriteOnly));
+                file.write("not a database");
+            }
+            window.import_database(junk);
+            QTRY_VERIFY(window.findChild<QWidget*>(QStringLiteral("database_error")) != nullptr);
+            QTest::qWait(300);
+            QCOMPARE(window.findChildren<QWidget*>(QStringLiteral("database_error")).size(), 1);
+            QCOMPARE(text(window, QStringLiteral("database_status")),
+                     QStringLiteral("No database"));
         }
         QVERIFY(QFile::remove(places.in_data()));
         {
@@ -132,6 +169,78 @@ class LookupTest : public QObject {
                      qPrintable(message));
             save_screenshot(window, QStringLiteral("lookup"), QStringLiteral("no-database"));
         }
+    }
+
+    void import_database_puts_a_new_one_in_place() {
+        const Places& places = *places_;
+        write(places.in_data());
+        const QString source = places.root.filePath(QStringLiteral("release.db"));
+        write(source);
+        set_data_version(source.toStdString(), 7);
+        {
+            QSettings ini(QDir(places.data_dir).filePath(QStringLiteral("settings.ini")),
+                          QSettings::IniFormat);
+            ini.setValue(QStringLiteral("tier"), 3);
+        }
+        MainWindow window(places.data_dir, QString());
+        window.show();
+        QTRY_COMPARE(text(window, QStringLiteral("data_version_status")),
+                     QStringLiteral("Data version 0"));
+        const auto& table = child<QTableView>(window, QStringLiteral("explore_table"));
+        QTRY_COMPARE(table.model()->rowCount(), 4);
+        const auto& board = child<chesscoach::app::BoardView>(window, QStringLiteral("board"));
+        click(board, "e2");
+        click(board, "e4");
+        QTRY_COMPARE(table.model()->rowCount(), 3);
+
+        // File > Import database… opens the chooser, which the timer answers with the file.
+        QTimer::singleShot(0, this, [&source] {
+            auto* chooser = qobject_cast<FileChooser*>(QApplication::activeModalWidget());
+            QTEST_ASSERT(chooser != nullptr);
+            chooser->go_to(source);
+            child<QPushButton>(*chooser, QStringLiteral("file_chooser_accept")).click();
+        });
+        child<QAction>(window, QStringLiteral("import_database_action")).trigger();
+        // The busy dialog shows until the worker answers, and Escape does not close it.
+        auto* busy = window.findChild<QWidget*>(QStringLiteral("database_import_progress"));
+        QVERIFY(busy != nullptr && busy->isVisible());
+        QTest::keyClick(busy, Qt::Key_Escape);
+        QVERIFY(busy->isVisible());
+        QTRY_VERIFY(window.findChild<QMessageBox*>(QStringLiteral("database_imported")) != nullptr);
+        auto* done = window.findChild<QMessageBox*>(QStringLiteral("database_imported"));
+        QCOMPARE(done->text(),
+                 QStringLiteral("Imported the opening database: data version 7, months 2013-01."));
+        QTRY_COMPARE(text(window, QStringLiteral("data_version_status")),
+                     QStringLiteral("Data version 7"));
+        QCOMPARE(text(window, QStringLiteral("database_status")),
+                 QStringLiteral("openings.db (data directory)"));
+        QVERIFY(QFileInfo::exists(
+            QDir(places.data_dir).filePath(QStringLiteral("openings.db.previous"))));
+        // The import is over: the busy dialog is gone, and both imports are on again.
+        QTRY_VERIFY(window.findChild<QWidget*>(QStringLiteral("database_import_progress")) ==
+                    nullptr);
+        QVERIFY(child<QAction>(window, QStringLiteral("import_database_action")).isEnabled());
+        QVERIFY(child<QAction>(window, QStringLiteral("import_action")).isEnabled());
+        // Explore reads the new file at the same position.
+        QTRY_COMPARE(table.model()->rowCount(), 3);
+        save_screenshot(window, QStringLiteral("lookup"), QStringLiteral("imported"));
+        done->close();
+
+        // A file that is not an opening database is refused, and the database stays open.
+        const QString junk = places.root.filePath(QStringLiteral("junk.db"));
+        {
+            QFile file(junk);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("not a database");
+        }
+        window.import_database(junk);
+        QTRY_VERIFY(window.findChild<QMessageBox*>(QStringLiteral("database_error")) != nullptr);
+        QVERIFY(window.findChild<QMessageBox*>(QStringLiteral("database_error"))
+                    ->text()
+                    .startsWith(QStringLiteral("junk.db was not imported")));
+        QTRY_COMPARE(text(window, QStringLiteral("data_version_status")),
+                     QStringLiteral("Data version 7"));
+        QTRY_COMPARE(table.model()->rowCount(), 3);
     }
 
     void the_engine_is_found_in_the_bundle() {

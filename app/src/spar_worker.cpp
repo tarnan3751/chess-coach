@@ -330,6 +330,21 @@ void SparWorker::coach_turn() {
 
 void SparWorker::close_stores() { profiles_.reset(); }
 
+void SparWorker::set_database(const QString& path) {
+    pending_db_ = path;
+    if (!session_.has_value()) {
+        use_pending_database();
+    }
+}
+
+void SparWorker::use_pending_database() {
+    if (pending_db_.has_value()) {
+        store_.reset();
+        db_ = *pending_db_;
+        pending_db_.reset();
+    }
+}
+
 void SparWorker::end_session() {
     if (session_.has_value()) {
         finish();
@@ -369,6 +384,7 @@ void SparWorker::finish() {
         profiles_.reset();
     }
     session_.reset();
+    use_pending_database();
     emit session_ended(out);
     if (out.saved_id == 0) {
         emit session_failed(tr("The session could not be saved."));

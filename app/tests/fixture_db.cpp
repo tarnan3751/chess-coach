@@ -235,6 +235,13 @@ template <typename T> void bind_optional(SQLite::Statement& statement, int index
 
 Key key_after(std::string_view moves) { return position_after(moves).key(); }
 
+void set_data_version(const std::filesystem::path& openings_db, int data_version) {
+    const SQLite::Database db(openings_db.string(), SQLite::OPEN_READWRITE);
+    SQLite::Statement update(db, "UPDATE meta SET value = ? WHERE key = 'data_version'");
+    update.bind(1, std::to_string(data_version));
+    update.exec();
+}
+
 void drop_cards(const std::filesystem::path& profiles_db) {
     SQLite::Database db(profiles_db.string(), SQLite::OPEN_READWRITE);
     db.exec("DELETE FROM cards");

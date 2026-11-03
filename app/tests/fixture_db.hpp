@@ -1,8 +1,8 @@
 // The app tests' opening database: a handful of positions, nodes, moves, names and evaluations at
 // tiers 0, 3 and 6, written into core's schema (docs/database.md §6) with the real keys of the
 // moves, from core's Position; the rows are the CLI fixture's (cli/tests/fixture.hpp), with a small
-// tree at tier 4 for Spar: a Dubious first move and an off-book continuation. And a helper that
-// takes a profiles.db's cards away.
+// tree at tier 4 for Spar: a Dubious first move and an off-book continuation. And helpers that
+// change a copy's data_version and take a profiles.db's cards away.
 #pragma once
 
 #include <chesscoach/key.hpp>
@@ -18,6 +18,9 @@ namespace chesscoach::app::test {
 
 // Writes the fixture database to path, which must not exist.
 void write_fixture_db(const std::filesystem::path& path);
+
+// Sets the data_version in meta of the opening database at path, as another build would have it.
+void set_data_version(const std::filesystem::path& openings_db, int data_version);
 
 // Deletes every card of the profiles.db at path, leaving its repertoire nodes without cards, as
 // no store call does, for the Drill tests' sync to repair.

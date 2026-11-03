@@ -51,6 +51,9 @@ class SparWorker : public QObject {
     // Closes the profile store, so that another may replace profiles.db; the next save or list
     // reopens it.
     Q_SLOT void close_stores();
+    // The opening database to read from now on: at once without a session, else once the
+    // running one, which keeps reading the file it started on, ends.
+    Q_SLOT void set_database(const QString& path);
     // Saves the running session as stopped and answers session_ended.
     Q_SLOT void end_session();
     // The Default profile's saved sessions: sessions_ready.
@@ -74,6 +77,7 @@ class SparWorker : public QObject {
     class Coach;
 
     [[nodiscard]] const OpeningStore* open_store();
+    void use_pending_database();
     [[nodiscard]] ProfileStore* open_profiles(bool create);
     [[nodiscard]] SparState state() const;
     void coach_turn();
@@ -85,6 +89,7 @@ class SparWorker : public QObject {
     EngineSettings engine_settings_;
     double seconds_ = 0.5;
     std::optional<OpeningStore> store_;
+    std::optional<QString> pending_db_; // set_database's, until the running session ends
     std::optional<ProfileStore> profiles_;
     std::mutex coach_mutex_; // guards coach_'s replacement against stop_coach()
     std::unique_ptr<Coach> coach_;

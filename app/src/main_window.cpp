@@ -31,12 +31,14 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QProgressDialog>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTabBar>
@@ -166,6 +168,10 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(db_worker_, &DbWorker::database_opened, this, &MainWindow::database_opened);
     connect(db_worker_, &DbWorker::database_failed, this, &MainWindow::database_failed);
     connect(db_worker_, &DbWorker::position_ready, this, &MainWindow::position_ready);
+    connect(this, &MainWindow::database_import_requested, db_worker_, &DbWorker::import_database);
+    connect(db_worker_, &DbWorker::database_imported, this, &MainWindow::database_imported);
+    connect(db_worker_, &DbWorker::database_import_failed, this,
+            &MainWindow::database_import_failed);
     db_thread_.setObjectName(QStringLiteral("database"));
     db_thread_.start();
     if (!db_path_.isEmpty()) {
@@ -198,6 +204,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(this, &MainWindow::spar_end_requested, spar_worker_, &SparWorker::end_session);
     connect(this, &MainWindow::spar_list_requested, spar_worker_, &SparWorker::list_sessions);
     connect(this, &MainWindow::spar_replay_requested, spar_worker_, &SparWorker::replay_session);
+    connect(this, &MainWindow::database_changed, spar_worker_, &SparWorker::set_database);
     connect(spar_worker_, &SparWorker::session_started, this, &MainWindow::spar_session_started);
     connect(spar_worker_, &SparWorker::move_accepted, this, &MainWindow::spar_move_accepted);
     connect(spar_worker_, &SparWorker::coach_moved, this, &MainWindow::spar_coach_moved);
@@ -225,6 +232,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(this, &MainWindow::sync_requested, profile_worker_, &ProfileWorker::sync_cards);
     connect(this, &MainWindow::due_requested, profile_worker_, &ProfileWorker::due_cards);
     connect(this, &MainWindow::review_requested, profile_worker_, &ProfileWorker::record_review);
+    connect(this, &MainWindow::database_changed, profile_worker_, &ProfileWorker::set_database);
     connect(this, &MainWindow::export_requested, profile_worker_, &ProfileWorker::export_profiles);
     connect(profile_worker_, &ProfileWorker::repertoire_changed, this,
             &MainWindow::repertoire_changed);
@@ -336,13 +344,24 @@ void MainWindow::build_menus() {
             export_profile(path);
         }
     });
-    QAction* import_action = file->addAction(tr("&Import profile…"));
-    import_action->setObjectName(QStringLiteral("import_action"));
-    connect(import_action, &QAction::triggered, this, [this] {
+    import_action_ = file->addAction(tr("&Import profile…"));
+    import_action_->setObjectName(QStringLiteral("import_action"));
+    connect(import_action_, &QAction::triggered, this, [this] {
         const QString path =
             choose_file_to_open(this, settings_, tr("Import a profile"), {QStringLiteral("*.db")});
         if (!path.isEmpty()) {
             import_profile(path);
+        }
+    });
+
+    file->addSeparator();
+    import_database_action_ = file->addAction(tr("Import &database…"));
+    import_database_action_->setObjectName(QStringLiteral("import_database_action"));
+    connect(import_database_action_, &QAction::triggered, this, [this] {
+        const QString path = choose_file_to_open(this, settings_, tr("Import an opening database"),
+                                                 {QStringLiteral("*.db")});
+        if (!path.isEmpty()) {
+            import_database(path);
         }
     });
 
@@ -657,6 +676,84 @@ void MainWindow::import_profile(const QString& path) {
         enter_drill();
         break;
     }
+}
+
+void MainWindow::import_database(const QString& path) {
+    // The database worker closes its store, copies the file into place and opens it, all on its
+    // thread; meanwhile a busy dialog shows, since a copy has no progress to give, and neither
+    // import can start again.
+    set_imports_enabled(false);
+    database_open_ = false;
+    import_progress_ =
+        new QProgressDialog(tr("Importing the opening database\u2026"), QString(), 0, 0, this);
+    import_progress_->setObjectName(QStringLiteral("database_import_progress"));
+    import_progress_->setWindowModality(Qt::WindowModal);
+    import_progress_->setCancelButton(nullptr);
+    import_progress_->setMinimumDuration(0);
+    import_progress_->installEventFilter(this); // Escape and closing do nothing: see eventFilter
+    import_progress_->show();
+    emit database_import_requested(data_dir_, path, db_path_);
+}
+
+void MainWindow::end_database_import() {
+    if (!import_progress_.isNull()) {
+        // Hidden, not closed: the dialog refuses a close while the import runs.
+        import_progress_->hide();
+        import_progress_->deleteLater();
+    }
+    set_imports_enabled(true);
+}
+
+void MainWindow::database_imported(const QString& path, qint64 data_version,
+                                   const QString& months) {
+    end_database_import();
+    // Every worker reads the new file from now on; the database worker, which has it open,
+    // answers database_opened next, which refreshes Explore, the status bar and About.
+    located_ = DatabaseChoice{.path = path.toStdString(), .source = tr("data directory")};
+    db_path_ = path;
+    show_database_label();
+    emit database_changed(db_path_);
+    if (screen_ == Screen::repertoire) {
+        repertoire_refresh();
+    }
+    auto* box = new QMessageBox(QMessageBox::Information, tr("Database imported"),
+                                tr("Imported the opening database: data version %1, months %2.")
+                                    .arg(data_version)
+                                    .arg(months),
+                                QMessageBox::Ok, this);
+    box->setObjectName(QStringLiteral("database_imported"));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
+}
+
+void MainWindow::database_import_failed(const QString& message) {
+    end_database_import();
+    auto* box = new QMessageBox(QMessageBox::Warning, tr("Importing database failed"), message,
+                                QMessageBox::Ok, this);
+    box->setObjectName(QStringLiteral("database_error"));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+    // The busy dialog stays until the import answers: Escape would reject it and a close would
+    // close it, so both are eaten.
+    if (!import_progress_.isNull() && watched == import_progress_.data()) {
+        const auto* key = dynamic_cast<const QKeyEvent*>(event);
+        if (event->type() == QEvent::Close) {
+            event->ignore();
+            return true;
+        }
+        if (event->type() == QEvent::KeyPress && key != nullptr && key->key() == Qt::Key_Escape) {
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::set_imports_enabled(bool enabled) {
+    import_action_->setEnabled(enabled);
+    import_database_action_->setEnabled(enabled);
 }
 
 void MainWindow::show_profile_error(const QString& message) {

@@ -230,6 +230,11 @@ void ProfileWorker::fail(const QString& message) { emit profile_failed(message);
 
 void ProfileWorker::close_stores() { profiles_.reset(); }
 
+void ProfileWorker::set_database(const QString& path) {
+    store_.reset();
+    db_ = path;
+}
+
 void ProfileWorker::set_choice(bool white, quint64 key, const QString& fen, const QString& uci) {
     try {
         const auto writable = writable_profile();

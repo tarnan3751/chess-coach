@@ -1,10 +1,12 @@
 // The database worker (db_worker.hpp).
 #include "db_worker.hpp"
 
+#include <chesscoach/opening_locator.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 
 #include <QCoreApplication>
+#include <QFileInfo>
 #include <QList>
 #include <algorithm>
 #include <exception>
@@ -36,6 +38,26 @@ QString describe(StoreError error) {
                                            "its tables do not match the schema");
     }
     return QCoreApplication::translate("chesscoach::app::DbWorker", "cannot open");
+}
+
+QString describe(const ImportError& error) {
+    switch (error.reason) {
+    case ImportError::Reason::missing_source:
+        return DbWorker::tr("the file is not there");
+    case ImportError::Reason::not_openings:
+        return DbWorker::tr("it is not an opening database chess-coach reads (%1)")
+            .arg(describe(error.store_error));
+    case ImportError::Reason::newer_version:
+        return DbWorker::tr("it is at schema version %1, newer than this chess-coach reads")
+            .arg(error.source_version);
+    case ImportError::Reason::already_in_place:
+        return DbWorker::tr("it is the data directory's database already");
+    case ImportError::Reason::inside_data_dir:
+        return DbWorker::tr("it lies inside the data directory");
+    case ImportError::Reason::unwritable:
+        return DbWorker::tr("the data directory cannot be written");
+    }
+    return {};
 }
 
 // The answer for the position at the end of the line at the tier.
@@ -126,6 +148,28 @@ void DbWorker::open_database(const QString& path) {
     const std::string* version = store->meta().find("data_version");
     store_.emplace(std::move(*store));
     emit database_opened(version != nullptr ? QString::fromStdString(*version) : QString());
+}
+
+void DbWorker::import_database(const QString& data_dir, const QString& source,
+                               const QString& current) {
+    // The import replaces the file the store reads, so the store lets it go first.
+    store_.reset();
+    const auto imported = import_opening_database(std::filesystem::path(data_dir.toStdString()),
+                                                  std::filesystem::path(source.toStdString()));
+    if (!imported) {
+        emit database_import_failed(
+            tr("%1 was not imported: %2.")
+                .arg(QFileInfo(source).fileName(), describe(imported.error())));
+        // The database it had, as it was; a --db that named no file stays without a store, and
+        // the failure is all there is to report.
+        if (!current.isEmpty() && QFileInfo::exists(current)) {
+            open_database(current);
+        }
+        return;
+    }
+    const QString path = QString::fromStdString(imported->path.string());
+    emit database_imported(path, imported->data_version, QString::fromStdString(imported->months));
+    open_database(path);
 }
 
 void DbWorker::query(const QVector<quint64>& line_keys, int tier) {
