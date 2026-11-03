@@ -2,8 +2,8 @@
 // by a board move and shown in the tree, the coverage equal to core's compute_coverage on the same
 // stores, a choice replaced by another move, the gap it leaves listed and Go to taking the board
 // there, Choose setting a recommended move, Remove choice clearing it, and a PGN import with its
-// counts; and the black repertoire. Screenshots of the repertoire and its gaps (ui_harness.hpp,
-// fixture_db.hpp).
+// counts; the black repertoire; and File > Export and Import profile restoring a repertoire.
+// Screenshots of the repertoire and its gaps (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
@@ -19,8 +19,10 @@
 #include <QAbstractItemModel>
 #include <QAction>
 #include <QDir>
+#include <QFile>
 #include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QObject>
 #include <QSettings>
 #include <QStringList>
@@ -244,6 +246,32 @@ class RepertoireTest : public QObject {
         click(board, "e5");
         QTRY_COMPARE(tree(window),
                      (QStringList{QStringLiteral("1. a3"), QStringLiteral("  1... e5")}));
+    }
+
+    void export_and_import_restore_a_repertoire() {
+        const Session session(*db_);
+        MainWindow& window = *session.window;
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        click(board, "e2");
+        click(board, "e4");
+        QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. e4")});
+        const QString exported = session.root.filePath(QStringLiteral("profile.db"));
+        window.export_profile(exported);
+        QTRY_VERIFY(QFile::exists(exported));
+        window.export_profile(exported); // never over a file
+        QTRY_VERIFY(window.findChild<QMessageBox*>(QStringLiteral("profile_error")) != nullptr);
+        window.findChild<QMessageBox*>(QStringLiteral("profile_error"))->close();
+        QTRY_VERIFY(window.findChild<QMessageBox*>(QStringLiteral("profile_error")) == nullptr);
+
+        child<QAction>(window, QStringLiteral("new_game_action")).trigger();
+        press(window, QStringLiteral("repertoire_remove"));
+        QTRY_VERIFY(tree(window).isEmpty());
+
+        window.import_profile(exported);
+        QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. e4")});
+        QVERIFY(
+            QFile::exists(QDir(session.data_dir).filePath(QStringLiteral("profiles.db.previous"))));
+        QVERIFY(window.findChild<QWidget*>(QStringLiteral("profile_error")) == nullptr);
     }
 };
 

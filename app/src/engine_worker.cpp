@@ -104,6 +104,8 @@ void EngineWorker::cancel_before(int request_id) {
     }
 }
 
+void EngineWorker::close_stores() { profiles_.reset(); }
+
 void EngineWorker::configure(const EngineSettings& settings) {
     settings_ = settings;
     drop_engine();

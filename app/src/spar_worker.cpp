@@ -303,6 +303,8 @@ void SparWorker::coach_turn() {
     }
 }
 
+void SparWorker::close_stores() { profiles_.reset(); }
+
 void SparWorker::end_session() {
     if (session_.has_value()) {
         finish();

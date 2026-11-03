@@ -1,13 +1,14 @@
 // The main window (docs/reference/app.md, **Shell**): a toolbar with New game, Back, Flip board
 // and the tier selector; the evaluation bar and the board on the left with the move list below
-// them; the screen switcher on the right over Explore, Spar, Repertoire and Drill; the Edit >
-// Settings, View > Theme and Help menus; the database and the
+// them; the screen switcher on the right over Explore, Spar, Repertoire and Drill; the File >
+// Export and Import profile, Edit > Settings, View > Theme and Help menus; the database and the
 // engine in the status bar. The board belongs to the current screen: it keeps Explore's line and
 // sends each position at the selected tier to the database worker and each position to the
 // engine worker; it runs Spar's sessions through the spar worker; and it builds the repertoires
 // and drills their cards through the profile worker, each worker on its own thread, and shows
-// their answers. It never touches the opening store, the profile store or an engine itself. GUI
-// thread only. It writes the settings file itself (settings.hpp); the workers write profiles.db.
+// their answers. It never touches the opening store, the profile store or an engine itself, but
+// for replacing profiles.db on import once every worker has closed its connection. GUI thread
+// only. It writes the settings file itself (settings.hpp); the workers write profiles.db.
 #pragma once
 
 #include <chesscoach/position.hpp>
@@ -68,6 +69,12 @@ class MainWindow : public QMainWindow {
     // The moves played from the start position to the board's position, in UCI.
     [[nodiscard]] const std::vector<std::string>& line() const { return line_uci_; }
 
+    // File > Export profile and Import profile once their file dialogs have answered: a copy of
+    // profiles.db written to path; profiles.db replaced by the file at path, every screen then
+    // reading it. Errors in a message box (profile_error).
+    void export_profile(const QString& path);
+    void import_profile(const QString& path);
+
   signals:
     void open_requested(const QString& path);
     void query_requested(const QVector<quint64>& line_keys, int tier);
@@ -88,6 +95,7 @@ class MainWindow : public QMainWindow {
     void sync_requested(bool white);
     void due_requested(bool white);
     void review_requested(qint64 card_id, int grade);
+    void export_requested(const QString& path);
 
   private:
     void build_toolbar();

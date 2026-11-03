@@ -72,6 +72,9 @@ class EngineWorker : public QObject {
     // The settings of the next search; a running engine is dropped, so the next search starts
     // one with them.
     Q_SLOT void configure(const chesscoach::app::EngineSettings& settings);
+    // Closes the engine cache's connection, so that another may replace profiles.db; the next
+    // lookup reopens it.
+    Q_SLOT void close_stores();
     // Answers lines_ready for the position, from the cache or a search, unless a later request
     // has come since; engine_state follows the engine; engine_failed when it cannot run.
     Q_SLOT void evaluate(quint64 key, const QString& fen, int request_id);

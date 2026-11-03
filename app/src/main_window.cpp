@@ -2,6 +2,7 @@
 #include "main_window.hpp"
 
 #include <chesscoach/position.hpp>
+#include <chesscoach/profile_store.hpp>
 #include <chesscoach/tier.hpp>
 #include <chesscoach/version.hpp>
 
@@ -25,6 +26,7 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QKeySequence>
@@ -209,6 +211,7 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     connect(this, &MainWindow::sync_requested, profile_worker_, &ProfileWorker::sync_cards);
     connect(this, &MainWindow::due_requested, profile_worker_, &ProfileWorker::due_cards);
     connect(this, &MainWindow::review_requested, profile_worker_, &ProfileWorker::record_review);
+    connect(this, &MainWindow::export_requested, profile_worker_, &ProfileWorker::export_profiles);
     connect(profile_worker_, &ProfileWorker::repertoire_changed, this,
             &MainWindow::repertoire_changed);
     connect(profile_worker_, &ProfileWorker::repertoire_ready, this, &MainWindow::repertoire_ready);
@@ -218,6 +221,10 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     connect(profile_worker_, &ProfileWorker::cards_synced, this, &MainWindow::cards_synced);
     connect(profile_worker_, &ProfileWorker::cards_ready, this, &MainWindow::cards_ready);
     connect(profile_worker_, &ProfileWorker::review_recorded, this, &MainWindow::review_recorded);
+    connect(profile_worker_, &ProfileWorker::profiles_exported, this, [this](const QString& path) {
+        statusBar()->showMessage(tr("Profile exported to %1").arg(path), 5000);
+    });
+    connect(profile_worker_, &ProfileWorker::export_failed, this, &MainWindow::show_profile_error);
     connect(profile_worker_, &ProfileWorker::profile_failed, this, &MainWindow::profile_failed);
     profile_thread_.setObjectName(QStringLiteral("profiles"));
     profile_thread_.start();
@@ -300,6 +307,30 @@ void MainWindow::build_toolbar() {
 }
 
 void MainWindow::build_menus() {
+    QMenu* file = menuBar()->addMenu(tr("&File"));
+    QAction* export_action = file->addAction(tr("&Export profile…"));
+    export_action->setObjectName(QStringLiteral("export_action"));
+    connect(export_action, &QAction::triggered, this, [this] {
+        // An export never replaces a file, so the dialog does not offer to.
+        const QString path = QFileDialog::getSaveFileName(
+            this, tr("Export the profile"), QStringLiteral("chess-coach-profile.db"),
+            tr("chess-coach profiles (*.db);;All files (*)"), nullptr,
+            QFileDialog::DontConfirmOverwrite);
+        if (!path.isEmpty()) {
+            export_profile(path);
+        }
+    });
+    QAction* import_action = file->addAction(tr("&Import profile…"));
+    import_action->setObjectName(QStringLiteral("import_action"));
+    connect(import_action, &QAction::triggered, this, [this] {
+        const QString path =
+            QFileDialog::getOpenFileName(this, tr("Import a profile"), QString(),
+                                         tr("chess-coach profiles (*.db);;All files (*)"));
+        if (!path.isEmpty()) {
+            import_profile(path);
+        }
+    });
+
     QMenu* edit = menuBar()->addMenu(tr("&Edit"));
     QAction* settings = edit->addAction(tr("&Settings\u2026"));
     settings->setObjectName(QStringLiteral("settings_action"));
@@ -535,6 +566,49 @@ void MainWindow::show_settings() {
         }
     });
     dialog->open();
+}
+
+void MainWindow::export_profile(const QString& path) { emit export_requested(path); }
+
+void MainWindow::import_profile(const QString& path) {
+    // Every connection to profiles.db closes first: the engine worker's search stops so that it
+    // answers at once, and each worker closes its store before the file is replaced here; each
+    // reopens it at its next use.
+    ++request_id_;
+    engine_worker_->cancel_before(request_id_);
+    if (answered_ && !recorded_) {
+        drill_record();
+    }
+    QMetaObject::invokeMethod(engine_worker_, &EngineWorker::close_stores,
+                              Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(spar_worker_, &SparWorker::close_stores,
+                              Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(profile_worker_, &ProfileWorker::close_stores,
+                              Qt::BlockingQueuedConnection);
+    const auto imported =
+        ProfileStore::import_profiles(data_dir_.toStdString(), path.toStdString());
+    if (!imported) {
+        show_profile_error(
+            tr("The profile was not imported: %1.").arg(ProfileWorker::describe(imported.error())));
+    } else {
+        statusBar()->showMessage(tr("Profile imported from %1").arg(path), 5000);
+    }
+    // Every screen reads the profile again.
+    switch (screen_) {
+    case Screen::explore:
+        request_evaluation();
+        break;
+    case Screen::spar:
+        emit spar_list_requested();
+        break;
+    case Screen::repertoire:
+        repertoire_refresh();
+        break;
+    case Screen::drill:
+        leave_drill();
+        enter_drill();
+        break;
+    }
 }
 
 void MainWindow::show_profile_error(const QString& message) {

@@ -46,6 +46,9 @@ class SparWorker : public QObject {
     Q_SLOT void start(int tier, bool user_white, quint64 seed, int end_move);
     // The user's move (UCI): move_accepted, then the coach's reply unless the session ended.
     Q_SLOT void user_move(const QString& uci);
+    // Closes the profile store, so that another may replace profiles.db; the next save or list
+    // reopens it.
+    Q_SLOT void close_stores();
     // Saves the running session as stopped and answers session_ended.
     Q_SLOT void end_session();
     // The Default profile's saved sessions: sessions_ready.
