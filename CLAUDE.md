@@ -21,36 +21,26 @@ heading of this file or of a doc.
 
 ## Status
 
-**Phase 0 (skeleton) has landed.** The four modules configure, build and test through the
-`dev`, `gate` and `release` presets: `pipeline` and `cli` print `--version`, and `app` opens a
-window titled with the version on the `--data-dir` it is given; the gate, the boundary check,
-clang-format, clang-tidy and CI on macOS and Ubuntu are wired (`docs/reference/testing-tools.md`).
-The data contract is `docs/database.md`. **Phase 1 (data contract and pipeline) is in progress:**
-`core` holds the position key, `Position` over chess-library, tiers, badges, the opening names
-and the read-only opening store with the canonical dump (`docs/reference/core.md`), and
-`chess-coach-cli` has `dump`, `stats`, `explore` and `name` (`docs/reference/cli.md`), and
-`chess-coach-pipeline build` builds `openings.db` from monthly dumps in two passes, with the
-sample corpus and its golden dump (`docs/reference/pipeline.md`). Phase 2's `core` part has
-begun: the recommendation score, the UCI engine client with its fake engine, and the profile
-store with the engine cache (`docs/reference/core.md`), which `chess-coach-cli eval` and
-`explore --engine` search through. Phase 4 has begun: the sparring sampler, the spar session, the
-engine reply provider and the saved sessions of `profiles.db` version 2 (`docs/reference/core.md`),
-`chess-coach-cli spar` (`docs/reference/cli.md`), and the app's Spar screen on a spar worker of its
-own (interruptions with the better choices, the summary, the saved sessions and their replay,
-`docs/reference/app.md`); Phase 5's `core` part has begun with the SM-2 scheduler, repertoire
-coverage, PGN import, and the repertoires, drill cards, reviews and export of `profiles.db`
-version 3 (`docs/reference/core.md`), which `chess-coach-cli repertoire`, `drill` and `profile`
-use (`docs/reference/cli.md`). **Phase 3 (app shell and Explore) is in progress:** the board
-(SVG pieces, two-click and drag input, hints, highlights, animation, flip, promotion); the main
-window with the tier selector and the move list; the Explore screen on `--db` through a database
-worker on its own thread (moves with badges, result bars, scores and top-tier shares, the evaluation
-bar, going back along the line) and the engine worker on another (Stockfish's lines through the
-engine cache, a search stopped when the position changes); light and dark themes; settings in
-`<data-dir>/settings.ini`, with the engine's in Edit > Settings; the About dialog; and the UI
-harness with screenshots (`tools/ui_tests.sh`, `docs/reference/app.md`). Phase 6 has begun: the
-macOS package with Qt and Stockfish inside and the licence texts in `legal/`, checked by
-`tools/package.sh`, and the release workflow (`docs/reference/testing-tools.md`). `PLAN.md` §7
-lists the seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the
+**Phases 0 to 4 are complete and Phase 5's `core` and CLI have landed; the app's Repertoire and
+Drill screens and Phase 6's release remain.** The skeleton (presets, the gate, the boundary
+check, CI on macOS and Ubuntu; `docs/reference/testing-tools.md`); the data contract
+(`docs/database.md`); `core` (the position key, `Position` over chess-library, tiers, badges,
+names, the read-only opening store and the canonical dump, the recommendation score, the UCI
+engine client with its fake engine, the profile store with the engine cache, spar sessions,
+repertoires, cards and reviews across `profiles.db` versions 1 to 3, the sampler, the spar
+session, the engine reply provider, the SM-2 scheduler, repertoire coverage, PGN import, profile
+export and import; `docs/reference/core.md`); the pipeline (`chess-coach-pipeline build`, two
+passes with a count-min sketch, the evaluation merge, badges, names, the sample corpus and its
+golden dump, the benchmark; `docs/reference/pipeline.md`); the CLI (`dump`, `stats`, `explore`
+with `--score` and `--engine`, `name`, `eval`, `spar`, `repertoire`, `drill`, `profile`;
+`docs/reference/cli.md`); the app (the board, the shell, Explore on a database worker with the
+engine worker's lines and cancellation, the Spar screen on a spar worker, themes, settings in
+`<data-dir>/settings.ini`, About, the UI harness with screenshots; `docs/reference/app.md`);
+and the macOS package with Qt and Stockfish inside, the licence texts in `legal/`,
+`tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`).
+In progress: the Repertoire and Drill screens, the review folds, the public-milestone files,
+and the release database (a recent month builds on the owner's machine). `PLAN.md` §7 lists
+the seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the
 resolved questions and §14 the deferred path.
 
 ## Stack (pinned)
@@ -247,7 +237,11 @@ PLAN.md          the plan: gitignored, read from the main tree
   struct; exceptions only for programming errors; `[[nodiscard]]` on every function whose result
   is the point.
 - **Ownership.** `std::unique_ptr` for our objects; Qt parent ownership for `QObject`s; never
-  both on one object. No raw owning pointers, no `new` outside a Qt parent-child construction.
+  both on one object. No raw owning pointers, no `new` outside a Qt parent-child construction,
+  with one exception: a worker `QObject` that is moved to its own `QThread` cannot have a parent,
+  so it is created with `new`, deleted by `deleteLater` on the thread's `finished` signal, and
+  the window joins the thread in its destructor (the database, engine, spar and profile
+  workers).
 - **Formatting** is `.clang-format`'s (LLVM base, four-space indent, 100 columns, pointers
   left-aligned); `.clang-tidy` is the linter; both run in the gate and neither is argued with.
 
