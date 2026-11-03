@@ -27,7 +27,7 @@ Checks: >
   -bugprone-easily-swappable-parameters,
   -readability-function-cognitive-complexity,
   -misc-include-cleaner,
-  -cppcoreguidelines-avoid-do-while,-misc-const-correctness,-bugprone-inc-dec-in-conditions,
+  -cppcoreguidelines-avoid-do-while,
   -portability-avoid-pragma-once
 WarningsAsErrors: '*'
 # GCC's compile commands carry GCC-only warning flags (cmake/warnings.cmake), unknown to clang.

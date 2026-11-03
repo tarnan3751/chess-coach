@@ -138,7 +138,7 @@ class FileChooserTest : public QObject {
                             {QStringLiteral("*.db")}, QStringLiteral("profile.db"));
         chooser.show();
         auto& path = child<QLineEdit>(chooser, QStringLiteral("file_chooser_path"));
-        auto& name = child<QLineEdit>(chooser, QStringLiteral("file_chooser_name"));
+        const auto& name = child<QLineEdit>(chooser, QStringLiteral("file_chooser_name"));
         // A folder typed and Return: the chooser goes there and stays open.
         path.setText(inner);
         QTest::keyClick(&path, Qt::Key_Return);

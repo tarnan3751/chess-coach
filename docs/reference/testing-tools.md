@@ -148,16 +148,16 @@ closing comments are added. Both CI jobs and the dev machine run clang-format an
 of the same major version: Homebrew's `llvm` and `clang-format` on macOS, and on Ubuntu the
 `clang-format` and `clang-tidy` wheels from PyPI pinned to the same major (Ubuntu's own
 packages are a major behind, and apt.llvm.org failed to resolve on the runners), with Ubuntu's
-`clang-tools` supplying only the `run-clang-tidy` driver script, which the gate points at the
-`clang-tidy` on the PATH with `-clang-tidy-binary` (the versioned script otherwise runs its own
-`clang-tidy-18`, which is how a green macOS job and a red Ubuntu job once disagreed); when
-Homebrew moves to a new major, the pinned wheel versions move with it.
+the `run-clang-tidy` driver taken from the same wheel's `data/bin` so that it matches the binary
+(Ubuntu's own `run-clang-tidy-18` ran its own `clang-tidy-18`, which is how a green macOS job
+and a red Ubuntu job once disagreed, and its start-up probe passes clang-tidy an empty source
+argument that version 23 answers "No checks enabled"); the gate also names the binary with
+`-clang-tidy-binary` and caps the driver's jobs by `CMAKE_BUILD_PARALLEL_LEVEL`. When Homebrew
+moves to a new major, the pinned wheel versions move with it.
 
 `.clang-tidy` enables `bugprone-*`, `cert-*`, `clang-analyzer-*`, `concurrency-*`,
 `cppcoreguidelines-*`, `misc-*`, `modernize-*`, `performance-*`, `portability-*` and
-`readability-*` (minus `misc-const-correctness` and `bugprone-inc-dec-in-conditions`, two
-style checks whose findings differ between libc++ and libstdc++, so the macOS and Ubuntu jobs
-disagreed on nine test lines), minus `modernize-use-trailing-return-type`, both magic-numbers checks,
+`readability-*`, minus `modernize-use-trailing-return-type`, both magic-numbers checks,
 `readability-identifier-length`, `cppcoreguidelines-pro-bounds-pointer-arithmetic`,
 `cppcoreguidelines-pro-bounds-array-to-pointer-decay`, `cppcoreguidelines-owning-memory` (Qt
 parent ownership), both non-private-member-variables checks,
