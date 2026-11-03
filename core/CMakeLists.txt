@@ -5,6 +5,7 @@ configure_file("${PROJECT_SOURCE_DIR}/cmake/version_info.hpp.in"
                "${PROJECT_BINARY_DIR}/generated/chesscoach/version_info.hpp" @ONLY)
 
 add_library(core STATIC
+  include/chesscoach/key.hpp
   include/chesscoach/version.hpp
   src/version.cpp
   "${PROJECT_BINARY_DIR}/generated/chesscoach/version_info.hpp")
@@ -15,12 +16,16 @@ target_link_libraries(core PUBLIC fmt::fmt tl::expected PRIVATE chesscoach::warn
 chesscoach_assert_no_qt(core)
 
 if(BUILD_TESTING)
+  chesscoach_add_test(core_key_test MODULE core KIND unit
+                      SOURCES tests/key_test.cpp
+                      LIBS chesscoach::core)
   chesscoach_add_test(core_version_test MODULE core KIND unit
                       SOURCES tests/version_test.cpp
                       LIBS chesscoach::core)
   chesscoach_add_test(core_version_property_test MODULE core KIND property
                       SOURCES tests/version_property_test.cpp
                       LIBS chesscoach::core rapidcheck)
+  chesscoach_assert_no_qt(core_key_test)
   chesscoach_assert_no_qt(core_version_test)
   chesscoach_assert_no_qt(core_version_property_test)
 endif()

@@ -118,8 +118,10 @@ drawn in this order:
 | 769 to 772 | castling rights K, Q, k, q (white king side, white queen side, black king side, black queen side) |
 | 773 to 780 | en passant file a to h |
 
-The key of the start position is TBD: the series that lands `core`'s tables records it here, and
-a unit test pins it.
+The key of the start position is `0x8b26ecc3ca52d0bb` (unsigned decimal 10026961946044190907,
+stored as the int64 -8419782127665360709), and the key after 1. e4, which has no en passant
+value, is `0xa355c969b7c91f2c`; the first value of the table is `0xf777eaa02d011cb2`. A unit test
+pins all three.
 
 A key is stored in SQLite as the signed 64-bit integer with the same bits (a bit cast), compared
 as an integer and never as text, and shown in the CLI and the dump (§11) as unsigned decimal.
