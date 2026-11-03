@@ -197,7 +197,8 @@ class EngineTest : public QObject {
         QTimer timer;
         connect(&timer, &QTimer::timeout, this, [&ticks] { ++ticks; });
         timer.start(20);
-        QTRY_VERIFY_WITH_TIMEOUT(ticks >= 3, 200);
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses (Qt 6.12's does not).
+        QTRY_VERIFY_WITH_TIMEOUT(ticks >= 3, 200); // NOLINT(readability-math-missing-parentheses)
 
         // Moving on stops the start position's search and starts the next one at once.
         const auto& board = child<BoardView>(window, QStringLiteral("board"));
