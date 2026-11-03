@@ -71,7 +71,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include(CTest)
+# The tests, on by default. enable_testing() rather than include(CTest), whose dashboard targets
+# and submit URL have no place in a build that never uses the network.
+option(BUILD_TESTING "Build the tests" ON)
+if(BUILD_TESTING)
+  enable_testing()
+endif()
 include(cmake/warnings.cmake)
 include(cmake/sanitizers.cmake)
 include(cmake/boundary.cmake)
