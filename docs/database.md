@@ -526,14 +526,18 @@ and is refused without anything being created.
 
 Importing a file refuses, without modifying anything, one that is not SQLite with a `meta` table and
 a decimal `schema_version` (§12.1), one newer than the importing build, and the data directory's own
-`profiles.db.importing`. It copies the file into the data directory as `profiles.db.importing` and
-opens that copy, which migrates it. Then it opens the current `profiles.db` read-write and takes its
-write lock, which reads it, so that a rollback journal a stopped writer left beside it is rolled
-back into it rather than played onto the imported file; holding the lock, it removes a `-journal` or
-`-wal` SQLite ignores (an empty one, or a journal whose header is zeroed), and it refuses if one
-still remains. Last, it renames the current `profiles.db` to `profiles.db.previous`, replacing any
-earlier one, and the copy to `profiles.db`; when that second rename fails, the first is undone, so a
-`profiles.db` always remains. The previous file is the one-step undo.
+`profiles.db.importing`. It copies the file into the data directory as `profiles.db.importing`, in
+rollback mode whatever the source's journal mode, and opens that copy, which migrates it. Then it
+opens the current `profiles.db` read-write and takes its write lock, which reads it, so that a
+rollback journal a stopped writer left beside it is rolled back into it rather than played onto the
+imported file; holding the lock, it removes a `-journal` or `-wal` SQLite ignores (an empty one, or
+a journal whose header is zeroed), and it refuses if one still remains. Last, holding the lock, it
+keeps the current `profiles.db` as `profiles.db.previous`, a hard link to it (or, where links fail,
+a complete copy renamed into place), after removing whatever was there before, and then renames the
+imported copy onto `profiles.db`, which replaces it in one step, so a `profiles.db` is there at
+every instant and a failure at any point leaves the one that was there. A `-journal`, `-wal` or
+`-shm` beside a `profiles.db` that is gone is removed first, since it belongs to no file. The
+previous file is the one-step undo.
 
 Both copies must complete: a file that another connection keeps locked past the store's two
 second busy timeout is reported busy, and a copy without the source's `meta` is removed, never

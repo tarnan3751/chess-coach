@@ -270,8 +270,9 @@ class ProfileStore {
     // (newer_version) and is not data_dir's profiles.db.importing (unwritable); the copy is
     // migrated as profiles.db.importing first; the current file is opened read-write so that a
     // journal beside it is rolled back into it (busy if one remains, or if a file stays locked);
-    // then the current file becomes profiles.db.previous and the copy profiles.db, the first
-    // rename undone if the second fails. No store may hold data_dir's file open.
+    // then the current file is copied to profiles.db.previous, under its write lock, and the copy
+    // renamed onto profiles.db, which replaces it in one step, so a profiles.db is there at every
+    // instant. No store may hold data_dir's file open.
     [[nodiscard]] static tl::expected<void, ProfileError>
     import_profiles(const std::filesystem::path& data_dir, const std::filesystem::path& source,
                     Clock clock = system_clock_seconds);

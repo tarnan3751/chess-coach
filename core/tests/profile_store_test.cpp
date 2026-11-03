@@ -1193,6 +1193,110 @@ TEST_CASE("A stray journal or WAL beside the replaced file is removed, unless an
     }
 }
 
+TEST_CASE("An import that fails at its swap leaves profiles.db as it was", "[profiles][export]") {
+    const DataDir dir("import-swap-fails");
+    const DataDir from("import-swap-fails-source");
+    TestClock clock;
+    {
+        static_cast<void>(open_store(dir, clock));
+    }
+    {
+        auto store = open_store(from, clock);
+        REQUIRE(store.create_profile("Mine", Tier::under_1200).has_value());
+    }
+    const auto source = from.path() / "export.db";
+    REQUIRE(ProfileStore::export_profiles(from.path(), source).has_value());
+    // A directory that is not empty where profiles.db.previous goes: it cannot be removed to keep
+    // the current file there, so the swap fails before the rename that would replace profiles.db
+    // (replace_keeping_previous's own tests fail that rename itself).
+    write_bytes(dir.path() / "profiles.db.previous" / "kept.txt", "mine");
+    const auto before = read_bytes(dir.file());
+    CHECK(ProfileStore::import_profiles(dir.path(), source, clock.clock()).error() ==
+          ProfileError::unwritable);
+    CHECK(read_bytes(dir.file()) == before);
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.importing"));
+    CHECK(std::filesystem::is_directory(dir.path() / "profiles.db.previous"));
+    CHECK(open_store(dir, clock).profiles().size() == 1);
+}
+
+TEST_CASE("A journal left beside a profiles.db that is gone is not played onto the import",
+          "[profiles][export]") {
+    const DataDir dir("import-orphan-journal");
+    const DataDir writer_dir("import-orphan-journal-writer");
+    const DataDir from("import-orphan-journal-source");
+    TestClock clock{.now = 5000};
+    {
+        auto store = open_store(from, clock);
+        REQUIRE(store.create_profile("Mine", Tier::under_1200).has_value());
+    }
+    const auto source = from.path() / "export.db";
+    REQUIRE(ProfileStore::export_profiles(from.path(), source).has_value());
+    {
+        static_cast<void>(open_store(writer_dir, clock));
+    }
+    // A writer stopped mid-transaction, then its profiles.db deleted: the hot journal stays.
+    copy_mid_transaction(writer_dir.file(), dir.file());
+    std::filesystem::remove(dir.file());
+    auto journal = dir.file();
+    journal += "-journal";
+    auto wal = dir.file();
+    wal += "-wal";
+    auto shm = dir.file();
+    shm += "-shm";
+    REQUIRE(std::filesystem::exists(journal));
+    write_bytes(wal, "not mine");
+    write_bytes(shm, "not mine");
+
+    REQUIRE(ProfileStore::import_profiles(dir.path(), source, clock.clock()).has_value());
+    CHECK_FALSE(std::filesystem::exists(journal));
+    CHECK_FALSE(std::filesystem::exists(wal));
+    CHECK_FALSE(std::filesystem::exists(shm));
+    {
+        SQLite::Database imported(dir.file(), SQLite::OPEN_READONLY);
+        CHECK(imported.execAndGet("PRAGMA integrity_check").getString() == "ok");
+    }
+    const auto store = open_store(dir, clock);
+    const auto profiles = store.profiles();
+    REQUIRE(profiles.size() == 2);
+    CHECK(profiles.at(1).name == "Mine");
+}
+
+TEST_CASE("A source in WAL mode is imported through its -wal, in rollback mode",
+          "[profiles][export]") {
+    const DataDir dir("import-wal-source");
+    const DataDir from("import-wal-source-from");
+    TestClock clock{.now = 5000};
+    {
+        static_cast<void>(open_store(dir, clock));
+    }
+    {
+        static_cast<void>(open_store(from, clock));
+    }
+    const auto source = from.path() / "export.db";
+    REQUIRE(ProfileStore::export_profiles(from.path(), source).has_value());
+    // A profile committed to the -wal and not yet in the file: the writer stays open, so the WAL
+    // is not checkpointed before the import reads it.
+    SQLite::Database writer(source, SQLite::OPEN_READWRITE);
+    REQUIRE(writer.execAndGet("PRAGMA journal_mode = WAL").getString() == "wal");
+    writer.exec("INSERT INTO profiles (name, tier, created_at) VALUES ('Walled', 3, 7)");
+    auto source_wal = source;
+    source_wal += "-wal";
+    REQUIRE(std::filesystem::file_size(source_wal) > 0);
+
+    REQUIRE(ProfileStore::import_profiles(dir.path(), source, clock.clock()).has_value());
+    auto wal = dir.file();
+    wal += "-wal";
+    CHECK_FALSE(std::filesystem::exists(wal));
+    {
+        SQLite::Database imported(dir.file(), SQLite::OPEN_READONLY);
+        CHECK(imported.execAndGet("PRAGMA journal_mode").getString() == "delete");
+    }
+    const auto store = open_store(dir, clock);
+    const auto profiles = store.profiles();
+    REQUIRE(profiles.size() == 2);
+    CHECK(profiles.at(1).name == "Walled");
+}
+
 TEST_CASE("A source with a journal a read-only connection cannot roll back is busy",
           "[profiles][export]") {
     const DataDir dir("import-hot-source");

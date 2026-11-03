@@ -3,6 +3,7 @@
 // runs, so version 1's script stays plain SQL and its Default profile gets a deterministic
 // created_at. Every statement prepared on the connection is finalized before the connection moves
 // into the store.
+#include <chesscoach/file_swap.hpp>
 #include <chesscoach/profile_store.hpp>
 
 #include <SQLiteCpp/Backup.h>
@@ -1136,6 +1137,16 @@ ProfileStore::import_profiles(const std::filesystem::path& data_dir,
         if (const auto copied = back_up(*copy, *from); !copied) {
             return refuse(copied.error());
         }
+        // The backup carries a WAL-mode source's header into the copy, which then would need a
+        // -wal and a -shm beside profiles.db; the copy is put in rollback mode, as the store's own
+        // files are.
+        try {
+            if (copy->execAndGet("PRAGMA journal_mode = DELETE").getString() != "delete") {
+                return refuse(ProfileError::storage);
+            }
+        } catch (const SQLite::Exception&) {
+            return refuse(ProfileError::storage);
+        }
     }
     // A copy without the source's meta is never opened as a new file.
     if (stored_version(importing) != source_version) {
@@ -1148,55 +1159,71 @@ ProfileStore::import_profiles(const std::filesystem::path& data_dir,
         }
     }
 
-    const bool replacing = std::filesystem::exists(current, error);
-    if (replacing) {
-        // A rollback journal left beside the current file by a writer that stopped mid-write
-        // would be played onto the imported file once that takes the name; opening the current
-        // file read-write and taking its write lock reads it first, which rolls the journal back
-        // into it. With the write lock held no other connection is writing, so a -journal or -wal
-        // still beside it that SQLite ignores (is_stray) is a stray, and it is removed.
-        try {
-            SQLite::Database db(current, SQLite::OPEN_READWRITE);
-            db.setBusyTimeout(static_cast<int>(busy_timeout.count()));
-            db.exec("BEGIN IMMEDIATE");
-            static_cast<void>(db.execAndGet("SELECT count(*) FROM sqlite_master"));
-            for (const char* suffix : {"-journal", "-wal"}) {
-                auto beside = current;
-                beside += suffix;
-                if (is_stray(beside, std::string_view(suffix) == "-journal")) {
-                    std::filesystem::remove(beside, error);
-                }
-            }
-            db.exec("ROLLBACK");
-        } catch (const SQLite::Exception& failure) {
-            if (is_busy(failure)) {
-                return refuse(ProfileError::busy);
-            }
-            // A current file that is not a database has no journal of its own to roll back; it
-            // is replaced, unless a journal beside it remains (below).
-        }
+    // A journal or WAL file still beside the current one, which the import never plays onto the
+    // imported file.
+    const auto journal_remains = [&current] {
+        std::error_code ignored;
         for (const char* suffix : {"-journal", "-wal"}) {
             auto beside = current;
             beside += suffix;
-            if (std::filesystem::exists(beside, error)) {
-                return refuse(ProfileError::busy);
+            if (std::filesystem::exists(beside, ignored)) {
+                return true;
             }
         }
-        std::filesystem::rename(current, previous, error);
-        if (error) {
+        return false;
+    };
+    // The swap keeps the current file as profiles.db.previous, a hard link (or, failing that, a
+    // complete copy renamed into place), and renames the copy onto profiles.db in one step: a
+    // profiles.db is there at every instant (replace_keeping_previous).
+    const auto swap = [&]() -> tl::expected<void, ProfileError> {
+        if (!replace_keeping_previous(importing, current, previous)) {
             return refuse(ProfileError::unwritable);
         }
-    }
-    std::filesystem::rename(importing, current, error);
-    if (error) {
-        // A profiles.db always remains: the one this import was to replace goes back.
-        std::error_code ignored;
-        if (replacing) {
-            std::filesystem::rename(previous, current, ignored);
+        return {};
+    };
+    if (!std::filesystem::exists(current, error)) {
+        // A -journal, -wal or -shm beside a profiles.db that is gone belongs to no file, and
+        // SQLite would play it onto the imported file at its next open.
+        for (const char* suffix : {"-journal", "-wal", "-shm"}) {
+            auto beside = current;
+            beside += suffix;
+            std::filesystem::remove(beside, error);
         }
-        return refuse(ProfileError::unwritable);
+        return swap();
     }
-    return {};
+    // A rollback journal left beside the current file by a writer that stopped mid-write would
+    // be played onto the imported file once that takes the name; opening the current file
+    // read-write and taking its write lock reads it first, which rolls the journal back into it.
+    // With the write lock held no other connection is writing, so a -journal or -wal still beside
+    // it that SQLite ignores (is_stray) is a stray, and it is removed; and the swap made under the
+    // lock keeps the file as it is. The connection's close rolls the empty transaction back.
+    try {
+        SQLite::Database db(current, SQLite::OPEN_READWRITE);
+        db.setBusyTimeout(static_cast<int>(busy_timeout.count()));
+        db.exec("BEGIN IMMEDIATE");
+        static_cast<void>(db.execAndGet("SELECT count(*) FROM sqlite_master"));
+        for (const char* suffix : {"-journal", "-wal"}) {
+            auto beside = current;
+            beside += suffix;
+            if (is_stray(beside, std::string_view(suffix) == "-journal")) {
+                std::filesystem::remove(beside, error);
+            }
+        }
+        if (journal_remains()) {
+            return refuse(ProfileError::busy);
+        }
+        return swap();
+    } catch (const SQLite::Exception& failure) {
+        if (is_busy(failure)) {
+            return refuse(ProfileError::busy);
+        }
+        // A current file that is not a database has no journal of its own to roll back; it is
+        // kept and replaced as it is, unless a journal beside it remains.
+    }
+    if (journal_remains()) {
+        return refuse(ProfileError::busy);
+    }
+    return swap();
 }
 
 } // namespace chesscoach

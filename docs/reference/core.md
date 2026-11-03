@@ -457,16 +457,22 @@ order)`, which a property test checks over random choices and reviews.
      `schema_version` (`not_profiles`) at most this build's (`newer_version`), and refuses the
      data directory's own `profiles.db.importing` as a source (`unwritable`), since staging
      removes that file;
-  2. copies it into `profiles.db.importing` and opens the copy, which migrates it (a failure
-     removes the copy and returns the error);
+  2. copies it into `profiles.db.importing`, sets the copy's journal mode to `DELETE` (a WAL-mode
+     source's header would otherwise come with it, and the copy need a `-wal` and a `-shm`), and
+     opens the copy, which migrates it (a failure removes the copy and returns the error);
   3. opens the current `profiles.db` read-write and reads it, which rolls back a hot journal a
      stopped writer left beside it, so that journal is never played onto the imported file once
      that takes the name; while it holds that file's write lock, a `-journal` or `-wal` SQLite
      ignores (an empty one, or a journal whose header PERSIST mode zeroed) is removed, and one
      still there afterwards, or a lock past the busy timeout, is `busy`;
-  4. renames the current file to `profiles.db.previous`, replacing an earlier one, and the copy to
-     `profiles.db`; if that second rename fails, the first is undone, so a `profiles.db` always
-     remains, and the import is `unwritable`.
+  4. while it still holds the write lock of step 3, swaps the copy in with
+     `replace_keeping_previous`: the current file is kept as `profiles.db.previous`, a hard link
+     (or a complete copy where links fail), replacing an earlier one, and one rename puts the
+     imported copy onto `profiles.db`, so a `profiles.db` is there at every instant, the old one
+     until the rename and the new one after it. If a step fails, `profiles.db` is the file it was,
+     the staging files are removed, and the import is `unwritable`. Where no `profiles.db` is
+     there, a `-journal`, `-wal` or `-shm` left beside its name belongs to no file, and SQLite
+     would play it onto the imported file at its next open, so it is removed before the swap.
 
   The source is never written. The caller must hold no store on the data directory while it runs:
   its open connection would keep the replaced file's handle.
@@ -652,7 +658,8 @@ to one, the order); `engine_test` (every fake script, `busy`, `stop`, the genera
 with their profile, the repertoire's validation and card rules, the import of choices, the card
 repair, the due order, the reviews against the scheduler and refused outside their profile and
 colour, the export and import round trip and every refusal, a journal left beside the replaced
-file rolled back, a file locked by another connection reported busy, the version 1 and 2 fixtures
+file rolled back, journals beside a `profiles.db` that is gone removed, a WAL-mode source imported
+in rollback mode, a file locked by another connection reported busy, the version 1 and 2 fixtures
 migrated and the version 3 one opened unchanged);
 `profile_store_property_test` (over random choices for one position and random reviews, a card's
 stored state is the replay of its stored reviews);
