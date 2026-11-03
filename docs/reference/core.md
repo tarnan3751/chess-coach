@@ -22,7 +22,8 @@ sampler, the spar session, the scheduler and repertoire coverage are described b
 | `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
 | `spar.hpp` | `SparSession`, `SparConfig`, `Interruption`, `Summary`, `ReplyProvider`, `SparError` |
 | `scheduler.hpp` | `CardState`, `Grade`, `Review`, `new_card`, `review`, `replay`, `is_due`, SM-2's numbers |
-| `repertoire.hpp` | `Repertoire`, `compute_coverage`, `Coverage`, `Gap`, `CoverageConfig` |
+| `repertoire.hpp` | `Repertoire`, `RepertoireChoice`, `compute_coverage`, `Coverage`, `Gap`, `CoverageConfig` |
+| `pgn_import.hpp` | `import_repertoire_pgn`, `PgnImport`, `PgnImportError` |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
 | `engine_reply_provider.hpp` | `EngineReplyProvider`, `ProviderConfig`, `provider_elo` |
 | `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `SparSessionRow`, `Migration`, `Clock`, `ProfileError` |
@@ -470,6 +471,27 @@ then by line, move by move bytewise. `positions_visited` counts the positions wa
 ply. The floating-point values are one IEEE operation per statement, summed in the walk's fixed
 order, so the numbers are the same on every platform.
 
+## PGN import
+
+`import_repertoire_pgn(in, colour)` reads a repertoire from a PGN stream with chess-library's
+streaming parser, variations on, and plays every move through `Position`. `RepertoireChoice`
+(`repertoire.hpp`) is a position's key, its normalized FEN and the chosen move in UCI.
+
+- A game begins with its header. It starts at the start position, or at its `[FEN]` header's
+  position; a `[FEN]` that does not parse makes the game count once in `unparsable` and adds
+  nothing.
+- A variation, `(`, starts from the position before the move it replaces, and `)` returns to its
+  line, so variations nest. NAGs (`$n`), comments and the result are not moves.
+- Wherever the colour is to move, the move played becomes the position's choice. The first
+  choice for a position, in document order, wins; a later different move for it is counted in
+  `conflicts`, the same move again is not. A main line's move comes before the variations that
+  replace it.
+- A move that does not play ends its line: the line's later moves and variations are skipped,
+  down to its closing parenthesis or the game's end, and the line counts once in `unparsable`.
+- `games` and `variations` count what was read. An empty stream is no games; a header without
+  its closing bracket or quote is `malformed_header`, a token longer than the parser reads
+  `too_long`.
+
 ## Tests
 
 `core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
@@ -506,6 +528,8 @@ equals the fold); `repertoire_test` (coverage worked out by hand on small stores
 depth, a gap, a black repertoire, a transposition, truncation, the walk's ends, an illegal choice,
 the gaps' order, the store overload) and `repertoire_property_test` (on stores from random games and
 random repertoires: covered and the gaps add up to the whole, each gap is the colour's to move and
-reached by its line, the order, the same answer twice). The property tests' random games
+reached by its line, the order, the same answer twice); `pgn_import_test` (a hand-written file
+with nested variations, a NAG, a conflict, a move that does not play, a `[FEN]` game and a bad
+one, for white and black; an empty stream; a broken header). The property tests' random games
 (`random_games.hpp`) start from the start position or from positions that soon castle, promote or
 meet en passant, and pick moves by index into the sorted legal moves.

@@ -12,6 +12,7 @@ add_library(core STATIC
   include/chesscoach/names.hpp
   include/chesscoach/opening_schema.hpp
   include/chesscoach/opening_store.hpp
+  include/chesscoach/pgn_import.hpp
   include/chesscoach/position.hpp
   include/chesscoach/profile_store.hpp
   include/chesscoach/random.hpp
@@ -29,6 +30,7 @@ add_library(core STATIC
   src/names.cpp
   src/opening_schema.cpp
   src/opening_store.cpp
+  src/pgn_import.cpp
   src/position.cpp
   src/profile_store.cpp
   src/repertoire.cpp
@@ -97,6 +99,9 @@ if(BUILD_TESTING)
                       LIBS chesscoach::core SQLiteCpp)
   target_compile_definitions(core_opening_store_test PRIVATE
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_add_test(core_pgn_import_test MODULE core KIND unit
+                      SOURCES tests/pgn_import_test.cpp
+                      LIBS chesscoach::core)
   chesscoach_add_test(core_position_test MODULE core KIND unit
                       SOURCES tests/position_test.cpp
                       LIBS chesscoach::core)
@@ -165,6 +170,7 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_key_property_test)
   chesscoach_assert_no_qt(core_names_test)
   chesscoach_assert_no_qt(core_opening_store_test)
+  chesscoach_assert_no_qt(core_pgn_import_test)
   chesscoach_assert_no_qt(core_position_test)
   chesscoach_assert_no_qt(core_position_property_test)
   chesscoach_assert_no_qt(core_profile_store_test)

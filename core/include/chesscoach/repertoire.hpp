@@ -24,6 +24,17 @@ namespace chesscoach {
 // move.
 using Repertoire = std::unordered_map<Key, std::string>;
 
+// One chosen move with the position it is chosen in: what the profile store keeps per position
+// (docs/database.md §12.4) and what a PGN import yields. fen is the normalized FEN of key's
+// position, move is UCI.
+struct RepertoireChoice {
+    Key key = 0;
+    std::string fen;
+    std::string move;
+
+    friend bool operator==(const RepertoireChoice&, const RepertoireChoice&) = default;
+};
+
 struct CoverageConfig {
     int max_plies = 20; // the depth, in plies from the start position
     double min_mass =
