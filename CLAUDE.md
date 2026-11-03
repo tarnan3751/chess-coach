@@ -38,9 +38,11 @@ engine worker's lines and cancellation, the Spar screen on a spar worker, the Re
 Drill screens on a profile worker with profile export and import, themes, settings in
 `<data-dir>/settings.ini`, About, the UI harness with screenshots; `docs/reference/app.md`);
 and the macOS package with Qt and Stockfish inside, the licence texts in `legal/`,
-`tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`).
-In progress: the review folds, the public-milestone files, and the release database (a recent
-month builds on the owner's machine). `PLAN.md` §7 lists the seven phases with their sizes, §6
+`tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`);
+and the release-database tooling, `tools/build_release_db.sh` and `tools/verify_db.sh`
+(`docs/reference/pipeline.md`, **Release database**; `data/release/README.md`). In progress: the
+review folds, the public-milestone files, and the release database (a recent month builds on the
+owner's machine). `PLAN.md` §7 lists the seven phases with their sizes, §6
 the data, §9 the process, §11 the decisions, §12 the resolved questions and §14 the deferred
 path.
 
@@ -97,6 +99,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` |
 | Package: the macOS disk image; the image built and checked mounted | `cmake --build --preset release --target package`; `tools/package.sh` |
+| A release database: built from a data directory (the coordinator's or the owner's, never a lane's, but on the sample); verified, with the reproducibility rebuild | `tools/build_release_db.sh <data-dir> <out.db> --data-version N [--months ...]`; `tools/verify_db.sh <db> [--rebuild]` |
 | Land a delivered series; in a batch, every series but the last with `--no-gate` | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--no-gate]` |
 | The changelog section for a release, from the commit log | `tools/changelog.sh <version> [<from-ref>] [<to-ref>]` |
 

@@ -171,7 +171,8 @@ file stores (signed), 50,000 rows per transaction.
 ## The report
 
 `name<TAB>value` lines: the output; one `input` line per month file in month order, then `eval` and
-`names`, the evaluation file and the names directory as given or `none`; every meta row, then
+`names`, the evaluation file and the names directory as given or `none`, which is what
+`tools/verify_db.sh --rebuild` builds again from (**Release database**); every meta row, then
 `threads`, `sketch_bytes`, `sketch_width`, `candidates`, `nodes` and `nodes_tier_0` to
 `nodes_tier_6`, `moves`, `positions`, `eval_lines`, `eval_unreadable`, `eval_matched` and
 `eval_unusable` when an evaluation file was read, `positions_evaluated`, `positions_named`,
@@ -189,6 +190,54 @@ slice and the committed names. `tools/run_corpus.sh` (the gate's corpus step) re
 it with `chess-coach-cli dump` and compares byte for byte; `build_test.cpp` does the same
 in-process through `OpeningStore::dump`. `tools/make_sample.sh <data-dir>` regenerates all three
 files; running it is tier A, under a brief that says so.
+
+## Release database
+
+A published `openings.db` is built and checked by two scripts, not by hand; `data/release/README.md`
+says how a release uses them and records each published file.
+
+`tools/build_release_db.sh <data-dir> <out.db> --data-version N [--months YYYY-MM,...]
+[--threads T] [--sketch-mib M] [--min-games G] [--max-ply P]` builds from the month files
+`lichess_db_standard_rated_YYYY-MM.pgn.zst` in `<data-dir>` (the months `--months` names, or every
+one there, ascending), the evaluation database `lichess_db_eval.jsonl.zst` beside them and the
+committed `data/chess-openings`, at `min_games` 100 and `max_ply` 30 unless told otherwise
+(`docs/database.md` §8). It refuses a month named twice, a named month without its file, a
+missing evaluation file and an existing output or report before building anything; it builds
+the `release` preset's `chess-coach-pipeline`, runs it with `--report <out.db>.report.txt`, and
+prints the report's key lines and the elapsed time. Without `--sketch-mib` it sizes the sketch by
+the rule of **The sketch**: it estimates the visits at one per ten compressed bytes (a recent
+month holds about a hundred million games of some thirty visits in about 31 GB; older months,
+with fewer bytes per game, hold more per byte) and takes the smallest power of two from 1 MiB
+whose width keeps them at `min_games` / 16 per counter or fewer (about six at the default),
+up to 16 GiB. For one recent month that is 2 GiB (width 2^29, about six per counter); twelve
+recent months would need more than the pipeline's 16 GiB, which the script then takes and says
+the prediction is above the target. A build of recent months holds every core for hours, so it
+is the coordinator's or the owner's on a quiet machine, never a lane's (`CLAUDE.md`, **Lanes**).
+
+`tools/verify_db.sh <db> [--rebuild]` checks a built file, one line per check: sqlite3's
+`PRAGMA integrity_check` and the store opening it (`chess-coach-cli stats`); every `meta` key of
+§6.1, `schema_version` 1, the months well formed and ascending, the tiers as §4 states, and the
+`admitted_tier_` and `skipped_` keys summing to `games_admitted` and `games_skipped`; the
+invariants of §6.4 by SQL (every node at least `min_games` with its columns summing to its
+games, every move with a node and a total of at least one, every node's moves summing to at
+most the node, column by column, and the start position's games at a tier at least that tier's
+admitted games when those reach `min_games`) and §6.2's rule that `positions` holds exactly the
+keys with a node; the canonical dump's sha256, written to `<db>.sha256` in shasum's format for a
+file named `<db>.dump`; and the file's size against the delivery rule (`PLAN.md` §12 item 2,
+§8 of the contract): under 500 MB it is bundled, from 500 MB to 1 GB it is the owner's call, over
+1 GB it is a separate download, and over 2 GB it is also too large for a GitHub release asset.
+With `--rebuild` it builds the file again from the inputs and knobs its report names (the
+report's `input`, `eval` and `names` lines and `meta`'s `min_games`, `max_ply` and
+`data_version`) into `<db>.rebuild.db` and compares the two dumps byte for byte, the
+reproducibility criterion of §11; the rebuild is deleted when they are equal and kept when they
+differ. It needs `sqlite3` on the `PATH` and builds the `release` preset's CLI and, for
+`--rebuild`, the pipeline.
+
+On the sample corpus, built through a scratch data directory holding links to the sample's
+month file and evaluation file (`--months 2013-01 --min-games 2 --max-ply 20 --data-version 0`),
+the script's database dumps byte-equal to `golden.dump`, and `verify_db.sh --rebuild` passes
+every check and reports the rebuild equal; a copy with a wrong `games_admitted`, a deleted node
+or a node under `min_games` fails its check, and a copy with one name changed fails the rebuild.
 
 ## Benchmark
 
