@@ -10,7 +10,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace chesscoach::cli {
 
@@ -66,6 +68,19 @@ Result<void> run_explore(const ExploreOptions& options, std::ostream& out) {
     }
     const Position& position = resolved->position;
     const Key key = position.key();
+    std::optional<EngineAnswer> engine;
+    if (options.engine) {
+        auto profiles = open_profiles(options.engine->data_dir);
+        if (!profiles) {
+            return tl::unexpected(profiles.error());
+        }
+        auto answer = search_through_cache(*profiles, position, options.engine->query,
+                                           options.engine->settings);
+        if (!answer) {
+            return tl::unexpected(answer.error());
+        }
+        engine = std::move(*answer);
+    }
 
     out << "fen: " << position.fen() << '\n';
     out << "key: " << key << '\n';
@@ -81,6 +96,12 @@ Result<void> run_explore(const ExploreOptions& options, std::ostream& out) {
                                                  : fmt::format("cp {}", row->eval_cp.value_or(0));
         out << fmt::format("eval: {} depth {} best {} {}\n", score, *row->eval_depth, *best,
                            *row->best_move);
+    }
+    if (engine) {
+        out << "engine: "
+            << (engine->search.lines.empty() ? std::string("none")
+                                             : line_text(position, engine->search.lines.front()))
+            << '\n';
     }
 
     if (!store->node(key, *tier)) {

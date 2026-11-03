@@ -1,11 +1,13 @@
 // chess-coach-cli: the entry point, wiring only (docs/reference/cli.md). It parses the command
-// line with CLI11 and runs one subcommand: dump, stats, explore or name, each over --db <file>.
+// line with CLI11 and runs one subcommand: dump, stats, explore or name, each over --db <file>,
+// or eval, over the profile store of --data-dir <dir>.
 // --version, --help, and the help when run without arguments, exit 0. A command line CLI11
 // rejects and an error a command returns each print one line on stderr and exit 2; an exception
 // that reaches main is reported on stderr with exit status 1.
 #include <chesscoach/version.hpp>
 
 #include "commands/dump.hpp"
+#include "commands/eval.hpp"
 #include "commands/explore.hpp"
 #include "commands/name.hpp"
 #include "commands/stats.hpp"
@@ -70,6 +72,57 @@ int main(int argc, char** argv) {
                 ->excludes(explore_fen);
         explore_command->add_flag("--score", explore.score,
                                   "Append the recommendation score's components to each move");
+        bool explore_engine = false;
+        chesscoach::cli::ExploreEngine explore_engine_options;
+        CLI::Option* explore_engine_flag = explore_command->add_flag(
+            "--engine", explore_engine, "Add the engine's first line, through the engine cache");
+        CLI::Option* explore_data_dir =
+            explore_command->add_option("--data-dir", explore_engine_options.data_dir,
+                                        "The data directory holding profiles.db (--engine)");
+        explore_engine_flag->needs(explore_data_dir);
+        explore_command->add_option("--lines", explore_engine_options.query.lines,
+                                    "The engine's line count (--engine)");
+        explore_command->add_option("--seconds", explore_engine_options.query.seconds,
+                                    "The engine's search time (--engine)");
+        std::string explore_stockfish;
+        const CLI::Option* explore_stockfish_option = explore_command->add_option(
+            "--stockfish", explore_stockfish, "The engine binary (--engine)");
+        explore_command->add_option("--threads", explore_engine_options.settings.threads,
+                                    "The engine's threads (--engine)");
+        explore_command->add_option("--hash", explore_engine_options.settings.hash_mb,
+                                    "The engine's hash in MB (--engine)");
+
+        chesscoach::cli::EvalOptions eval;
+        CLI::App* eval_command = app.add_subcommand(
+            "eval", "Print a position's engine lines, from the engine cache or a new search.");
+        eval_command
+            ->add_option("--data-dir", eval.data_dir, "The data directory holding profiles.db")
+            ->required();
+        std::string eval_db;
+        const CLI::Option* eval_db_option =
+            eval_command->add_option("--db", eval_db, "The opening database, for its evaluation");
+        CLI::Option* eval_fen = eval_command->add_option("--fen", fen, "The position as a FEN");
+        const CLI::Option* eval_moves =
+            eval_command
+                ->add_option("--moves", moves,
+                             "The moves from the start position, UCI or SAN, separated by spaces")
+                ->excludes(eval_fen);
+        eval_command->add_option("--lines", eval.query.lines, "The engine's line count")
+            ->capture_default_str();
+        eval_command->add_option("--seconds", eval.query.seconds, "The engine's search time")
+            ->capture_default_str();
+        eval_command
+            ->add_option("--min-depth", eval.query.min_depth,
+                         "The least depth a cached search needs to be served")
+            ->capture_default_str();
+        std::string eval_stockfish;
+        const CLI::Option* eval_stockfish_option = eval_command->add_option(
+            "--stockfish", eval_stockfish,
+            "The engine binary (else CHESS_COACH_STOCKFISH, else stockfish on the PATH)");
+        eval_command->add_option("--threads", eval.engine.threads, "The engine's threads")
+            ->capture_default_str();
+        eval_command->add_option("--hash", eval.engine.hash_mb, "The engine's hash in MB")
+            ->capture_default_str();
 
         chesscoach::cli::NameOptions name;
         CLI::App* name_command = app.add_subcommand(
@@ -109,7 +162,28 @@ int main(int argc, char** argv) {
             if (*explore_moves) {
                 explore.moves = moves;
             }
+            if (*explore_stockfish_option) {
+                explore_engine_options.settings.stockfish = explore_stockfish;
+            }
+            if (explore_engine) {
+                explore.engine = explore_engine_options;
+            }
             return report(chesscoach::cli::run_explore(explore, std::cout));
+        }
+        if (*eval_command) {
+            if (*eval_fen) {
+                eval.fen = fen;
+            }
+            if (*eval_moves) {
+                eval.moves = moves;
+            }
+            if (*eval_db_option) {
+                eval.db = eval_db;
+            }
+            if (*eval_stockfish_option) {
+                eval.engine.stockfish = eval_stockfish;
+            }
+            return report(chesscoach::cli::run_eval(eval, std::cout));
         }
         if (*name_fen) {
             name.fen = fen;

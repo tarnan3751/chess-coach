@@ -1,12 +1,15 @@
 # The CLI's exit statuses (cli; unit), run as
-#   cmake -DCLI=<chess-coach-cli> -DMISSING_DB=<path that does not exist> -P exit_status.cmake
+#   cmake -DCLI=<chess-coach-cli> -DMISSING_DB=<path that does not exist> -DDATA_DIR=<scratch dir>
+#         -P exit_status.cmake
 # Every rejected command line and every command error prints exactly one line on stderr, nothing
 # on stdout, and exits 2; --version, --help and no arguments exit 0. No case needs a database:
-# the ones that open one name a file that does not exist.
+# the ones that open one name a file that does not exist. eval's cases may create profiles.db in
+# DATA_DIR, and none of them finds an engine.
 cmake_minimum_required(VERSION 3.28)
 
-if(NOT CLI OR NOT MISSING_DB)
-  message(FATAL_ERROR "usage: cmake -DCLI=<chess-coach-cli> -DMISSING_DB=<path> -P exit_status.cmake")
+if(NOT CLI OR NOT MISSING_DB OR NOT DATA_DIR)
+  message(FATAL_ERROR "usage: cmake -DCLI=<chess-coach-cli> -DMISSING_DB=<path> -DDATA_DIR=<dir> "
+                      "-P exit_status.cmake")
 endif()
 
 set(failures "")
@@ -48,6 +51,14 @@ expect(2 explore --db "${MISSING_DB}" --tier 3 --moves "e4" --fen "8/8/8/8/8/8/8
 expect(2 name --db "${MISSING_DB}")
 expect(2 name --db "${MISSING_DB}" --moves "e4")
 expect(2 name --db "${MISSING_DB}" --fen "not a fen")
+expect(2 explore --db "${MISSING_DB}" --tier 3 --engine)
+expect(0 eval --help)
+expect(2 eval --moves "e4")
+expect(2 eval --data-dir "${DATA_DIR}" --fen "not a fen")
+expect(2 eval --data-dir "${DATA_DIR}" --moves "e4" --fen "8/8/8/8/8/8/8/8 w - -")
+expect(2 eval --data-dir "${DATA_DIR}" --db "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --stockfish "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --lines 0 --stockfish "${MISSING_DB}")
 
 if(failures)
   list(JOIN failures "\n  " listing)
