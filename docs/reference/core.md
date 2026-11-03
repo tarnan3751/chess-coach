@@ -458,8 +458,9 @@ children, the floor at zero, the shares and the sort, each number worked out by 
 sound score equal to max(0, expected − penalty), the penalty within its cap, the shares summing
 to one, the order); `engine_test` (every fake script, `busy`, `stop`, the options sent, the
 timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
-error, migrations, the refused files, the cache rules and the version 1 fixture); `random_test`
-(`Splitmix64` gives the Zobrist table and the reference outputs); `sampler_test` (min_games, the
+error, migrations, the refused files, the cache rules and the version 1 fixture); `random_test` (the
+reference output of seed 0, one sequence per seed; `key_test`'s pinned values guard the tables);
+`sampler_test` (min_games, the
 order, no draw without a candidate, the draw by cumulative weight, one sequence per seed, and
 the frequencies over 200,000 draws within one point of the weights) and `sampler_property_test`
 (a draw is a candidate and ignores the moves below min_games); `spar_test` (on a small tree

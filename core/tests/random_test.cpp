@@ -1,7 +1,7 @@
-// Unit tests for chesscoach/random.hpp (core; unit): Splitmix64 from the contract's seed gives the
-// Zobrist table (docs/database.md §5.2) value for value, its first output is the pinned one, and
-// two generators with one seed give one sequence.
-#include <chesscoach/key.hpp>
+// Unit tests for chesscoach/random.hpp (core; unit): the reference output of splitmix64's step
+// from seed 0, and two generators with one seed give one sequence. That the Zobrist tables, which
+// key.hpp now draws from Splitmix64, are unchanged is key_test's to show: its pinned table values
+// and keys were computed by independent implementations of docs/database.md §5.2.
 #include <chesscoach/random.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -9,14 +9,6 @@
 #include <cstdint>
 
 using chesscoach::Splitmix64;
-
-TEST_CASE("Splitmix64 from the contract's seed gives the Zobrist table", "[random]") {
-    Splitmix64 generator(0x434845535320434FULL);
-    for (const chesscoach::Key value : chesscoach::zobrist::table) {
-        CHECK(generator.next() == value);
-    }
-    CHECK(Splitmix64(0x434845535320434FULL).next() == 0xF777EAA02D011CB2ULL);
-}
 
 TEST_CASE("Splitmix64 repeats its sequence for a seed and differs across seeds", "[random]") {
     Splitmix64 a(20261103);
