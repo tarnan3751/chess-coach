@@ -654,13 +654,19 @@ void MainWindow::screen_changed(int index) {
     }
     if (previous == Screen::explore) {
         // Explore's engine idles while the board is another screen's, and its evaluation bar,
-        // which is Explore's position's, hides; its line waits as it was.
+        // which is Explore's position's, empties; its line and its side of the board wait as
+        // they were.
         ++request_id_;
         engine_worker_->cancel_before(request_id_);
+        explore_flipped_ = board_->flipped();
     }
     update_eval_bar();
     switch (next) {
     case Screen::explore:
+        if (board_->flipped() != explore_flipped_) {
+            board_->flip();
+            eval_bar_->set_flipped(explore_flipped_);
+        }
         board_->set_position(explore_position());
         rebuild_move_list();
         request_query();
@@ -674,6 +680,13 @@ void MainWindow::screen_changed(int index) {
             static_cast<void>(position.play_uci(uci));
         }
         board_->set_position(position);
+        // The board faces the user: the replay's colour, the running session's, or the one
+        // chosen for the next.
+        if (replay_) {
+            face(replay_->user_white);
+        } else {
+            face(spar_running_ ? spar_white_ : spar_->user_white());
+        }
         replay_ply_ = 0;
         if (replay_) {
             spar_replay_step(0);
@@ -721,6 +734,7 @@ void MainWindow::spar_start(bool user_white) {
     spar_->end_replay();
     spar_->hide_interruption();
     spar_running_ = true;
+    spar_white_ = user_white;
     spar_started_ = false;
     spar_waiting_ = true;
     spar_uci_.clear();

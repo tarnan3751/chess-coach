@@ -212,6 +212,7 @@ class MainWindow : public QMainWindow {
     // is left as it was.
     bool spar_active_ = false;
     bool spar_running_ = false;   // a session runs on the worker
+    bool spar_white_ = true;      // the colour the user plays in it
     bool spar_started_ = false;   // the worker has answered session_started for it
     bool spar_waiting_ = false;   // the coach is to move
     bool applying_coach_ = false; // the board is playing the coach's move, not the user's
@@ -220,9 +221,11 @@ class MainWindow : public QMainWindow {
     std::optional<SparReplay> replay_;
     int replay_ply_ = 0;
 
-    // The screen the board belongs to.
+    // The screen the board belongs to, and Explore's side of the board, which Flip board sets
+    // there; the other screens turn the board to the side they play.
     enum class Screen : std::uint8_t { explore, spar, repertoire, drill };
     Screen screen_ = Screen::explore;
+    bool explore_flipped_ = false;
 
     // Repertoire: the line the board is at, from the start, and the colour's choices by key.
     bool repertoire_white_ = true;

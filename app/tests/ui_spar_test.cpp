@@ -377,6 +377,14 @@ class SparTest : public QObject {
         QCOMPARE(window.line().size(), std::size_t{1});
         QTRY_COMPARE(move_row(window, 0), QStringLiteral("1. e4"));
         QVERIFY(board.isEnabled());
+
+        // Explore keeps its own side of the board; Spar faces the user.
+        child<QAction>(window, QStringLiteral("flip_action")).trigger();
+        QVERIFY(board.flipped());
+        tabs.setCurrentIndex(1);
+        QVERIFY(!board.flipped()); // the session's white
+        tabs.setCurrentIndex(0);
+        QVERIFY(board.flipped());
     }
 };
 
