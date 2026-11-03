@@ -10,6 +10,7 @@ the sampler are described here when they land.
 
 | Header (`core/include/chesscoach/`) | Holds |
 |---|---|
+| `random.hpp` | `Splitmix64`, the generator of the Zobrist tables and of the sampler's draws |
 | `key.hpp` | `Key`, the Zobrist tables, the bit cast SQLite stores |
 | `position.hpp` | `Position`, `Color`, `FenError`, `MoveError`, `PlayedMove` |
 | `tier.hpp` | `Tier`, `tier_of`, the bounds, the labels |
@@ -29,7 +30,8 @@ hold them behind a pointer.
 ## The key
 
 `Key` is `std::uint64_t`. `zobrist::table` is the 781 values of §5.2, computed at compile time
-(`consteval make_table()`, splitmix64 from `0x434845535320434F`) in the contract's draw order;
+(`consteval make_table()`, 781 outputs of `Splitmix64` from `0x434845535320434F`, `random.hpp`)
+in the contract's draw order;
 `piece_square(piece, square)`, `black_to_move()`, `castling(CastlingRight)` and
 `en_passant_file(file)` index it. chess-library's `Piece` as an int (white P N B R Q K, then
 black) and `Square` as an int (a1 = 0 to h8 = 63) are the contract's indices, so the board's own
@@ -324,7 +326,7 @@ children, the floor at zero, the shares and the sort, each number worked out by 
 sound score equal to max(0, expected − penalty), the penalty within its cap, the shares summing
 to one, the order); `engine_test` (every fake script, `busy`, `stop`, the options sent, the
 timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
-error, migrations, the refused files, the cache rules and the version 1 fixture). The property
-tests' random games (`random_games.hpp`) start from the start
-position or from positions that soon castle, promote or meet en passant, and pick moves by index
-into the sorted legal moves.
+error, migrations, the refused files, the cache rules and the version 1 fixture); `random_test`
+(`Splitmix64` gives the Zobrist table and the reference outputs). The property tests' random
+games (`random_games.hpp`) start from the start position or from positions that soon castle,
+promote or meet en passant, and pick moves by index into the sorted legal moves.

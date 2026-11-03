@@ -1,9 +1,11 @@
 // The position key (docs/database.md §5.2): the Key type, the 781 Zobrist values, computed at
-// compile time by splitmix64 from the contract's seed in its draw order, and the bit cast SQLite
-// stores. Only these tables compute a key; Position (chesscoach/position.hpp) applies them, from
-// scratch when a FEN is parsed and incrementally on every move. Pure, constexpr, and uint64_t
-// arithmetic throughout, so nothing here can overflow a signed type.
+// compile time by Splitmix64 (random.hpp) from the contract's seed in its draw order, and the
+// bit cast SQLite stores. Only these tables compute a key; Position (chesscoach/position.hpp)
+// applies them, from scratch when a FEN is parsed and incrementally on every move. Pure,
+// constexpr, and uint64_t arithmetic throughout, so nothing here can overflow a signed type.
 #pragma once
+
+#include <chesscoach/random.hpp>
 
 #include <array>
 #include <bit>
@@ -26,16 +28,12 @@ inline constexpr std::size_t castling_offset = 769;
 inline constexpr std::size_t en_passant_offset = 773;
 inline constexpr std::size_t table_size = 781;
 
-// The 781 consecutive outputs of splitmix64 from the state 0x434845535320434F ("CHESS CO").
+// The 781 consecutive outputs of Splitmix64 seeded 0x434845535320434F ("CHESS CO").
 [[nodiscard]] consteval std::array<Key, table_size> make_table() noexcept {
     std::array<Key, table_size> values{};
-    Key state = 0x434845535320434FULL;
+    Splitmix64 generator(0x434845535320434FULL);
     for (auto& value : values) {
-        state += 0x9E3779B97F4A7C15ULL;
-        Key z = state;
-        z = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
-        z = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
-        value = z ^ (z >> 31U);
+        value = generator.next();
     }
     return values;
 }
