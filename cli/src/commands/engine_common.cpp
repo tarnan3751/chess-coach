@@ -122,8 +122,9 @@ Result<EngineAnswer> search_through_cache(ProfileStore& profiles, const Position
     if (query.lines < 1) {
         return fail(fmt::format("--lines {} is not at least 1", query.lines));
     }
-    if (!(query.seconds > 0.0)) {
-        return fail(fmt::format("--seconds {} is not above 0", query.seconds));
+    if (!(query.seconds > 0.0) || !(query.seconds <= maximum_search_seconds)) {
+        return fail(fmt::format("--seconds {} is not above 0 and at most {}", query.seconds,
+                                maximum_search_seconds));
     }
     const Key key = position.key();
     if (auto hit = profiles.cache_lookup(key, query.lines, query.min_depth)) {

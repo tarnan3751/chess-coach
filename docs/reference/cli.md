@@ -142,9 +142,10 @@ score order (`docs/reference/core.md`, **The engine**).
   printed in UCI and ends the pv.
 - `cached: yes` when the cache answered: it held rows for the position's key and `--lines` (3 by
   default) whose least depth is at least `--min-depth` (12 by default). Otherwise the engine was
-  started and searched for `--seconds` (1.0), the result went through the cache, which keeps the
-  deeper of the stored and the new rows (§12.2), and the line is `cached: no`. A cached answer
-  never starts or even looks for the engine.
+  started and searched for `--seconds` (1.0; above 0 and at most 3600, as `core`'s engine
+  accepts), the result went through the cache, which keeps the deeper of the stored and the new
+  rows (§12.2), and the line is `cached: no`. A cached answer never starts or even looks for the
+  engine.
 - The engine is `--stockfish`, else the file the environment variable `CHESS_COACH_STOCKFISH`
   names, else `stockfish` on the `PATH`; it runs with `--threads` (1) and `--hash` (16 MB).
   Nothing is written to stdout unless the whole command succeeds.

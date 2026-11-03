@@ -59,6 +59,13 @@ expect(2 eval --data-dir "${DATA_DIR}" --moves "e4" --fen "8/8/8/8/8/8/8/8 w - -
 expect(2 eval --data-dir "${DATA_DIR}" --db "${MISSING_DB}")
 expect(2 eval --data-dir "${DATA_DIR}" --stockfish "${MISSING_DB}")
 expect(2 eval --data-dir "${DATA_DIR}" --lines 0 --stockfish "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --seconds 0 --stockfish "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --seconds -1 --stockfish "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --seconds 3601 --stockfish "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --seconds nan --stockfish "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --seconds inf --stockfish "${MISSING_DB}")
+expect(2 eval --data-dir "${DATA_DIR}" --seconds 1s --stockfish "${MISSING_DB}")
+expect(2 explore --db "${MISSING_DB}" --tier 3 --engine --data-dir "${DATA_DIR}" --seconds 3601)
 
 if(failures)
   list(JOIN failures "\n  " listing)

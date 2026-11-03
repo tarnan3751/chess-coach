@@ -4,6 +4,7 @@
 // --version, --help, and the help when run without arguments, exit 0. A command line CLI11
 // rejects and an error a command returns each print one line on stderr and exit 2; an exception
 // that reaches main is reported on stderr with exit status 1.
+#include <chesscoach/engine.hpp>
 #include <chesscoach/version.hpp>
 
 #include "commands/dump.hpp"
@@ -15,6 +16,7 @@
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
 
+#include <cstddef>
 #include <cstdio>
 #include <exception>
 #include <iostream>
@@ -23,6 +25,24 @@
 namespace {
 
 constexpr int usage_error = 2;
+
+// --seconds: above 0 and at most the longest search core's engine accepts.
+std::string check_seconds(const std::string& text) {
+    double value = 0.0;
+    try {
+        std::size_t used = 0;
+        value = std::stod(text, &used);
+        if (used != text.size()) {
+            return "not a number of seconds";
+        }
+    } catch (const std::exception&) {
+        return "not a number of seconds";
+    }
+    if (!(value > 0.0) || !(value <= chesscoach::maximum_search_seconds)) {
+        return fmt::format("must be above 0 and at most {}", chesscoach::maximum_search_seconds);
+    }
+    return {};
+}
 
 int report(const chesscoach::cli::Result<void>& result) {
     if (!result) {
@@ -82,8 +102,10 @@ int main(int argc, char** argv) {
         explore_engine_flag->needs(explore_data_dir);
         explore_command->add_option("--lines", explore_engine_options.query.lines,
                                     "The engine's line count (--engine)");
-        explore_command->add_option("--seconds", explore_engine_options.query.seconds,
-                                    "The engine's search time (--engine)");
+        explore_command
+            ->add_option("--seconds", explore_engine_options.query.seconds,
+                         "The engine's search time (--engine)")
+            ->check(CLI::Validator(check_seconds, "SECONDS"));
         std::string explore_stockfish;
         const CLI::Option* explore_stockfish_option = explore_command->add_option(
             "--stockfish", explore_stockfish, "The engine binary (--engine)");
@@ -110,7 +132,8 @@ int main(int argc, char** argv) {
         eval_command->add_option("--lines", eval.query.lines, "The engine's line count")
             ->capture_default_str();
         eval_command->add_option("--seconds", eval.query.seconds, "The engine's search time")
-            ->capture_default_str();
+            ->capture_default_str()
+            ->check(CLI::Validator(check_seconds, "SECONDS"));
         eval_command
             ->add_option("--min-depth", eval.query.min_depth,
                          "The least depth a cached search needs to be served")
