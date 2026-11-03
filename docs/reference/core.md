@@ -24,7 +24,7 @@ sampler, the spar session, the scheduler and repertoire coverage are described b
 | `scheduler.hpp` | `CardState`, `Grade`, `Review`, `new_card`, `review`, `replay`, `is_due`, SM-2's numbers |
 | `repertoire.hpp` | `Repertoire`, `compute_coverage`, `Coverage`, `Gap`, `CoverageConfig` |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
-| `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `Migration`, `Clock`, `ProfileError` |
+| `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `SparSessionRow`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
 
 Errors are values (`tl::expected` with an `enum class` or a small struct). No public header
@@ -300,15 +300,17 @@ connection registers `chesscoach_now()`, an SQL function answered from it, so a 
 can timestamp rows and stay plain SQL.
 
 **Versions** (§12.1). `profile_migrations()` lists one script per version; version 1 creates
-`meta`, `profiles` and `engine_cache` and the profile `Default` at tier 2. An absent or
-zero-length file is created by running every script; an existing file must have a `meta` table
-with a positive decimal `schema_version`, else it is refused as `not_profiles` without being
-modified; a version above the last script's is `newer_version`, also unmodified; an older one
-runs each later script in its own transaction, which records `schema_version` as its last
-statement, so a failing script (`migration_failed`) leaves the file at the last version that
-succeeded. Tests pass longer migration lists to exercise all of this. Each version's file is
-kept as a fixture (`core/tests/fixtures/profiles-v1.db`), written by the hidden test case
-`[.fixture]` and opened unchanged by every later build.
+`meta`, `profiles` and `engine_cache` and the profile `Default` at tier 2, and version 2 creates
+`spar_sessions` (§12.3). An absent or zero-length file is created by running every script; an
+existing file must have a `meta` table with a positive decimal `schema_version`, else it is
+refused as `not_profiles` without being modified; a version above the last script's is
+`newer_version`, also unmodified; an older one runs each later script in its own transaction,
+which records `schema_version` as its last statement, so a failing script (`migration_failed`)
+leaves the file at the last version that succeeded. Tests pass longer migration lists to exercise
+all of this. Each version's file is kept as a fixture (`core/tests/fixtures/profiles-v1.db`,
+`profiles-v2.db`), written by a hidden test case `[.fixture]` that opens the file with the
+migrations up to its version only, so a later build writes the same file; the current version's
+fixture opens unchanged, and every earlier one migrates with its rows kept.
 
 **Profiles.** `profiles()` by id; `create_profile`, `rename_profile`, `set_tier` and
 `remove_profile` return the profile or an error: `invalid_name` (empty), `duplicate_name`,
@@ -325,6 +327,19 @@ failed).
   least depth, and the stored lines are kept and returned when it is not. A result with fewer
   lines than asked for (a position with fewer legal moves) is complete and stored as such.
 - A pv is stored as UCI moves separated by spaces; scores stay from the side to move.
+
+**Spar sessions** (§12.3). `save_spar_session(profile_id, session, started_at, ended_at)` saves a
+`SparSession` under a profile: its tier, the user's colour, the seed (bit-cast), the moves, the
+number of interruptions, its phase now (ended, or where it stopped), the result, the start time,
+the end time only when the session has ended, its `end_move` and `min_games`, and the
+`data_version` of the `openings.db` it plays against (`opening_data_version`, 0 for a file
+without one). It returns the new id, or `no_such_profile`
+or `storage`. `spar_sessions(profile_id)` lists a profile's sessions by id and `spar_session(id)`
+reads one, as `SparSessionRow`s, which `replay_spar_session(store, row)` replays with the
+stored end move and `min_games`, refusing a store of another `data_version` as
+`replay_database_mismatch`; a row whose tier, colour or
+phase is out of range throws, as a corrupted file does. Removing a profile removes its sessions
+(`ON DELETE CASCADE`, with foreign keys on).
 
 ## The sampler
 
@@ -458,24 +473,25 @@ children, the floor at zero, the shares and the sort, each number worked out by 
 sound score equal to max(0, expected − penalty), the penalty within its cap, the shares summing
 to one, the order); `engine_test` (every fake script, `busy`, `stop`, the options sent, the
 timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
-error, migrations, the refused files, the cache rules and the version 1 fixture); `random_test` (the
-reference output of seed 0, one sequence per seed; `key_test`'s pinned values guard the tables);
-`sampler_test` (min_games, the
-order, no draw without a candidate, the draw by cumulative weight, one sequence per seed, and
-the frequencies over 200,000 draws within half a point of the weights) and `sampler_property_test`
-(a draw is a candidate and ignores the moves below min_games); `spar_test` (on a small tree built
-from `openings_schema_sql()`, `spar_fixture.hpp`: a scripted session with a Dubious and an off-book
-interruption, the sampler's book replies, the provider off book, the end, the summary and its
-replay; a session off book from the start, a book position without candidates, a mate's result, the
-provider's failures, the replay's refusals, the calls out of turn) and `spar_property_test`
-(sessions from generated seeds, colours, end moves and user moves replay to the same summary);
-`scheduler_test` (a hand-computed sequence, also checked at compile time, `hard` and `easy`, the
-ease floor, the interval cap, when a card is due) and `scheduler_property_test` (over random
-histories: intervals grow on passes and reset on a failure, due never before creation or review, the
-bounds, replay equals the fold); `repertoire_test` (coverage worked out by hand on small stores:
-complete to a depth, a gap, a black repertoire, a transposition, truncation, the walk's ends, an
-illegal choice, the gaps' order, the store overload) and `repertoire_property_test` (on stores from
-random games and random repertoires: covered and the gaps add up to the whole, each gap is the
-colour's to move and reached by its line, the order, the same answer twice). The property tests'
-random games (`random_games.hpp`) start from the start position or from positions that soon castle,
-promote or meet en passant, and pick moves by index into the sorted legal moves.
+error, migrations, the refused files, the cache rules, the spar sessions saved, read and removed
+with their profile, the version 1 fixture migrated and the version 2 one opened unchanged);
+`random_test` (the reference output of seed 0, one sequence per seed; `key_test`'s pinned values
+guard the tables); `sampler_test` (min_games, the order, no draw without a candidate, the draw by
+cumulative weight, one sequence per seed, and the frequencies over 200,000 draws within half a point
+of the weights) and `sampler_property_test` (a draw is a candidate and ignores the moves below
+min_games); `spar_test` (on a small tree built from `openings_schema_sql()`, `spar_fixture.hpp`: a
+scripted session with a Dubious and an off-book interruption, the sampler's book replies, the
+provider off book, the end, the summary and its replay; a session off book from the start, a book
+position without candidates, a mate's result, the provider's failures, the replay's refusals, the
+calls out of turn) and `spar_property_test` (sessions from generated seeds, colours, end moves and
+user moves replay to the same summary); `scheduler_test` (a hand-computed sequence, also checked at
+compile time, `hard` and `easy`, the ease floor, the interval cap, when a card is due) and
+`scheduler_property_test` (over random histories: intervals grow on passes and reset on a failure,
+due never before creation or review, the bounds, replay equals the fold); `repertoire_test`
+(coverage worked out by hand on small stores: complete to a depth, a gap, a black repertoire, a
+transposition, truncation, the walk's ends, an illegal choice, the gaps' order, the store overload)
+and `repertoire_property_test` (on stores from random games and random repertoires: covered and the
+gaps add up to the whole, each gap is the colour's to move and reached by its line, the order, the
+same answer twice). The property tests' random games (`random_games.hpp`) start from the start
+position or from positions that soon castle, promote or meet en passant, and pick moves by index
+into the sorted legal moves.

@@ -59,10 +59,19 @@ class RecordedReply final : public ReplyProvider {
 
 } // namespace
 
+std::int64_t opening_data_version(const OpeningStore& store) {
+    const std::string* text = store.meta().find("data_version");
+    if (text == nullptr || text->empty() || text->size() > 18 ||
+        text->find_first_not_of("0123456789") != std::string::npos) {
+        return 0;
+    }
+    return std::stoll(*text);
+}
+
 SparSession::SparSession(const OpeningStore& store, Tier tier, Color user_colour,
                          std::uint64_t seed, const SparConfig& config)
     : store_(&store), tier_(tier), user_colour_(user_colour), config_(config), generator_(seed),
-      position_(Position::start()), seed_(seed) {
+      position_(Position::start()), seed_(seed), data_version_(opening_data_version(store)) {
     if (!store_->node(position_.key(), tier_)) {
         phase_ = Phase::off_book;
         reached_ = Phase::off_book;

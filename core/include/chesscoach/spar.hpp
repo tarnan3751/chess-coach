@@ -34,12 +34,13 @@ struct SparConfig {
 };
 
 enum class SparError : std::uint8_t {
-    bad_config,            // end_move or sampler.min_games below 1
-    provider_failed,       // the ReplyProvider returned an error
-    provider_illegal_move, // the ReplyProvider returned a move that is not legal
-    replay_illegal_move,   // a recorded move is not legal where it is played
-    replay_mismatch,       // a recorded coach move differs from the sampler's book reply, or the
-                           // record runs past the session's end
+    bad_config,               // end_move or sampler.min_games below 1
+    provider_failed,          // the ReplyProvider returned an error
+    provider_illegal_move,    // the ReplyProvider returned a move that is not legal
+    replay_illegal_move,      // a recorded move is not legal where it is played
+    replay_mismatch,          // a recorded coach move differs from the sampler's book reply, or the
+                              // record runs past the session's end
+    replay_database_mismatch, // a saved session played against another openings.db data_version
 };
 
 enum class Phase : std::uint8_t {
@@ -108,6 +109,10 @@ struct Summary {
     friend bool operator==(const Summary&, const Summary&) = default;
 };
 
+// The data_version an openings.db's meta records (docs/database.md §6.1), 0 when the file has
+// none or not a decimal integer, as a hand-made test database may.
+[[nodiscard]] std::int64_t opening_data_version(const OpeningStore& store);
+
 class SparSession {
   public:
     // A session at the start position, in book when the start position has a nodes row at the
@@ -129,6 +134,9 @@ class SparSession {
     [[nodiscard]] Phase phase() const noexcept { return phase_; }
     [[nodiscard]] Tier tier() const noexcept { return tier_; }
     [[nodiscard]] Color user_colour() const noexcept { return user_colour_; }
+    [[nodiscard]] const SparConfig& config() const noexcept { return config_; }
+    // The data_version of the openings.db the session plays against (opening_data_version).
+    [[nodiscard]] std::int64_t data_version() const noexcept { return data_version_; }
     // Whether the user is to move; false once the session has ended.
     [[nodiscard]] bool user_to_move() const noexcept;
     // The move number the game is at: 1 at the start, one more after each black move.
@@ -170,6 +178,7 @@ class SparSession {
     std::vector<Interruption> interruptions_;
     std::optional<std::string> result_;
     std::uint64_t seed_;
+    std::int64_t data_version_ = 0;
 };
 
 } // namespace chesscoach

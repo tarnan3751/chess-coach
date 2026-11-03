@@ -1,9 +1,15 @@
 // Unit tests for chesscoach/profile_store.hpp (core; unit; docs/database.md §12): creating a
-// profiles.db at version 1 with the Default profile, every ProfileError, the migration framework
-// over longer test lists (in order, one transaction each, a failing script, a newer file refused
-// unmodified), the files refused without being touched, the engine cache's hit, miss and replace
-// rules, and the committed version 1 fixture opened unchanged. The clock is injected.
+// profiles.db at the current version with the Default profile, every ProfileError, the migration
+// framework over longer test lists (in order, one transaction each, a failing script, a newer file
+// refused unmodified), the files refused without being touched, the engine cache's hit, miss and
+// replace rules, the spar sessions saved, read and removed with their profile, the committed
+// version 1 fixture migrated to version 2, and the committed version 2 fixture opened unchanged.
+// The clock is injected.
+#include <chesscoach/opening_store.hpp>
 #include <chesscoach/profile_store.hpp>
+#include <chesscoach/spar.hpp>
+
+#include "spar_fixture.hpp"
 
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <catch2/catch_test_macros.hpp>
@@ -19,14 +25,22 @@
 #include <vector>
 
 using chesscoach::CachedSearch;
+using chesscoach::Color;
 using chesscoach::Key;
 using chesscoach::Migration;
+using chesscoach::OpeningStore;
+using chesscoach::Phase;
 using chesscoach::Profile;
 using chesscoach::ProfileError;
 using chesscoach::ProfileStore;
+using chesscoach::ProviderError;
+using chesscoach::ReplyProvider;
 using chesscoach::SearchLine;
 using chesscoach::SearchResult;
+using chesscoach::SparSession;
+using chesscoach::SparSessionRow;
 using chesscoach::Tier;
+using chesscoach::testing::SparFixture;
 
 namespace {
 
@@ -117,6 +131,62 @@ SearchResult result_of(std::vector<SearchLine> lines) {
 
 constexpr Key start_key = 0x8b26ecc3ca52d0bbULL;
 
+// Plays the scripted moves in turn, for sessions off book.
+class Scripted final : public ReplyProvider {
+  public:
+    explicit Scripted(std::vector<std::string> moves) : moves_(std::move(moves)) {}
+    tl::expected<std::string, ProviderError> reply(const chesscoach::Position& /*at*/) override {
+        if (next_ == moves_.size()) {
+            return tl::unexpected(ProviderError{.message = "no more moves"});
+        }
+        return moves_.at(next_++);
+    }
+
+  private:
+    std::vector<std::string> moves_;
+    std::size_t next_ = 0;
+};
+
+OpeningStore open_openings(const SparFixture& fixture) {
+    auto store = OpeningStore::open(fixture.file());
+    REQUIRE(store.has_value());
+    return std::move(*store);
+}
+
+// A session that ends by mate at move 3, off book from the start (tier 0 of the spar fixture):
+// 1. f3 e5 2. g4 Qh4#, the user playing black.
+SparSession mated_session(const OpeningStore& openings, std::uint64_t seed) {
+    auto session = SparSession::start(openings, Tier::under_1200, Color::black, seed);
+    REQUIRE(session.has_value());
+    Scripted coach({"f2f3", "g2g4"});
+    REQUIRE(session->coach_reply(coach).has_value());
+    REQUIRE(session->play_user_move("e7e5").has_value());
+    REQUIRE(session->coach_reply(coach).has_value());
+    REQUIRE(session->play_user_move("d8h4").has_value());
+    REQUIRE(session->phase() == Phase::ended);
+    return std::move(*session);
+}
+
+// The row the version 2 fixture holds: mated_session(seed 7), saved at 4000, ended at 4100.
+SparSessionRow fixture_session() {
+    return {
+        .id = 1,
+        .profile_id = 1,
+        .tier = Tier::under_1200,
+        .colour = Color::black,
+        .seed = 7,
+        .moves = {"f2f3", "e7e5", "g2g4", "d8h4"},
+        .interruptions = 0,
+        .phase = Phase::ended,
+        .result = "0-1",
+        .started_at = 4000,
+        .ended_at = 4100,
+        .end_move = 25,
+        .min_games = 10,
+        .data_version = 0,
+    };
+}
+
 // Test migrations after the real version 1: version 2 adds a table and calls chesscoach_now(),
 // version 3 alters it.
 constexpr Migration version_2{
@@ -153,25 +223,25 @@ CachedSearch cached(std::vector<SearchLine> lines, std::int64_t created_at) {
 
 } // namespace
 
-TEST_CASE("A new data directory gets profiles.db at version 1 with the Default profile",
+TEST_CASE("A new data directory gets profiles.db at the current version with the Default profile",
           "[profiles]") {
     const DataDir dir("fresh");
     TestClock clock;
     const auto store = open_store(dir, clock);
     CHECK(std::filesystem::is_regular_file(dir.file()));
-    CHECK(store.schema_version() == 1);
-    CHECK(chesscoach::profile_schema_version == 1);
+    CHECK(store.schema_version() == 2);
+    CHECK(chesscoach::profile_schema_version == 2);
     CHECK(store.profiles() ==
           std::vector{
               Profile{.id = 1, .name = "Default", .tier = Tier::r1400_1599, .created_at = 1000}});
 }
 
-TEST_CASE("A zero-length profiles.db is created at version 1", "[profiles]") {
+TEST_CASE("A zero-length profiles.db is created by every script", "[profiles]") {
     const DataDir dir("zero-length");
     write_bytes(dir.file(), "");
     TestClock clock;
     const auto store = open_store(dir, clock);
-    CHECK(store.schema_version() == 1);
+    CHECK(store.schema_version() == 2);
     CHECK(store.profiles().size() == 1);
 }
 
@@ -259,7 +329,8 @@ TEST_CASE("An older file is migrated one version at a time, and a failing script
     SECTION("each later script runs, in order") {
         const DataDir dir("migrate");
         TestClock clock;
-        static_cast<void>(open_store(dir, clock));
+        static_cast<void>(ProfileStore::open(dir.path(), clock.clock(),
+                                             chesscoach::profile_migrations().first(1)));
         clock.now = 7000;
         const auto store = ProfileStore::open(dir.path(), clock.clock(), three_versions());
         REQUIRE(store.has_value());
@@ -275,7 +346,8 @@ TEST_CASE("An older file is migrated one version at a time, and a failing script
     SECTION("a failing script leaves the file at the last version that succeeded") {
         const DataDir dir("migrate-fails");
         TestClock clock;
-        static_cast<void>(open_store(dir, clock));
+        static_cast<void>(ProfileStore::open(dir.path(), clock.clock(),
+                                             chesscoach::profile_migrations().first(1)));
         CHECK(open_error(dir, failing_third()) == ProfileError::migration_failed);
         SQLite::Database db(dir.file());
         CHECK(db.execAndGet("SELECT value FROM meta WHERE key = 'schema_version'").getString() ==
@@ -369,32 +441,135 @@ TEST_CASE("Limited, stopped and empty results are not cached", "[profiles]") {
     CHECK_FALSE(store.cache_lookup(start_key, 1, 0).has_value());
 }
 
-TEST_CASE("The committed version 1 file opens unchanged", "[profiles]") {
+TEST_CASE("The committed version 1 file migrates to version 2 with its rows kept", "[profiles]") {
     const DataDir dir("fixture");
     std::filesystem::create_directories(dir.path());
     std::filesystem::copy_file(std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v1.db",
+                               dir.file());
+    TestClock clock{.now = 9999};
+    const auto store = open_store(dir, clock);
+    CHECK(store.schema_version() == 2);
+    CHECK(store.profiles() ==
+          std::vector{
+              Profile{.id = 1, .name = "Default", .tier = Tier::r1400_1599, .created_at = 1000},
+              Profile{.id = 2, .name = "Club", .tier = Tier::r1800_1999, .created_at = 2000}});
+    CHECK(store.cache_lookup(start_key, 3, 20) == cached(fixture_search().lines, 3000));
+    CHECK(store.spar_sessions(1).empty());
+    CHECK(store.spar_sessions(2).empty());
+}
+
+TEST_CASE("The committed version 2 file opens unchanged", "[profiles]") {
+    const DataDir dir("fixture-v2");
+    std::filesystem::create_directories(dir.path());
+    std::filesystem::copy_file(std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v2.db",
                                dir.file());
     const auto before = read_bytes(dir.file());
     {
         TestClock clock{.now = 9999};
         const auto store = open_store(dir, clock);
-        CHECK(store.schema_version() == 1);
-        CHECK(store.profiles() ==
-              std::vector{
-                  Profile{.id = 1, .name = "Default", .tier = Tier::r1400_1599, .created_at = 1000},
-                  Profile{.id = 2, .name = "Club", .tier = Tier::r1800_1999, .created_at = 2000}});
+        CHECK(store.schema_version() == 2);
+        CHECK(store.profiles().size() == 2);
         CHECK(store.cache_lookup(start_key, 3, 20) == cached(fixture_search().lines, 3000));
+        CHECK(store.spar_sessions(1) == std::vector{fixture_session()});
     }
     CHECK(read_bytes(dir.file()) == before);
 }
 
-// Writes the committed fixture: run by hand with `core_profile_store_test "[.fixture]"` when a
-// version's fixture is made; ctest never runs a hidden test.
+TEST_CASE("Spar sessions are saved, read back and removed with their profile", "[profiles]") {
+    const DataDir dir("spar");
+    TestClock clock;
+    auto store = open_store(dir, clock);
+    const SparFixture fixture("profiles_spar");
+    const OpeningStore openings = open_openings(fixture);
+
+    // An ended session: the mate, its moves, result and both times.
+    const SparSession mated = mated_session(openings, 0xFFFFFFFFFFFFFFFFULL);
+    const auto id = store.save_spar_session(1, mated, 5000, 5100);
+    REQUIRE(id.has_value());
+    SparSessionRow expected = fixture_session();
+    expected.id = *id;
+    expected.seed = 0xFFFFFFFFFFFFFFFFULL; // the bit cast round-trips the top bit
+    expected.started_at = 5000;
+    expected.ended_at = 5100;
+    CHECK(store.spar_session(*id) == expected);
+
+    // A session stopped in book after a Dubious move: its phase, its interruption, no end time.
+    auto stopped = SparSession::start(openings, Tier::r1600_1799, Color::white, 3);
+    REQUIRE(stopped.has_value());
+    REQUIRE(stopped->play_user_move("f2f3").has_value());
+    const auto second = store.save_spar_session(1, *stopped, 6000, 6100);
+    REQUIRE(second.has_value());
+    const auto row = store.spar_session(*second);
+    REQUIRE(row.has_value());
+    if (row) {
+        CHECK(row->phase == Phase::book);
+        CHECK(row->colour == Color::white);
+        CHECK(row->tier == Tier::r1600_1799);
+        CHECK(row->interruptions == 1);
+        CHECK(row->moves == std::vector<std::string>{"f2f3"});
+        CHECK_FALSE(row->result.has_value());
+        CHECK_FALSE(row->ended_at.has_value());
+    }
+    CHECK(store.spar_sessions(1).size() == 2);
+    CHECK_FALSE(store.spar_session(999).has_value());
+    CHECK(store.save_spar_session(77, mated, 1, 2).error() == ProfileError::no_such_profile);
+
+    // Removing a profile removes its sessions, and only its.
+    const auto club = store.create_profile("Club", Tier::r1800_1999);
+    REQUIRE(club.has_value());
+    REQUIRE(store.save_spar_session(club->id, mated, 7000, 7100).has_value());
+    CHECK(store.spar_sessions(club->id).size() == 1);
+    REQUIRE(store.remove_profile(club->id).has_value());
+    CHECK(store.spar_sessions(club->id).empty());
+    CHECK(store.spar_sessions(1).size() == 2);
+}
+
+TEST_CASE("A saved session replays with its own end move and refuses another database",
+          "[profiles]") {
+    const DataDir dir("spar-replay");
+    TestClock clock;
+    auto store = open_store(dir, clock);
+    const SparFixture fixture("profiles_spar_replay", "3");
+    const OpeningStore openings = open_openings(fixture);
+    // A session played to move 2 at min_games 12: 1. Nc3 Nf6 (Nf6's 12 games), stopped there.
+    auto session =
+        SparSession::start(openings, Tier::r1600_1799, Color::white, 11,
+                           chesscoach::SparConfig{.end_move = 2, .sampler = {.min_games = 12}});
+    REQUIRE(session.has_value());
+    REQUIRE(session->play_user_move("b1c3").has_value());
+    Scripted unused({});
+    REQUIRE(session->coach_reply(unused) == "g8f6");
+    REQUIRE(session->phase() == Phase::ended);
+    const auto id = store.save_spar_session(1, *session, 100, 200);
+    REQUIRE(id.has_value());
+    const auto row = store.spar_session(*id);
+    REQUIRE(row.has_value());
+    if (row) {
+        CHECK(row->end_move == 2);
+        CHECK(row->min_games == 12);
+        CHECK(row->data_version == 3);
+        const auto replayed = chesscoach::replay_spar_session(openings, *row);
+        REQUIRE(replayed.has_value());
+        CHECK(*replayed == session->summary());
+        // Another build of the database: refused, its book replies may differ.
+        const SparFixture other("profiles_spar_replay_other", "4");
+        const OpeningStore other_openings = open_openings(other);
+        CHECK(chesscoach::replay_spar_session(other_openings, *row).error() ==
+              chesscoach::SparError::replay_database_mismatch);
+    }
+}
+
+// Writes the committed fixtures: run by hand with `core_profile_store_test "[.fixture]"` when a
+// version's fixture is made; ctest never runs a hidden test. Each writer opens the file with the
+// migrations up to its version only, so it writes the same file whatever version this build is.
 TEST_CASE("Write the version 1 fixture", "[.fixture]") {
     const DataDir dir("fixture-writer");
     TestClock clock;
     {
-        auto store = open_store(dir, clock);
+        auto opened = ProfileStore::open(dir.path(), clock.clock(),
+                                         chesscoach::profile_migrations().first(1));
+        REQUIRE(opened.has_value());
+        auto& store = *opened;
         clock.now = 2000;
         REQUIRE(store.create_profile("Club", Tier::r1800_1999).has_value());
         clock.now = 3000;
@@ -403,5 +578,26 @@ TEST_CASE("Write the version 1 fixture", "[.fixture]") {
     }
     std::filesystem::copy_file(dir.file(),
                                std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v1.db",
+                               std::filesystem::copy_options::overwrite_existing);
+}
+
+TEST_CASE("Write the version 2 fixture", "[.fixture]") {
+    const DataDir dir("fixture-writer-v2");
+    TestClock clock;
+    const SparFixture fixture("profiles_fixture_v2");
+    const OpeningStore openings = open_openings(fixture);
+    {
+        auto opened = ProfileStore::open(dir.path(), clock.clock(),
+                                         chesscoach::profile_migrations().first(2));
+        REQUIRE(opened.has_value());
+        auto& store = *opened;
+        clock.now = 2000;
+        REQUIRE(store.create_profile("Club", Tier::r1800_1999).has_value());
+        clock.now = 3000;
+        REQUIRE(store.cache_store(start_key, 3, fixture_search()).has_value());
+        REQUIRE(store.save_spar_session(1, mated_session(openings, 7), 4000, 4100).has_value());
+    }
+    std::filesystem::copy_file(dir.file(),
+                               std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v2.db",
                                std::filesystem::copy_options::overwrite_existing);
 }

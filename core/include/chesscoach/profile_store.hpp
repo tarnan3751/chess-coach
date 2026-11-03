@@ -1,15 +1,16 @@
 // ProfileStore: profiles.db in the data directory (docs/database.md §12), the one way anything
-// reads or writes the profiles and the engine cache (docs/reference/core.md, **The profile
-// store**). Opened read-write; created at version 1 when absent or zero-length; migrated when
-// older, each migration's script in its own transaction that sets schema_version last; refused,
-// unmodified, when newer or when it is a non-empty file without meta. Timestamps are Unix seconds
-// UTC from an injected clock, so tests are deterministic. Used from one thread at a time. Writes
-// return errors as values; a read that fails after a successful open (an I/O error, a file
-// corrupted on disk) throws std::runtime_error, as OpeningStore's do.
+// reads or writes the profiles, the engine cache and the spar sessions (docs/reference/core.md,
+// **The profile store**). Opened read-write; created at version 1 when absent or zero-length;
+// migrated when older, each migration's script in its own transaction that sets schema_version
+// last; refused, unmodified, when newer or when it is a non-empty file without meta. Timestamps are
+// Unix seconds UTC from an injected clock, so tests are deterministic. Used from one thread at a
+// time. Writes return errors as values; a read that fails after a successful open (an I/O error, a
+// file corrupted on disk) throws std::runtime_error, as OpeningStore's do.
 #pragma once
 
 #include <chesscoach/engine.hpp>
 #include <chesscoach/key.hpp>
+#include <chesscoach/spar.hpp>
 #include <chesscoach/tier.hpp>
 
 #include <tl/expected.hpp>
@@ -40,11 +41,11 @@ struct Migration {
 };
 
 // The real migrations, version 1 first. Version 1 creates meta, profiles and engine_cache, and
-// the profile Default at tier 2.
+// the profile Default at tier 2; version 2 creates spar_sessions (§12.3).
 [[nodiscard]] std::span<const Migration> profile_migrations() noexcept;
 
 // The version this build writes: the last of profile_migrations().
-inline constexpr int profile_schema_version = 1;
+inline constexpr int profile_schema_version = 2;
 
 enum class ProfileError : std::uint8_t {
     unwritable,       // the data directory or profiles.db cannot be created or opened
@@ -75,6 +76,32 @@ struct CachedSearch {
 
     friend bool operator==(const CachedSearch&, const CachedSearch&) = default;
 };
+
+// A saved spar session (§12.3): enough to list it and to replay it (SparSession::replay).
+struct SparSessionRow {
+    std::int64_t id = 0;
+    std::int64_t profile_id = 0;
+    Tier tier{};
+    Color colour = Color::white; // the user's
+    std::uint64_t seed = 0;
+    std::vector<std::string> moves; // UCI, from the start
+    std::int64_t interruptions = 0;
+    Phase phase = Phase::book; // when saved: ended, or where the session stopped
+    std::optional<std::string> result;
+    std::int64_t started_at = 0;
+    std::optional<std::int64_t> ended_at; // set exactly when phase is ended
+    int end_move = 25;                    // the session's SparConfig, which replay needs
+    std::int64_t min_games = 10;
+    std::int64_t data_version = 0; // the openings.db data_version it played against
+
+    friend bool operator==(const SparSessionRow&, const SparSessionRow&) = default;
+};
+
+// Replays a saved session (SparSession::replay) with the end move and min_games it was played
+// with; replay_database_mismatch when the store's data_version is not the one it played against,
+// whose book replies may differ.
+[[nodiscard]] tl::expected<Summary, SparError> replay_spar_session(const OpeningStore& store,
+                                                                   const SparSessionRow& row);
 
 class ProfileStore {
   public:
@@ -114,6 +141,21 @@ class ProfileStore {
     // written and comes back as it is.
     [[nodiscard]] tl::expected<CachedSearch, ProfileError> cache_store(Key key, int lines,
                                                                        const SearchResult& result);
+
+    // §12.3: saves the session under the profile, with its phase now (ended, or where it
+    // stopped), its end move and min_games, and the data_version of the openings.db it plays
+    // against; ended_at is stored only when the session has ended. Returns the session's id;
+    // no_such_profile when the profile does not exist, storage when the write fails. Removing a
+    // profile removes its sessions.
+    [[nodiscard]] tl::expected<std::int64_t, ProfileError>
+    save_spar_session(std::int64_t profile_id, const SparSession& session, std::int64_t started_at,
+                      std::optional<std::int64_t> ended_at);
+
+    // The profile's saved sessions, by id.
+    [[nodiscard]] std::vector<SparSessionRow> spar_sessions(std::int64_t profile_id) const;
+
+    // The saved session with the id, or nullopt.
+    [[nodiscard]] std::optional<SparSessionRow> spar_session(std::int64_t id) const;
 
   private:
     struct Impl;

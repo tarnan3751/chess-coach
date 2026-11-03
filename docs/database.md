@@ -440,11 +440,30 @@ stored ones, in one transaction, only when nothing is stored or its least depth 
 stored least depth; when it is not, the stored rows are kept and returned. The cache, like the
 key, ignores the move counters and the history.
 
-### 12.3 Version 2 (Phase 4): `spar_sessions`, provisional
+### 12.3 Version 2 (Phase 4): `spar_sessions`
 
-Columns as provisional until Phase 4 lands and specifies them here: `id INTEGER PRIMARY KEY`,
-`profile_id` referencing `profiles(id)`, `tier`, `colour`, `seed`, `moves` (UCI, space-separated),
-`started_at`, `ended_at`, and the summary's columns.
+Version 2's script creates `spar_sessions`, one row per saved sparring session, enough to list it
+and to replay it from its seed and moves:
+
+| Column | Type | Null | Meaning |
+|---|---|---|---|
+| `id` | `INTEGER PRIMARY KEY` | no | The session's id |
+| `profile_id` | `INTEGER` | no | `REFERENCES profiles(id) ON DELETE CASCADE`: removing a profile removes its sessions |
+| `tier` | `INTEGER` | no | The tier played at (§4) |
+| `colour` | `INTEGER` | no | The user's colour: 0 white, 1 black |
+| `seed` | `INTEGER` | no | The session's seed, the 64-bit unsigned value bit-cast to the signed integer (§5.2's storage rule) |
+| `moves` | `TEXT` | no | Every move from the start, both sides, UCI (§5.3), separated by spaces; empty for none |
+| `interruptions` | `INTEGER` | no | The coach's interruptions |
+| `phase` | `INTEGER` | no | The session's phase when saved: 0 in book, 1 off book (stopped before its end), 2 ended |
+| `result` | `TEXT` | yes | `1-0`, `0-1` or `1/2-1/2` when the game ended by mate or stalemate, else NULL |
+| `started_at` | `INTEGER` | no | When the session started |
+| `ended_at` | `INTEGER` | yes | When it ended; not NULL exactly when `phase` is 2 |
+| `end_move` | `INTEGER` | no | The move number the session was set to end at |
+| `min_games` | `INTEGER` | no | The sampler's least plays for a candidate (§13) the session used |
+| `data_version` | `INTEGER` | no | The `data_version` (§6.1) of the `openings.db` the session played against |
+
+A saved session is replayed with its own `end_move` and `min_games`, and only against an
+`openings.db` with its `data_version`, since another build may answer with other book moves.
 
 ### 12.4 Version 3 (Phase 5): `repertoire_nodes`, `cards`, `reviews`, provisional
 

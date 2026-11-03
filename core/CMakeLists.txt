@@ -95,7 +95,7 @@ if(BUILD_TESTING)
                       SOURCES tests/position_property_test.cpp tests/random_games.hpp
                       LIBS chesscoach::core rapidcheck)
   chesscoach_add_test(core_profile_store_test MODULE core KIND unit
-                      SOURCES tests/profile_store_test.cpp
+                      SOURCES tests/profile_store_test.cpp tests/spar_fixture.hpp
                       LIBS chesscoach::core SQLiteCpp)
   target_compile_definitions(core_profile_store_test PRIVATE
                              CHESSCOACH_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"

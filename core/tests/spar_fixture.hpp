@@ -61,12 +61,13 @@ inline SparFixtureMove row(std::string_view parent, std::string_view uci, std::s
 // The fixture database in a fresh scratch directory, removed with the object.
 class SparFixture {
   public:
-    explicit SparFixture(std::string_view name)
+    // data_version is meta's (§6.1), which a saved session records.
+    explicit SparFixture(std::string_view name, std::string_view data_version = "0")
         : directory_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / name),
           file_(directory_ / "openings.db") {
         std::filesystem::remove_all(directory_);
         std::filesystem::create_directories(directory_);
-        write();
+        write(data_version);
     }
     SparFixture(const SparFixture&) = delete;
     SparFixture& operator=(const SparFixture&) = delete;
@@ -105,11 +106,14 @@ class SparFixture {
     }
 
   private:
-    void write() const {
+    void write(std::string_view data_version) const {
         // NOLINTNEXTLINE(bugprone-signed-bitwise): SQLiteCpp's flags are ints
         SQLite::Database db(file_, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
         db.exec(openings_schema_sql());
         db.exec("INSERT INTO meta (key, value) VALUES ('schema_version', '1')");
+        SQLite::Statement meta(db, "INSERT INTO meta (key, value) VALUES ('data_version', ?)");
+        meta.bind(1, std::string(data_version));
+        meta.exec();
         const std::vector<std::pair<std::string_view, std::optional<std::int64_t>>> nodes{
             {"", 20},
             {"e4", 30},

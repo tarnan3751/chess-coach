@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
@@ -51,9 +52,29 @@ constexpr std::string_view version_1 =
     ") WITHOUT ROWID;\n"
     "INSERT INTO profiles (name, tier, created_at) VALUES ('Default', 2, chesscoach_now());\n";
 
-constexpr std::array<Migration, 1> migrations{
+// §12.3. A session belongs to a profile and goes with it.
+constexpr std::string_view version_2 =
+    "CREATE TABLE spar_sessions (\n"
+    "    id INTEGER PRIMARY KEY,\n"
+    "    profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,\n"
+    "    tier INTEGER NOT NULL,\n"
+    "    colour INTEGER NOT NULL,\n"
+    "    seed INTEGER NOT NULL,\n"
+    "    moves TEXT NOT NULL,\n"
+    "    interruptions INTEGER NOT NULL,\n"
+    "    phase INTEGER NOT NULL,\n"
+    "    result TEXT,\n"
+    "    started_at INTEGER NOT NULL,\n"
+    "    ended_at INTEGER,\n"
+    "    end_move INTEGER NOT NULL,\n"
+    "    min_games INTEGER NOT NULL,\n"
+    "    data_version INTEGER NOT NULL\n"
+    ");\n";
+
+constexpr std::array<Migration, 2> migrations{
     {
         {.version = 1, .sql = version_1},
+        {.version = 2, .sql = version_2},
     },
 };
 
@@ -115,6 +136,45 @@ std::string join_pv(const std::vector<std::string>& moves) {
 
 int least_depth(const std::vector<SearchLine>& lines) {
     return std::ranges::min(lines, {}, &SearchLine::depth).depth;
+}
+
+constexpr std::string_view spar_columns =
+    "id, profile_id, tier, colour, seed, moves, interruptions, phase, result, started_at, "
+    "ended_at, end_move, min_games, data_version";
+
+// A spar_sessions row as read with spar_columns.
+SparSessionRow spar_row(const SQLite::Statement& query) {
+    const auto id = query.getColumn(0).getInt64();
+    const auto tier = tier_from_index(query.getColumn(2).getInt64());
+    const auto colour = query.getColumn(3).getInt64();
+    const auto phase = query.getColumn(7).getInt64();
+    if (!tier || colour < 0 || colour > 1 || phase < 0 || phase > 2) {
+        throw std::runtime_error("profiles.db: spar session " + std::to_string(id) +
+                                 " has a tier, colour or phase out of range");
+    }
+    SparSessionRow row{
+        .id = id,
+        .profile_id = query.getColumn(1).getInt64(),
+        .tier = *tier,
+        .colour = colour == 0 ? Color::white : Color::black,
+        .seed = std::bit_cast<std::uint64_t>(query.getColumn(4).getInt64()),
+        .moves = split_pv(query.getColumn(5).getString()),
+        .interruptions = query.getColumn(6).getInt64(),
+        .phase = static_cast<Phase>(phase),
+        .result = std::nullopt,
+        .started_at = query.getColumn(9).getInt64(),
+        .ended_at = std::nullopt,
+        .end_move = query.getColumn(11).getInt(),
+        .min_games = query.getColumn(12).getInt64(),
+        .data_version = query.getColumn(13).getInt64(),
+    };
+    if (!query.getColumn(8).isNull()) {
+        row.result = query.getColumn(8).getString();
+    }
+    if (!query.getColumn(10).isNull()) {
+        row.ended_at = query.getColumn(10).getInt64();
+    }
+    return row;
 }
 
 bool is_unique_violation(const SQLite::Exception& error) {
@@ -416,6 +476,77 @@ tl::expected<CachedSearch, ProfileError> ProfileStore::cache_store(Key key, int 
     } catch (const SQLite::Exception&) {
         return tl::unexpected(ProfileError::storage);
     }
+}
+
+tl::expected<std::int64_t, ProfileError>
+ProfileStore::save_spar_session(std::int64_t profile_id, const SparSession& session,
+                                std::int64_t started_at, std::optional<std::int64_t> ended_at) {
+    try {
+        if (!impl_->profile(profile_id)) {
+            return tl::unexpected(ProfileError::no_such_profile);
+        }
+        const Summary summary = session.summary();
+        const bool ended = session.phase() == Phase::ended;
+        SQLite::Statement insert(
+            impl_->db, "INSERT INTO spar_sessions (profile_id, tier, colour, seed, moves, "
+                       "interruptions, phase, result, started_at, ended_at, end_move, min_games, "
+                       "data_version) "
+                       "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)");
+        insert.bind(1, profile_id);
+        insert.bind(2, tier_index(session.tier()));
+        insert.bind(3, session.user_colour() == Color::white ? 0 : 1);
+        insert.bind(4, std::bit_cast<std::int64_t>(summary.seed));
+        insert.bind(5, join_pv(summary.moves));
+        insert.bind(6, static_cast<std::int64_t>(summary.interruptions.size()));
+        insert.bind(7, static_cast<int>(session.phase()));
+        if (summary.result) {
+            insert.bind(8, *summary.result);
+        }
+        insert.bind(9, started_at);
+        if (ended && ended_at) {
+            insert.bind(10, *ended_at);
+        }
+        insert.bind(11, session.config().end_move);
+        insert.bind(12, session.config().sampler.min_games);
+        insert.bind(13, session.data_version());
+        insert.exec();
+        return impl_->db.getLastInsertRowid();
+    } catch (const SQLite::Exception&) {
+        return tl::unexpected(ProfileError::storage);
+    }
+}
+
+std::vector<SparSessionRow> ProfileStore::spar_sessions(std::int64_t profile_id) const {
+    SQLite::Statement query(impl_->db, "SELECT " + std::string(spar_columns) +
+                                           " FROM spar_sessions WHERE profile_id = ?1 ORDER BY id");
+    query.bind(1, profile_id);
+    std::vector<SparSessionRow> rows;
+    while (query.executeStep()) {
+        rows.push_back(spar_row(query));
+    }
+    return rows;
+}
+
+std::optional<SparSessionRow> ProfileStore::spar_session(std::int64_t id) const {
+    SQLite::Statement query(impl_->db, "SELECT " + std::string(spar_columns) +
+                                           " FROM spar_sessions WHERE id = ?1");
+    query.bind(1, id);
+    if (!query.executeStep()) {
+        return std::nullopt;
+    }
+    return spar_row(query);
+}
+
+tl::expected<Summary, SparError> replay_spar_session(const OpeningStore& store,
+                                                     const SparSessionRow& row) {
+    if (opening_data_version(store) != row.data_version) {
+        return tl::unexpected(SparError::replay_database_mismatch);
+    }
+    return SparSession::replay(store, row.tier, row.colour, row.seed, row.moves,
+                               SparConfig{
+                                   .end_move = row.end_move,
+                                   .sampler = {.min_games = row.min_games},
+                               });
 }
 
 } // namespace chesscoach
