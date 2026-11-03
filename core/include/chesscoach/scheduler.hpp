@@ -5,11 +5,15 @@
 // bounded by the caller (the CLI takes times up to the end of the year 9999), so a due date, the
 // time plus at most 36500 days, stays far from the limits of 64-bit arithmetic. The ease and the
 // interval are capped, so their integer arithmetic is bounded however many reviews a card gets;
-// repetitions counts passes in an int, which a person's reviews cannot overflow.
+// repetitions counts passes in an int, which a person's reviews cannot overflow. A stored card
+// may hold anything a file changed by other means gives it, so review brings its ease into
+// [minimum_ease_milli, maximum_ease_milli], its repetitions below INT_MAX and its interval into
+// [1, maximum_interval_days] before any arithmetic.
 #pragma once
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <span>
 
 namespace chesscoach {
@@ -54,29 +58,33 @@ struct Review {
 // before this review (SuperMemo's order), at most maximum_interval_days, and one repetition more.
 // The ease, for every grade q: ease_milli += 100 - (5 - q) * (80 + (5 - q) * 20), at least
 // minimum_ease_milli and at most maximum_ease_milli. Due: reviewed_at plus the interval in days,
-// so never before the review.
+// so never before the review. The card's ease is first clamped into its range, its repetitions
+// into [0, INT_MAX - 1] and its interval into [1, maximum_interval_days], which changes nothing
+// for a card the scheduler made.
 [[nodiscard]] constexpr CardState review(const CardState& card, Grade grade,
                                          std::int64_t reviewed_at) noexcept {
     const int quality = static_cast<int>(grade);
     const int miss = 5 - quality;
+    const int stored_ease = std::clamp(card.ease_milli, minimum_ease_milli, maximum_ease_milli);
+    const int repetitions = std::clamp(card.repetitions, 0, std::numeric_limits<int>::max() - 1);
+    const int interval = std::clamp(card.interval_days, 1, maximum_interval_days);
     CardState next = card;
     if (grade == Grade::again) {
         next.repetitions = 0;
         next.interval_days = 1;
     } else {
-        if (card.repetitions == 0) {
+        if (repetitions == 0) {
             next.interval_days = 1;
-        } else if (card.repetitions == 1) {
+        } else if (repetitions == 1) {
             next.interval_days = 6;
         } else {
-            const std::int64_t grown =
-                ((std::int64_t{card.interval_days} * card.ease_milli) + 500) / 1000;
+            const std::int64_t grown = ((std::int64_t{interval} * stored_ease) + 500) / 1000;
             next.interval_days =
                 static_cast<int>(grown < maximum_interval_days ? grown : maximum_interval_days);
         }
-        next.repetitions = card.repetitions + 1;
+        next.repetitions = repetitions + 1;
     }
-    const int ease = card.ease_milli + 100 - (miss * (80 + (miss * 20)));
+    const int ease = stored_ease + 100 - (miss * (80 + (miss * 20)));
     next.ease_milli = std::clamp(ease, minimum_ease_milli, maximum_ease_milli);
     next.due_at = reviewed_at + (std::int64_t{next.interval_days} * seconds_per_day);
     return next;

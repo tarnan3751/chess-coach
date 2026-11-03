@@ -555,8 +555,11 @@ integer arithmetic bounded however many `easy` reviews a card gets: the ease rea
 75th, and the interval times the ease is at most 365,000,000. `repetitions` counts passes in an
 `int`, which no person's reviews overflow. Times are the caller's and bounded by it (the CLI's
 `--at` stops at the end of the year 9999), so a due date, a time plus at most 36500 days, stays
-far inside 64 bits. Good, good, good, again, good gives intervals of 1, 6, 15, 1 and 1 days with
-eases 2500, 2500, 2500, 1960 and 1960.
+far inside 64 bits. A stored card holds what its file holds, which a file changed by other means
+may put out of range, so `review` first clamps the card's ease into [1300, 10000], its
+repetitions into [0, INT_MAX − 1] and its interval into [1, 36500]; a card the scheduler made is
+already there, so nothing it computes changes. Good, good, good, again, good gives intervals of
+1, 6, 15, 1 and 1 days with eases 2500, 2500, 2500, 1960 and 1960.
 
 ## Repertoire coverage
 

@@ -1143,6 +1143,23 @@ TEST_CASE("An import never takes the data directory's staging file as its source
     CHECK_FALSE(std::filesystem::exists(dir.file()));
 }
 
+TEST_CASE("A card stored out of range is reviewed without overflow", "[profiles][repertoire]") {
+    const DataDir dir("out-of-range-card");
+    TestClock clock{.now = 5000};
+    auto store = open_store(dir, clock);
+    REQUIRE(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
+    const Card card = card_at(store, 1, Color::white, white_start().key);
+    {
+        SQLite::Database db(dir.file(), SQLite::OPEN_READWRITE);
+        db.exec("UPDATE cards SET ease_milli = 2147483647, repetitions = 2147483647");
+    }
+    const auto reviewed =
+        store.record_review(1, Color::white, card.id, card.key, Grade::easy, 6000);
+    REQUIRE(reviewed.has_value());
+    CHECK(reviewed->state.ease_milli == 10000);
+    CHECK(reviewed->state.repetitions == 2147483647);
+}
+
 // Writes the committed fixtures: run by hand with `core_profile_store_test "[.fixture]"` when a
 // version's fixture is made; ctest never runs a hidden test. Each writer opens the file with the
 // migrations up to its version only, so it writes the same file whatever version this build is.

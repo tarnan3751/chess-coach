@@ -1,6 +1,7 @@
 // Unit tests for chesscoach/scheduler.hpp (core; unit): SM-2's numbers worked out by hand, checked
 // at compile time and at run time: a new card, a sequence of good and again reviews, hard and
-// easy, the ease floor and cap, the interval cap, and when a card is due.
+// easy, the ease floor and cap, the interval cap, a stored card out of range, and when a card is
+// due.
 #include <chesscoach/scheduler.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 using chesscoach::CardState;
@@ -43,6 +45,27 @@ static_assert(chesscoach::replay(created, history) == CardState{
                                                           .ease_milli = 1960,
                                                           .due_at = day(24),
                                                       });
+
+// A stored card out of every range a file changed by other means could give it: reviewed without
+// overflow (a constant expression, so the compiler would reject undefined behaviour), the ease
+// clamped first, the repetitions kept below INT_MAX and the interval brought into its range.
+constexpr CardState out_of_range{
+    .repetitions = std::numeric_limits<int>::max(),
+    .interval_days = 36500,
+    .ease_milli = std::numeric_limits<int>::max(),
+    .due_at = 0,
+};
+static_assert(chesscoach::review(out_of_range, Grade::easy, 0).ease_milli == 10000);
+static_assert(chesscoach::review(out_of_range, Grade::easy, 0).repetitions ==
+              std::numeric_limits<int>::max());
+// A stored interval below one day grows from one day: round(1 × 2.5) half up is 3.
+constexpr CardState negative_interval{
+    .repetitions = 5,
+    .interval_days = std::numeric_limits<int>::min(),
+    .ease_milli = 2500,
+    .due_at = 0,
+};
+static_assert(chesscoach::review(negative_interval, Grade::good, 0).interval_days == 3);
 
 } // namespace
 
@@ -124,6 +147,33 @@ TEST_CASE("The ease stops at 10000, and falls from there", "[scheduler]") {
         card = chesscoach::review(card, Grade::easy, card.due_at);
     }
     CHECK(card.ease_milli == 10000);
+}
+
+TEST_CASE("A stored card out of range is brought into range before its review", "[scheduler]") {
+    const auto easy = chesscoach::review(out_of_range, Grade::easy, created);
+    CHECK(easy.ease_milli == 10000);
+    CHECK(easy.repetitions == std::numeric_limits<int>::max());
+    CHECK(easy.interval_days == 36500);
+    CHECK(easy.due_at == created + (36500 * seconds_per_day));
+    // Below the floor, and negative repetitions: a first pass from the floor.
+    constexpr CardState below{
+        .repetitions = -5,
+        .interval_days = 0,
+        .ease_milli = std::numeric_limits<int>::min(),
+        .due_at = 0,
+    };
+    const auto good = chesscoach::review(below, Grade::good, created);
+    CHECK(good.ease_milli == 1300);
+    CHECK(good.repetitions == 1);
+    CHECK(good.interval_days == 1);
+    CHECK(chesscoach::review(below, Grade::again, created).ease_milli == 1300);
+    // An interval out of range: INT_MIN grows from one day, INT_MAX stops at the cap.
+    const auto from_one = chesscoach::review(negative_interval, Grade::good, created);
+    CHECK(from_one.interval_days == 3);
+    CHECK(from_one.due_at == created + (3 * seconds_per_day));
+    CardState too_long = negative_interval;
+    too_long.interval_days = std::numeric_limits<int>::max();
+    CHECK(chesscoach::review(too_long, Grade::good, created).interval_days == 36500);
 }
 
 TEST_CASE("The interval stops at 36500 days", "[scheduler]") {
