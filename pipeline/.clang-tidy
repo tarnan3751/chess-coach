@@ -1,0 +1,9 @@
+# pipeline's translation units include chess-library's chess.hpp (src/game_scanner.cpp, for the
+# PGN parser), and its tests Catch2's headers; the static analyzer follows our calls into them
+# and reports, inside the headers, enum casts and an array index it cannot prove in range. A
+# NOLINT cannot sit in a header we do not own, so the two path-sensitive checks core turns off
+# for the same reason (core/.clang-tidy) are off here too; everything else is the root's.
+InheritParentConfig: true
+Checks: >
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-security.ArrayBound
