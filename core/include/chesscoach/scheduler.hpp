@@ -1,9 +1,14 @@
 // The spaced-repetition scheduler: SM-2 (PLAN.md §5.2, §11) as pure functions over a card's
 // integer state, so a card's history replays to exactly the same state on every platform
 // (docs/reference/core.md, **The scheduler**). The numbers are tier A; FSRS may later replace the
-// rules behind these same functions. No clock: every time is given, in Unix seconds UTC.
+// rules behind these same functions. No clock: every time is given, in Unix seconds UTC, and is
+// bounded by the caller (the CLI takes times up to the end of the year 9999), so a due date, the
+// time plus at most 36500 days, stays far from the limits of 64-bit arithmetic. The ease and the
+// interval are capped, so their integer arithmetic is bounded however many reviews a card gets;
+// repetitions counts passes in an int, which a person's reviews cannot overflow.
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <span>
 
@@ -12,6 +17,7 @@ namespace chesscoach {
 inline constexpr std::int64_t seconds_per_day = 86400;
 inline constexpr int initial_ease_milli = 2500;     // SM-2's starting E-Factor, 2.5
 inline constexpr int minimum_ease_milli = 1300;     // SM-2's floor, 1.3
+inline constexpr int maximum_ease_milli = 10000;    // 10.0: keeps the ease an int, ours not SM-2's
 inline constexpr int maximum_interval_days = 36500; // keeps the integer arithmetic bounded
 
 // SM-2's quality of a recall; again fails, the others pass. The values are what is stored.
@@ -47,7 +53,8 @@ struct Review {
 // pass, 6 after the second, then round(interval × ease) half up in integers, with the ease from
 // before this review (SuperMemo's order), at most maximum_interval_days, and one repetition more.
 // The ease, for every grade q: ease_milli += 100 - (5 - q) * (80 + (5 - q) * 20), at least
-// minimum_ease_milli. Due: reviewed_at plus the interval in days, so never before the review.
+// minimum_ease_milli and at most maximum_ease_milli. Due: reviewed_at plus the interval in days,
+// so never before the review.
 [[nodiscard]] constexpr CardState review(const CardState& card, Grade grade,
                                          std::int64_t reviewed_at) noexcept {
     const int quality = static_cast<int>(grade);
@@ -70,7 +77,7 @@ struct Review {
         next.repetitions = card.repetitions + 1;
     }
     const int ease = card.ease_milli + 100 - (miss * (80 + (miss * 20)));
-    next.ease_milli = ease < minimum_ease_milli ? minimum_ease_milli : ease;
+    next.ease_milli = std::clamp(ease, minimum_ease_milli, maximum_ease_milli);
     next.due_at = reviewed_at + (std::int64_t{next.interval_days} * seconds_per_day);
     return next;
 }

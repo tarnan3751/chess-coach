@@ -510,16 +510,21 @@ the rules behind the same functions. No clock: every time is given, in Unix seco
     half up, in 64-bit integers) with the ease from before this review (SuperMemo's order), at
     most `maximum_interval_days`, and one repetition more;
   - the ease, for every grade q: `ease_milli += 100 - (5 - q) * (80 + (5 - q) * 20)`, so `easy`
-    +100, `good` 0, `hard` −140 and `again` −540, at least `minimum_ease_milli`;
+    +100, `good` 0, `hard` −140 and `again` −540, at least `minimum_ease_milli` and at most
+    `maximum_ease_milli`;
   - `due_at = reviewed_at + interval_days * 86400`, so never before the review.
 - `replay(created_at, history)` is `new_card` followed by `review` of each entry; `is_due(card,
   now)` is `now >= due_at`.
 
-The numbers are tier A: the starting ease 2500, the floor 1300, the 100, 80 and 20 of the ease
-rule, the first intervals 1 and 6, the rounding, 86400 seconds a day, and the cap of 36500 days
-(100 years), which keeps the arithmetic bounded however many `easy` reviews a card gets. Good,
-good, good, again, good gives intervals of 1, 6, 15, 1 and 1 days with eases 2500, 2500, 2500,
-1960 and 1960.
+The numbers are tier A: the starting ease 2500, the floor 1300, the cap of 10000 (an E-Factor of
+10.0, ours, not SM-2's), the 100, 80 and 20 of the ease rule, the first intervals 1 and 6, the
+rounding, 86400 seconds a day, and the cap of 36500 days (100 years). The two caps keep the
+integer arithmetic bounded however many `easy` reviews a card gets: the ease reaches 10000 at the
+75th, and the interval times the ease is at most 365,000,000. `repetitions` counts passes in an
+`int`, which no person's reviews overflow. Times are the caller's and bounded by it (the CLI's
+`--at` stops at the end of the year 9999), so a due date, a time plus at most 36500 days, stays
+far inside 64 bits. Good, good, good, again, good gives intervals of 1, 6, 15, 1 and 1 days with
+eases 2500, 2500, 2500, 1960 and 1960.
 
 ## Repertoire coverage
 
@@ -607,8 +612,8 @@ position without candidates, a mate's result, the provider's failures, the repla
 calls out of turn) and `spar_property_test` (sessions from generated seeds, colours, end moves and
 user moves replay to the same summary); `engine_reply_provider_test` (the Elo per tier, the limited
 one-line search the fake engine receives, the best move, an engine failure); `scheduler_test` (a
-hand-computed sequence, also checked at compile time, `hard` and `easy`, the ease floor, the
-interval cap, when a card is due) and `scheduler_property_test` (over random histories: intervals
+hand-computed sequence, also checked at compile time, `hard` and `easy`, the ease floor and cap,
+the interval cap, when a card is due) and `scheduler_property_test` (over random histories: intervals
 grow on passes and reset on a failure, due never before creation or review, the bounds, replay
 equals the fold); `repertoire_test` (coverage worked out by hand on small stores: complete to a
 depth, a gap, a black repertoire, a transposition, truncation, the walk's ends, an illegal choice,

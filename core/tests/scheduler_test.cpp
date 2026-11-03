@@ -1,10 +1,11 @@
 // Unit tests for chesscoach/scheduler.hpp (core; unit): SM-2's numbers worked out by hand, checked
 // at compile time and at run time: a new card, a sequence of good and again reviews, hard and
-// easy, the ease floor, the interval cap, and when a card is due.
+// easy, the ease floor and cap, the interval cap, and when a card is due.
 #include <chesscoach/scheduler.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -101,6 +102,28 @@ TEST_CASE("The ease never falls below 1300", "[scheduler]") {
     CHECK(card.ease_milli == 1300);
     CHECK(card.interval_days == 1);
     CHECK(card.repetitions == 0);
+}
+
+TEST_CASE("The ease stops at 10000, and falls from there", "[scheduler]") {
+    auto card = chesscoach::new_card(created);
+    std::int64_t now = created;
+    // 2500 + 100 per easy review reaches 10000 at the 75th, and stays.
+    for (int i = 0; i < 100; ++i) {
+        card = chesscoach::review(card, Grade::easy, now);
+        now = card.due_at;
+        CHECK(card.ease_milli == std::min(10000, 2500 + ((i + 1) * 100)));
+    }
+    CHECK(card.interval_days == 36500);
+    // An again takes 540 off the cap.
+    card = chesscoach::review(card, Grade::again, now);
+    CHECK(card.ease_milli == 9460);
+    // Good keeps it, and easy brings it back to the cap.
+    card = chesscoach::review(card, Grade::good, card.due_at);
+    CHECK(card.ease_milli == 9460);
+    for (int i = 0; i < 6; ++i) {
+        card = chesscoach::review(card, Grade::easy, card.due_at);
+    }
+    CHECK(card.ease_milli == 10000);
 }
 
 TEST_CASE("The interval stops at 36500 days", "[scheduler]") {

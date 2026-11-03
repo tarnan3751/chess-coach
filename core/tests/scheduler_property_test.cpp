@@ -1,13 +1,15 @@
 // Property tests for chesscoach/scheduler.hpp (core; property; PLAN.md §7 Phase 5's acceptance):
 // over random histories of grades at non-decreasing times, intervals grow on consecutive passes
 // and reset to a day on a failure, a card is never due before its creation or its last review,
-// the ease stays at or above its floor and the interval at or below its cap, and replaying a
-// history gives the same state as reviewing it one review at a time.
+// the ease stays between its floor and its cap and the interval at or below its cap, long runs of
+// easy reviews (run under UBSan by the gate) stop at both caps, and replaying a history gives the
+// same state as reviewing it one review at a time.
 #include <chesscoach/scheduler.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <rapidcheck.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -54,6 +56,7 @@ TEST_CASE("Reviews keep the scheduler's invariants", "[scheduler][property]") {
             RC_ASSERT(card.due_at ==
                       entry.reviewed_at + (std::int64_t{card.interval_days} * 86400));
             RC_ASSERT(card.ease_milli >= chesscoach::minimum_ease_milli);
+            RC_ASSERT(card.ease_milli <= chesscoach::maximum_ease_milli);
             RC_ASSERT(card.interval_days >= 1);
             RC_ASSERT(card.interval_days <= chesscoach::maximum_interval_days);
             if (entry.grade == Grade::again) {
@@ -84,6 +87,8 @@ TEST_CASE("Long runs of easy reviews stay within the cap", "[scheduler][property
             card = chesscoach::review(card, Grade::easy, card.due_at);
             RC_ASSERT(card.interval_days <= chesscoach::maximum_interval_days);
         }
-        RC_ASSERT(card.ease_milli == chesscoach::initial_ease_milli + (reviews * 100));
+        RC_ASSERT(card.ease_milli == std::min(chesscoach::maximum_ease_milli,
+                                              chesscoach::initial_ease_milli + (reviews * 100)));
+        RC_ASSERT(card.repetitions == reviews);
     }));
 }
