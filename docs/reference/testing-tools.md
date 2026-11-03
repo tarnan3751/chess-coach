@@ -148,8 +148,10 @@ closing comments are added. Both CI jobs and the dev machine run clang-format an
 of the same major version: Homebrew's `llvm` and `clang-format` on macOS, and on Ubuntu the
 `clang-format` and `clang-tidy` wheels from PyPI pinned to the same major (Ubuntu's own
 packages are a major behind, and apt.llvm.org failed to resolve on the runners), with Ubuntu's
-`clang-tools` supplying only the `run-clang-tidy` driver script; when Homebrew moves to a new
-major, the pinned wheel versions move with it.
+`clang-tools` supplying only the `run-clang-tidy` driver script, which the gate points at the
+`clang-tidy` on the PATH with `-clang-tidy-binary` (the versioned script otherwise runs its own
+`clang-tidy-18`, which is how a green macOS job and a red Ubuntu job once disagreed); when
+Homebrew moves to a new major, the pinned wheel versions move with it.
 
 `.clang-tidy` enables `bugprone-*`, `cert-*`, `clang-analyzer-*`, `concurrency-*`,
 `cppcoreguidelines-*`, `misc-*`, `modernize-*`, `performance-*`, `portability-*` and

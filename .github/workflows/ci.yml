@@ -40,8 +40,9 @@ jobs:
           # Homebrew's llvm on macOS and on the dev machine (docs/reference/testing-tools.md,
           # **CI**), so the two jobs and the local gate format and lint identically; Ubuntu's own
           # packages are a major behind, and apt.llvm.org failed to resolve on the runners twice.
-          # Ubuntu's clang-tools supplies only run-clang-tidy, the driver script, which runs the
-          # clang-tidy first on the PATH. The compiler stays GCC.
+          # Ubuntu's clang-tools supplies only run-clang-tidy, the driver script; the gate tells
+          # it which clang-tidy to run, since the versioned script defaults to clang-tidy-18.
+          # The compiler stays GCC.
           sudo apt-get update
           sudo apt-get install -y ninja-build clang-tools qt6-base-dev qt6-svg-dev \
             libgl1-mesa-dev stockfish
