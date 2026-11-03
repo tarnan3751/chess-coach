@@ -250,6 +250,22 @@ class ProfileStore {
     // The card's reviews in the order they were applied.
     [[nodiscard]] std::vector<Review> card_history(std::int64_t card_id) const;
 
+    // §12.5: writes a consistent copy of data_dir's profiles.db, opened (created or migrated) as
+    // open does, to destination with SQLite's backup API; unwritable when destination exists or
+    // cannot be written.
+    [[nodiscard]] static tl::expected<void, ProfileError>
+    export_profiles(const std::filesystem::path& data_dir,
+                    const std::filesystem::path& destination);
+
+    // §12.5: replaces data_dir's profiles.db with source, migrated: refused unmodified unless the
+    // source is SQLite with meta and a decimal schema_version (not_profiles) at most this build's
+    // (newer_version); the copy is migrated as profiles.db.importing first, then the current file
+    // becomes profiles.db.previous and the copy profiles.db. No store may hold data_dir's file
+    // open.
+    [[nodiscard]] static tl::expected<void, ProfileError>
+    import_profiles(const std::filesystem::path& data_dir, const std::filesystem::path& source,
+                    Clock clock = system_clock_seconds);
+
   private:
     struct Impl;
     explicit ProfileStore(std::unique_ptr<Impl> impl);

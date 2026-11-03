@@ -513,6 +513,16 @@ node whose move changes keeps its card's `id` but the card's move changes, its r
 deleted and its state and `created_at` restart; a removed node's card is deleted with its
 reviews. A review applies the scheduler to the card and inserts the review in one transaction.
 
+### 12.5 Export and import
+
+A profile export is a `profiles.db` file, at the exporting build's schema version, written with
+SQLite's backup API so that it is consistent even while the store is open; an export never
+overwrites an existing file. Importing a file refuses one that is not SQLite with a `meta` table
+and a decimal `schema_version` (§12.1) and one newer than the importing build, all without
+modifying anything; it copies the file into the data directory as `profiles.db.importing`, opens
+that copy, which migrates it, then renames the current `profiles.db` to `profiles.db.previous`,
+replacing any earlier one, and the copy to `profiles.db`. The previous file is the one-step undo.
+
 ## 13. Sampler and score inputs
 
 **Sampler defaults.** At a position and a tier, the candidates are the position's `moves` rows at

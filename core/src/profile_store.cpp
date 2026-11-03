@@ -5,6 +5,7 @@
 // into the store.
 #include <chesscoach/profile_store.hpp>
 
+#include <SQLiteCpp/Backup.h>
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <sqlite3.h>
 
@@ -350,6 +351,11 @@ void insert_node(const SQLite::Database& db, std::int64_t profile_id, Color colo
 }
 
 bool unsigned_key_before(const Card& a, const Card& b) { return a.key < b.key; }
+
+// SQLite's open flags are ints, combined with | as its API documents.
+int read_write_create() {
+    return SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE; // NOLINT(bugprone-signed-bitwise)
+}
 
 } // namespace
 
@@ -962,6 +968,88 @@ std::vector<Review> ProfileStore::card_history(std::int64_t card_id) const {
         });
     }
     return history;
+}
+
+tl::expected<void, ProfileError>
+ProfileStore::export_profiles(const std::filesystem::path& data_dir,
+                              const std::filesystem::path& destination) {
+    std::error_code error;
+    if (std::filesystem::exists(destination, error)) {
+        return tl::unexpected(ProfileError::unwritable);
+    }
+    auto store = open(data_dir);
+    if (!store) {
+        return tl::unexpected(store.error());
+    }
+    try {
+        SQLite::Database copy(destination, read_write_create());
+        SQLite::Backup backup(copy, store->impl_->db);
+        backup.executeStep();
+        return {};
+    } catch (const SQLite::Exception&) {
+        std::filesystem::remove(destination, error);
+        return tl::unexpected(ProfileError::unwritable);
+    }
+}
+
+tl::expected<void, ProfileError>
+ProfileStore::import_profiles(const std::filesystem::path& data_dir,
+                              const std::filesystem::path& source, Clock clock) {
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(source, error)) {
+        return tl::unexpected(ProfileError::not_profiles);
+    }
+    try {
+        const SQLite::Database file(source, SQLite::OPEN_READONLY);
+        if (!file.tableExists("meta")) {
+            return tl::unexpected(ProfileError::not_profiles);
+        }
+        const auto version = read_version(file);
+        if (!version) {
+            return tl::unexpected(ProfileError::not_profiles);
+        }
+        if (*version > profile_schema_version) {
+            return tl::unexpected(ProfileError::newer_version);
+        }
+    } catch (const SQLite::Exception&) {
+        return tl::unexpected(ProfileError::not_profiles);
+    }
+
+    std::filesystem::create_directories(data_dir, error);
+    if (error) {
+        return tl::unexpected(ProfileError::unwritable);
+    }
+    const auto importing = data_dir / "profiles.db.importing";
+    std::filesystem::remove(importing, error);
+    try {
+        SQLite::Database from(source, SQLite::OPEN_READONLY);
+        SQLite::Database copy(importing, read_write_create());
+        SQLite::Backup backup(copy, from);
+        backup.executeStep();
+    } catch (const SQLite::Exception&) {
+        std::filesystem::remove(importing, error);
+        return tl::unexpected(ProfileError::unwritable);
+    }
+    {
+        auto migrated = open_file(importing, std::move(clock), profile_migrations());
+        if (!migrated) {
+            std::filesystem::remove(importing, error);
+            return tl::unexpected(migrated.error());
+        }
+    }
+    const auto current = data_dir / "profiles.db";
+    if (std::filesystem::exists(current, error)) {
+        std::filesystem::rename(current, data_dir / "profiles.db.previous", error);
+        if (error) {
+            std::filesystem::remove(importing, error);
+            return tl::unexpected(ProfileError::unwritable);
+        }
+    }
+    std::filesystem::rename(importing, current, error);
+    if (error) {
+        return tl::unexpected(ProfileError::unwritable);
+    }
+    return {};
 }
 
 } // namespace chesscoach

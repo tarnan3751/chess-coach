@@ -4,8 +4,9 @@
 // refused unmodified), the files refused without being touched, the engine cache's hit, miss and
 // replace rules, the spar sessions saved, read and removed with their profile, the repertoire's
 // choices and the cards they keep in step (§12.4: validation, the card rules, the import, the
-// repair, the due order, the reviews), the committed version 1 and 2 fixtures migrated to version
-// 3, and the committed version 3 fixture opened unchanged. The clock is injected.
+// repair, the due order, the reviews), the export and the import (§12.5) with their refusals, the
+// committed version 1 and 2 fixtures migrated to version 3, and the committed version 3 fixture
+// opened unchanged. The clock is injected.
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
@@ -890,6 +891,101 @@ TEST_CASE("Removing a profile removes its repertoires, cards and reviews", "[pro
     CHECK(store.card_history(card.id).empty());
     CHECK(store.repertoire_nodes(1, Color::white).size() == 1);
     CHECK(store.cards(1, Color::white).size() == 1);
+}
+
+TEST_CASE("An export is a copy, and importing it replaces profiles.db and keeps the previous",
+          "[profiles][export]") {
+    const DataDir from("export-from");
+    const DataDir to("export-to");
+    const auto copy = from.path() / "export.db";
+    TestClock clock{.now = 5000};
+    std::int64_t card_id = 0;
+    {
+        // Exported while the store is open, as the app would.
+        auto store = open_store(from, clock);
+        REQUIRE(store.create_profile("Club", Tier::r1800_1999).has_value());
+        REQUIRE(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
+        card_id = card_at(store, 1, Color::white, white_start().key).id;
+        REQUIRE(store.record_review(card_id, Grade::good, 6000).has_value());
+        REQUIRE(ProfileStore::export_profiles(from.path(), copy).has_value());
+        // Never over an existing file.
+        CHECK(ProfileStore::export_profiles(from.path(), copy).error() == ProfileError::unwritable);
+        CHECK(ProfileStore::export_profiles(from.path(), from.path() / "no" / "such" / "dir.db")
+                  .error() == ProfileError::unwritable);
+    }
+    {
+        auto store = open_store(to, clock);
+        REQUIRE(store.create_profile("Mine", Tier::under_1200).has_value());
+    }
+    const auto replaced = read_bytes(to.file());
+    REQUIRE(ProfileStore::import_profiles(to.path(), copy, clock.clock()).has_value());
+    CHECK(read_bytes(to.path() / "profiles.db.previous") == replaced);
+    CHECK_FALSE(std::filesystem::exists(to.path() / "profiles.db.importing"));
+
+    const auto imported = open_store(to, clock);
+    const auto original = open_store(from, clock);
+    CHECK(imported.profiles() == original.profiles());
+    CHECK(imported.repertoire_nodes(1, Color::white) == original.repertoire_nodes(1, Color::white));
+    CHECK(imported.cards(1, Color::white) == original.cards(1, Color::white));
+    CHECK(imported.card_history(card_id) == original.card_history(card_id));
+    CHECK(imported.card_history(card_id).size() == 1);
+}
+
+TEST_CASE("An older file is migrated as it is imported, and the source is left as it was",
+          "[profiles][export]") {
+    const DataDir dir("import-v1");
+    const auto source = std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v1.db";
+    const auto before = read_bytes(source);
+    TestClock clock{.now = 9999};
+    REQUIRE(ProfileStore::import_profiles(dir.path(), source, clock.clock()).has_value());
+    CHECK(read_bytes(source) == before);
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.previous"));
+    const auto store = open_store(dir, clock);
+    CHECK(store.schema_version() == 3);
+    CHECK(store.profiles().size() == 2);
+    CHECK(store.cache_lookup(start_key, 3, 20) == cached(fixture_search().lines, 3000));
+}
+
+TEST_CASE("An import that cannot be used is refused and changes nothing", "[profiles][export]") {
+    const DataDir dir("import-refused");
+    const DataDir sources("import-sources");
+    std::filesystem::create_directories(sources.path());
+    TestClock clock;
+    {
+        static_cast<void>(open_store(dir, clock));
+    }
+    const auto before = read_bytes(dir.file());
+    const auto source = sources.path() / "source.db";
+    ProfileError expected = ProfileError::not_profiles;
+
+    SECTION("missing") {}
+    SECTION("not SQLite") { write_bytes(source, "a shopping list\n"); }
+    SECTION("SQLite without meta") {
+        SQLite::Database db(source, create_flags());
+        db.exec("CREATE TABLE notes (text TEXT)");
+    }
+    SECTION("a version that is not decimal") {
+        SQLite::Database db(source, create_flags());
+        db.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+                "INSERT INTO meta VALUES ('schema_version', 'three')");
+    }
+    SECTION("newer") {
+        SQLite::Database db(source, create_flags());
+        db.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+                "INSERT INTO meta VALUES ('schema_version', '4')");
+        expected = ProfileError::newer_version;
+    }
+    SECTION("a migration that fails") {
+        std::filesystem::copy_file(std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v2.db",
+                                   source);
+        SQLite::Database db(source, SQLite::OPEN_READWRITE);
+        db.exec("CREATE TABLE repertoire_nodes (x INTEGER)");
+        expected = ProfileError::migration_failed;
+    }
+    CHECK(ProfileStore::import_profiles(dir.path(), source, clock.clock()).error() == expected);
+    CHECK(read_bytes(dir.file()) == before);
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.importing"));
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.previous"));
 }
 
 // Writes the committed fixtures: run by hand with `core_profile_store_test "[.fixture]"` when a

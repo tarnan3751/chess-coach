@@ -377,6 +377,20 @@ order)`, which a property test checks over random choices and reviews.
   reviews, and returns the three counts. The mutators keep it at zero; a file changed by anything
   else is what it repairs.
 
+**Export and import** (§12.5) are static, so that no store need be open:
+
+- `export_profiles(data_dir, destination)` opens the data directory's store as `open` does
+  (creating or migrating it), then copies it with SQLite's backup API, which is consistent even
+  while another connection, the app's, has the file open. A destination that exists, or that
+  cannot be written, is `unwritable`, and a partial copy is removed.
+- `import_profiles(data_dir, source, clock)` first opens the source read-only and refuses it
+  unless it is SQLite with `meta` and a decimal `schema_version` (`not_profiles`) at most this
+  build's (`newer_version`). It then backs it up into `profiles.db.importing` in the data
+  directory and opens that copy, which migrates it (a failure removes the copy and returns
+  `migration_failed`), renames the current `profiles.db`, if any, to `profiles.db.previous`,
+  replacing an earlier one, and renames the copy to `profiles.db`. The source is never written.
+  The caller must hold no store on the data directory while it runs.
+
 ## The engine reply provider
 
 `EngineReplyProvider(engine, tier, config)` is the `ReplyProvider` a spar session uses once off
@@ -544,8 +558,8 @@ to one, the order); `engine_test` (every fake script, `busy`, `stop`, the option
 timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
 error, migrations, the refused files, the cache rules, the spar sessions saved, read and removed
 with their profile, the repertoire's validation and card rules, the import of choices, the card
-repair, the due order, the reviews against the scheduler, the version 1 and 2 fixtures migrated
-and the version 3 one opened unchanged);
+repair, the due order, the reviews against the scheduler, the export and import round trip and
+every refusal, the version 1 and 2 fixtures migrated and the version 3 one opened unchanged);
 `profile_store_property_test` (over random choices for one position and random reviews, a card's
 stored state is the replay of its stored reviews);
 `random_test` (the reference output of seed 0, one sequence per seed; `key_test`'s pinned values
