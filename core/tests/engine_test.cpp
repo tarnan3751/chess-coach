@@ -220,6 +220,77 @@ TEST_CASE("stop() ends a search in progress, and a second call is busy meanwhile
                              "isready", std::string(start_fen_sent), "go movetime 20", "quit"}));
 }
 
+TEST_CASE("A search of a stopped generation sends nothing, and a current one searches",
+          "[engine]") {
+    const Log log("stop-before");
+    {
+        auto engine = start("normal", log);
+        // Recorded with no search in progress: the stop is kept for the searches it means.
+        engine.stop_before(5);
+        const auto stale = engine.search(Position::start(), {.seconds = 0.02, .generation = 4});
+        REQUIRE(stale.has_value());
+        CHECK(stale->stopped);
+        CHECK(stale->lines.empty());
+        CHECK(stale->best_move.empty());
+        CHECK(engine.is_alive());
+        // A lower generation recorded later does not lower the bound.
+        engine.stop_before(2);
+        CHECK(engine.search(Position::start(), {.seconds = 0.02, .generation = 3})->stopped);
+        // The current generation, and any later one, searches.
+        const auto current = engine.search(Position::start(), {.seconds = 0.02, .generation = 5});
+        REQUIRE(current.has_value());
+        CHECK_FALSE(current->stopped);
+        CHECK(current->best_move == "e2e4");
+        const auto later = engine.search(Position::start(), {.seconds = 0.02, .generation = 6});
+        REQUIRE(later.has_value());
+        CHECK_FALSE(later->stopped);
+    }
+    // The stale searches sent nothing at all.
+    CHECK(log.lines() ==
+          then(handshake(), {"isready", std::string(start_fen_sent), "go movetime 20", "isready",
+                             std::string(start_fen_sent), "go movetime 20", "quit"}));
+}
+
+TEST_CASE("stop_before stops a running search of a lower generation only", "[engine]") {
+    SECTION("a higher generation stops it") {
+        const Log log("stop-before-running");
+        {
+            auto engine = start("normal", log);
+            const auto began = std::chrono::steady_clock::now();
+            auto running = std::async(std::launch::async, [&] {
+                return engine.search(Position::start(),
+                                     {.lines = 1, .seconds = 30.0, .generation = 1});
+            });
+            log.wait_for("go movetime 30000");
+            engine.stop_before(2);
+            const auto result = running.get();
+            REQUIRE(result.has_value());
+            CHECK(result->stopped);
+            CHECK(result->best_move == "e2e4");
+            CHECK(std::chrono::steady_clock::now() - began < 15s);
+        }
+        CHECK(log.lines() == then(handshake(), {"isready", std::string(start_fen_sent),
+                                                "go movetime 30000", "stop", "quit"}));
+    }
+    SECTION("its own generation does not") {
+        const Log log("stop-before-own");
+        {
+            auto engine = start("normal", log);
+            auto running = std::async(std::launch::async, [&] {
+                return engine.search(Position::start(),
+                                     {.lines = 1, .seconds = 0.5, .generation = 3});
+            });
+            log.wait_for("go movetime 500");
+            engine.stop_before(3);
+            const auto result = running.get();
+            REQUIRE(result.has_value());
+            CHECK_FALSE(result->stopped);
+        }
+        CHECK(log.lines() == then(handshake(), {"isready", std::string(start_fen_sent),
+                                                "go movetime 500", "quit"}));
+    }
+}
+
 TEST_CASE("A late readyok is waited for within the bound, and past it is a timeout", "[engine]") {
     SECTION("within the bound") {
         const Log log("late-readyok-within");

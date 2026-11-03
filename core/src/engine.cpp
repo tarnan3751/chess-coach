@@ -1,8 +1,9 @@
 // The UCI client over reproc++ (chesscoach/engine.hpp). All I/O with the child happens on the
 // thread that called start, new_game or search: stdout is polled in short slices, each slice checks
-// the deadline and the stop flag, and the searching thread writes stop itself, so stop() only sets
-// a flag under the mutex that also marks a search as running. A missed bound or a dead pipe kills
-// the process and marks the engine dead for good (docs/reference/core.md, **The engine**).
+// the deadline and the stop flag, and the searching thread writes stop itself, so stop() and
+// stop_before() only set flags under the mutex that also marks a search as running and records its
+// generation. A missed bound or a dead pipe kills the process and marks the engine dead for good
+// (docs/reference/core.md, **The engine**).
 #include <chesscoach/engine.hpp>
 
 #include <reproc++/reproc.hpp>
@@ -31,7 +32,8 @@ using SteadyClock = std::chrono::steady_clock;
 namespace {
 
 // The engine's process and protocol state, all of it touched only by the calling thread but for
-// running and stop_requested, which stop() reads and writes under the mutex.
+// running, the generations and stop_requested, which stop() and stop_before() read and write
+// under the mutex.
 struct EngineState {
     reproc::process process;
     std::string name;
@@ -41,8 +43,10 @@ struct EngineState {
     std::string pending; // output read but not yet split into lines
     std::atomic<bool> alive{true};
 
-    std::mutex mutex; // guards running; stop() and the start and end of a call take it
+    std::mutex mutex; // guards running and the generations; stop() and the calls take it
     bool running = false;
+    std::int64_t running_generation = 0; // the running search's
+    std::int64_t stopped_below = 0;      // the highest generation stop_before recorded
     std::atomic<bool> stop_requested{false};
 
     int multipv_sent = 1;        // UCI's default MultiPV
@@ -291,17 +295,20 @@ tl::expected<void, EngineError> handshake(EngineState& impl) {
     }
 }
 
-// Marks the engine as running a call for as long as it lives, or reports that it already is.
+// Marks the engine as running a call for as long as it lives, or reports that it already is; a
+// search's generation is recorded, and compared with the stopped ones, under the same lock.
 class RunningCall {
   public:
-    explicit RunningCall(EngineState& impl) : impl_(impl) {
+    explicit RunningCall(EngineState& impl, std::int64_t generation = 0) : impl_(impl) {
         const std::scoped_lock lock(impl_.mutex);
         if (impl_.running) {
             return;
         }
         impl_.running = true;
+        impl_.running_generation = generation;
         impl_.stop_requested = false;
         acquired_ = true;
+        stale_ = generation < impl_.stopped_below;
     }
     RunningCall(const RunningCall&) = delete;
     RunningCall& operator=(const RunningCall&) = delete;
@@ -315,10 +322,13 @@ class RunningCall {
         }
     }
     [[nodiscard]] bool acquired() const noexcept { return acquired_; }
+    // The search's generation was stopped before it started.
+    [[nodiscard]] bool stale() const noexcept { return stale_; }
 
   private:
     EngineState& impl_;
     bool acquired_ = false;
+    bool stale_ = false;
 };
 
 } // namespace
@@ -387,6 +397,14 @@ void Engine::stop() noexcept {
     }
 }
 
+void Engine::stop_before(std::int64_t generation) noexcept {
+    const std::scoped_lock lock(impl_->mutex);
+    impl_->stopped_below = std::max(impl_->stopped_below, generation);
+    if (impl_->running && impl_->running_generation < generation) {
+        impl_->stop_requested = true;
+    }
+}
+
 tl::expected<void, EngineError> Engine::new_game() {
     const RunningCall call(*impl_);
     if (!call.acquired()) {
@@ -404,16 +422,20 @@ tl::expected<SearchResult, EngineError> Engine::search(const Position& position,
         !(request.seconds <= maximum_search_seconds)) {
         return tl::unexpected(EngineError::invalid_request);
     }
-    const RunningCall call(*impl_);
+    const RunningCall call(*impl_, request.generation);
     if (!call.acquired()) {
         return tl::unexpected(EngineError::busy);
     }
     auto& impl = *impl_;
+    SearchResult result;
+    result.engine_name = impl.name;
+    if (call.stale()) {
+        result.stopped = true;
+        return result;
+    }
     if (!impl.alive) {
         return tl::unexpected(EngineError::died);
     }
-    SearchResult result;
-    result.engine_name = impl.name;
     const int line_count =
         impl.multipv_max ? std::min(request.lines, *impl.multipv_max) : request.lines;
     std::vector<std::string> commands;

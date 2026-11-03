@@ -1,7 +1,8 @@
 // Engine: one UCI engine (Stockfish) as a child process over reproc++, held behind a pointer so no
 // public header includes reproc (docs/reference/core.md, **The engine**). Synchronous: start,
-// new_game and search block the calling thread; stop() may be called from any other thread and
-// ends the search in progress. The client owns the protocol: uci and uciok, the options, isready
+// new_game and search block the calling thread; stop() and stop_before() may be called from any
+// other thread: stop() ends the search in progress, stop_before() also every later search of an
+// older generation. The client owns the protocol: uci and uciok, the options, isready
 // and readyok before every position, never a second go while one is in flight, ucinewgame through
 // new_game. Every reply has a bound; a missed bound or a dead process leaves the engine unusable
 // (is_alive() false) and the caller starts a new one. Scores are from the side to move, as UCI
@@ -52,6 +53,9 @@ struct SearchRequest {
     double seconds = 1.0;
     // UCI_LimitStrength with UCI_Elo, clamped to the engine's range.
     std::optional<int> limit_elo = std::nullopt;
+    // The caller's request number, which stop_before compares: below the highest generation
+    // stopped, the search returns at once as stopped, sending nothing.
+    std::int64_t generation = 0;
 };
 
 // The last exact info of one multipv: an info with a lowerbound or upperbound score does not
@@ -110,6 +114,12 @@ class Engine {
     // Ends the search in progress early: it then returns what arrived, with stopped set. No effect
     // when no search is in progress. Thread-safe; the searching thread itself writes stop.
     void stop() noexcept;
+
+    // Records generation as stopped: the search in progress stops, as stop() does, when its
+    // generation is below it, and every later search whose generation is below the highest one
+    // recorded returns at once with stopped set, no lines and nothing sent. A stop that arrives
+    // before the search it means starts is so never lost. Thread-safe.
+    void stop_before(std::int64_t generation) noexcept;
 
   private:
     struct Impl;

@@ -242,7 +242,7 @@ Book's margin and the score's soundness margin are both `book_margin_cp`, 50 cp.
 
 `Engine` is one UCI engine, Stockfish in practice, as a child process over reproc++ (stdin and
 stdout piped, stderr discarded). Its calls are synchronous; the app's engine worker runs them on
-its own thread. `stop()` may come from any other thread.
+its own thread. `stop()` and `stop_before()` may come from any other thread.
 
 | Call | Sent | Awaited, within |
 |---|---|---|
@@ -250,6 +250,7 @@ its own thread. `stop()` may come from any other thread.
 | `new_game()` | `ucinewgame`, `isready` | `readyok`, within `reply_timeout` |
 | `search(position, request)` | `setoption name MultiPV` when the line count, clamped to the engine's maximum, changed; `setoption name UCI_LimitStrength value true` or `false` when that changed, and `UCI_Elo` when its value changed; `isready`; `position fen <normalized FEN> 0 1`; `go movetime <ms>` | `readyok` within `reply_timeout`; then info lines up to `bestmove`, within the movetime plus `reply_timeout` |
 | `stop()` during a search | `stop`, written by the searching thread | `bestmove` within `reply_timeout` of the stop, however many lines keep coming |
+| `stop_before(generation)` | `stop`, as `stop()`, when a search of a lower generation runs | as `stop()`; a later search of a lower generation sends nothing |
 | destruction | `quit` | the process's exit; then terminate, then kill, a second apart |
 
 - **The handshake** records the `id name`, `UCI_Elo`'s `min` and `max` and `MultiPV`'s `max`
@@ -270,7 +271,14 @@ its own thread. `stop()` may come from any other thread.
   be the first line's first move when the engine's last word on it was a bound.
 - **One call at a time.** A mutex marks a call as running: a second `search` or `new_game` from
   another thread returns `busy` without touching the process; `stop()` sets a flag under the
-  same mutex only while a search runs, so it reaches the running search or nothing. The
+  same mutex only while a search runs, so it reaches the running search or nothing.
+- **Generations.** A request carries `generation`, the caller's request number (0 by default).
+  `stop_before(g)` records g, under the same mutex, as the highest generation stopped, and stops
+  the running search, as `stop()` does, when its generation is below g. A search whose generation
+  is below the highest recorded returns at once, `stopped`, without lines and without sending
+  anything, so a stop that arrives between a caller's check that its request is current and the
+  search it then starts is not lost; a search of the recorded generation or a later one runs as
+  before. The app's engine worker passes its request ids. The
   searching thread polls stdout in 25 ms slices and checks the flag and the deadline between
   slices, so all I/O stays on one thread and there is never a second `go` in flight. The search
   has one deadline, which a stop shortens for every line after it.
@@ -560,9 +568,9 @@ gate with defined, undefined and mate losses, the penalty and its cap, off-book 
 children, the floor at zero, the shares and the sort, each number worked out by hand) and
 `score_property_test` (over generated rows: every score between 0 and 1, an unsound move at 0, a
 sound score equal to max(0, expected − penalty), the penalty within its cap, the shares summing
-to one, the order); `engine_test` (every fake script, `busy`, `stop`, the options sent, the
-timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
-error, migrations, the refused files, the cache rules, the spar sessions saved, read and removed
+to one, the order); `engine_test` (every fake script, `busy`, `stop`, the generations
+`stop_before` stops, the options sent, the timeouts, a missing binary) and
+`engine_stockfish_test`; `profile_store_test` (creation, every error, migrations, the refused files, the cache rules, the spar sessions saved, read and removed
 with their profile, the repertoire's validation and card rules, the import of choices, the card
 repair, the due order, the reviews against the scheduler and refused outside their profile and
 colour, the export and import round trip and every refusal, the version 1 and 2 fixtures migrated
