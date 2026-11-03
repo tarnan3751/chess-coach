@@ -208,6 +208,35 @@ TEST_CASE("A session starts off book without a node, and hands off without candi
     CHECK(strict->phase() == Phase::off_book);
 }
 
+TEST_CASE("A provider's failure in a book position without candidates changes nothing", "[spar]") {
+    const SparFixture fixture("spar_no_candidate");
+    const OpeningStore store = open(fixture);
+    auto session = SparSession::start(store, tier, Color::white, seed,
+                                      SparConfig{.end_move = 25, .sampler = {}});
+    REQUIRE(session.has_value());
+    FirstLegal never;
+    REQUIRE(session->play_user_move("b1c3").has_value());
+    REQUIRE(session->coach_reply(never) == "g8f6"); // the only candidate
+    REQUIRE(session->play_user_move("g1f3").has_value());
+    // 1. Nc3 Nf6 2. Nf3 is in book at the tier with no moves: the provider is asked, and fails.
+    CHECK(session->phase() == Phase::book);
+    const auto before = session->summary();
+    Scripted failing({});
+    CHECK(session->coach_reply(failing).error() == SparError::provider_failed);
+    Scripted illegal({"e2e4"});
+    CHECK(session->coach_reply(illegal).error() == SparError::provider_illegal_move);
+    CHECK(session->phase() == Phase::book);
+    CHECK(session->summary() == before);
+    CHECK(session->position().key() == spar_position("Nc3 Nf6 Nf3").key());
+    // A working provider plays, and only then is the game off book.
+    FirstLegal engine;
+    REQUIRE(session->coach_reply(engine).has_value());
+    CHECK(engine.calls == 1);
+    CHECK(session->phase() == Phase::off_book);
+    CHECK(session->summary().phase_reached == Phase::off_book);
+    CHECK(session->summary().moves.size() == 4);
+}
+
 TEST_CASE("A mate ends the session with its result, and replays", "[spar]") {
     const SparFixture fixture("spar_mate");
     const OpeningStore store = open(fixture);

@@ -145,11 +145,10 @@ tl::expected<std::string, SparError> SparSession::coach_reply(ReplyProvider& pro
     if (phase_ == Phase::book) {
         reply = sample_reply(
             sampler_candidates(store_->moves(position_.key(), tier_), config_.sampler), generator_);
-        if (!reply) {
-            leave_book();
-        }
     }
     if (!reply) {
+        // Off book, or a book position without a candidate: the provider's move. Nothing changes,
+        // the phase included, until it has played.
         auto provided = provider.reply(position_);
         if (!provided) {
             return tl::unexpected(SparError::provider_failed);
@@ -158,6 +157,7 @@ tl::expected<std::string, SparError> SparSession::coach_reply(ReplyProvider& pro
         if (!played) {
             return tl::unexpected(SparError::provider_illegal_move);
         }
+        leave_book();
         moves_.push_back(played->uci);
         finish_move();
         return played->uci;

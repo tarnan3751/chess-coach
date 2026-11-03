@@ -81,15 +81,25 @@ class SparFixture {
 
     // Tier 3's moves: start e4 (Book, Popular), d4 (Popular), f3 (Popular, Dubious: 20 cp to
     // -60), Nf3 (Book, its child off book); after f3, e5 and d5; after f3 e5, g4 (Dubious) and
-    // e4 (off book); after f3 d5, e4 (off book); after e4, e5 and c5.
+    // e4 (off book); after f3 d5, e4 (off book); after e4, e5 and c5; and 1. Nc3 (no badge) Nf6
+    // 2. Nf3, which reaches a book node with no moves.
     static const std::vector<SparFixtureMove>& moves() {
         static const std::vector<SparFixtureMove> rows{
-            row("", "e2e4", "e4", 60, 3),           row("", "d2d4", "d4", 30, 2),
-            row("", "f2f3", "f3", 15, 6),           row("", "g1f3", "Nf3", 12, 1),
-            row("e4", "e7e5", "e4 e5", 40, 3),      row("e4", "c7c5", "e4 c5", 20, 3),
-            row("d4", "d7d5", "d4 d5", 30, 3),      row("f3", "e7e5", "f3 e5", 20, 3),
-            row("f3", "d7d5", "f3 d5", 10, 2),      row("f3 e5", "g2g4", "f3 e5 g4", 12, 6),
-            row("f3 e5", "e2e4", "f3 e5 e4", 8, 2), row("f3 d5", "e2e4", "f3 d5 e4", 10, 2),
+            row("", "e2e4", "e4", 60, 3),
+            row("", "d2d4", "d4", 30, 2),
+            row("", "f2f3", "f3", 15, 6),
+            row("", "g1f3", "Nf3", 12, 1),
+            row("e4", "e7e5", "e4 e5", 40, 3),
+            row("e4", "c7c5", "e4 c5", 20, 3),
+            row("d4", "d7d5", "d4 d5", 30, 3),
+            row("f3", "e7e5", "f3 e5", 20, 3),
+            row("f3", "d7d5", "f3 d5", 10, 2),
+            row("f3 e5", "g2g4", "f3 e5 g4", 12, 6),
+            row("f3 e5", "e2e4", "f3 e5 e4", 8, 2),
+            row("f3 d5", "e2e4", "f3 d5 e4", 10, 2),
+            row("", "b1c3", "Nc3", 10, 0),
+            row("Nc3", "g8f6", "Nc3 Nf6", 12, 2),
+            row("Nc3 Nf6", "g1f3", "Nc3 Nf6 Nf3", 11, 2),
         };
         return rows;
     }
@@ -101,8 +111,19 @@ class SparFixture {
         db.exec(openings_schema_sql());
         db.exec("INSERT INTO meta (key, value) VALUES ('schema_version', '1')");
         const std::vector<std::pair<std::string_view, std::optional<std::int64_t>>> nodes{
-            {"", 20},       {"e4", 30},    {"d4", 15},    {"f3", -60},   {"f3 e5", -80},
-            {"f3 d5", -40}, {"e4 e5", 25}, {"e4 c5", 35}, {"d4 d5", 20}, {"f3 e5 g4", std::nullopt},
+            {"", 20},
+            {"e4", 30},
+            {"d4", 15},
+            {"f3", -60},
+            {"f3 e5", -80},
+            {"f3 d5", -40},
+            {"e4 e5", 25},
+            {"e4 c5", 35},
+            {"d4 d5", 20},
+            {"f3 e5 g4", std::nullopt},
+            {"Nc3", std::nullopt},
+            {"Nc3 Nf6", std::nullopt},
+            {"Nc3 Nf6 Nf3", std::nullopt},
         };
         SQLite::Statement position(db, "INSERT INTO positions (key, fen, eval_cp, eval_depth, "
                                        "best_move) VALUES (?, ?, ?, ?, ?)");
