@@ -14,6 +14,7 @@ add_library(core STATIC
   include/chesscoach/position.hpp
   include/chesscoach/profile_store.hpp
   include/chesscoach/random.hpp
+  include/chesscoach/repertoire.hpp
   include/chesscoach/sampler.hpp
   include/chesscoach/scheduler.hpp
   include/chesscoach/score.hpp
@@ -28,6 +29,7 @@ add_library(core STATIC
   src/opening_store.cpp
   src/position.cpp
   src/profile_store.cpp
+  src/repertoire.cpp
   src/sampler.cpp
   src/score.cpp
   src/spar.cpp
@@ -101,6 +103,14 @@ if(BUILD_TESTING)
   chesscoach_add_test(core_random_test MODULE core KIND unit
                       SOURCES tests/random_test.cpp
                       LIBS chesscoach::core)
+  chesscoach_add_test(core_repertoire_test MODULE core KIND unit
+                      SOURCES tests/repertoire_test.cpp
+                      LIBS chesscoach::core SQLiteCpp)
+  target_compile_definitions(core_repertoire_test PRIVATE
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_add_test(core_repertoire_property_test MODULE core KIND property
+                      SOURCES tests/repertoire_property_test.cpp tests/random_games.hpp
+                      LIBS chesscoach::core rapidcheck)
   chesscoach_add_test(core_sampler_test MODULE core KIND unit
                       SOURCES tests/sampler_test.cpp
                       LIBS chesscoach::core)
@@ -149,6 +159,8 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_position_property_test)
   chesscoach_assert_no_qt(core_profile_store_test)
   chesscoach_assert_no_qt(core_random_test)
+  chesscoach_assert_no_qt(core_repertoire_test)
+  chesscoach_assert_no_qt(core_repertoire_property_test)
   chesscoach_assert_no_qt(core_sampler_test)
   chesscoach_assert_no_qt(core_sampler_property_test)
   chesscoach_assert_no_qt(core_scheduler_test)

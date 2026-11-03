@@ -6,8 +6,7 @@ client and the profile store with the engine cache. What these must do is fixed 
 `docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11,
 `profiles.db` §12, the score's inputs §13); this file says how `core` does it. The rules it obeys
 are in `CLAUDE.md`, **`core/` is exact, deterministic and keyed by position**. The sparring
-sampler, the spar session and the scheduler are described below; repertoire coverage is described
-here when it lands.
+sampler, the spar session, the scheduler and repertoire coverage are described below.
 
 | Header (`core/include/chesscoach/`) | Holds |
 |---|---|
@@ -23,6 +22,7 @@ here when it lands.
 | `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
 | `spar.hpp` | `SparSession`, `SparConfig`, `Interruption`, `Summary`, `ReplyProvider`, `SparError` |
 | `scheduler.hpp` | `CardState`, `Grade`, `Review`, `new_card`, `review`, `replay`, `is_due`, SM-2's numbers |
+| `repertoire.hpp` | `Repertoire`, `compute_coverage`, `Coverage`, `Gap`, `CoverageConfig` |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
 | `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
@@ -408,6 +408,36 @@ rule, the first intervals 1 and 6, the rounding, 86400 seconds a day, and the ca
 good, good, again, good gives intervals of 1, 6, 15, 1 and 1 days with eases 2500, 2500, 2500,
 1960 and 1960.
 
+## Repertoire coverage
+
+`compute_coverage(repertoire, colour, lookup, config)` measures how much of what opponents at a
+tier play against one colour's repertoire it answers, to `config.max_plies` (20) plies, and lists
+the gaps. A `Repertoire` maps a position's key to its chosen move in UCI, for the positions where
+the colour is to move. The lookup gives a position's rows at the tier (score.hpp's
+`ChildLookup`; only `node` and `moves` are read); the overload on an `OpeningStore` reads them
+from the store.
+
+The walk goes from the start position, with mass 1.0, ply by ply. A ply's positions are kept by
+key, so a position reached by two move orders at one ply is one position whose masses add, and
+which keeps the bytewise-smaller line. At each position, in key order:
+
+1. at `max_plies`, the walk ends there, covered;
+2. without a `nodes` row at the tier (off book), it ends covered;
+3. where the colour is to move, the chosen move is followed with the same mass, played through
+   `Position`, even when it has no `moves` row at the tier; a position without a chosen move, or
+   with one that is not legal there, is a gap with that mass, and the walk ends there;
+4. where the opponent is to move, a position whose moves sum to nothing ends covered; otherwise
+   each reply, by move text, carries the mass times its total, divided by the sum, and a reply
+   whose mass falls below `config.min_mass` (0.001) is not followed and counts covered, as does a
+   stored reply that is not legal.
+
+`Coverage::covered` is the mass that ended covered, truncated mass included; `total` is 1.0; so
+`covered` plus the gaps' masses is the total, up to rounding. A gap met at several plies is one
+gap: its masses add and it keeps its first line and FEN. The gaps come by mass, highest first,
+then by line, move by move bytewise. `positions_visited` counts the positions walked, once per
+ply. The floating-point values are one IEEE operation per statement, summed in the walk's fixed
+order, so the numbers are the same on every platform.
+
 ## Tests
 
 `core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
@@ -437,7 +467,11 @@ result, the provider's failures, the replay's refusals, the calls out of turn) a
 the same summary); `scheduler_test` (a hand-computed sequence, also checked at compile time,
 `hard` and `easy`, the ease floor, the interval cap, when a card is due) and
 `scheduler_property_test` (over random histories: intervals grow on passes and reset on a
-failure, due never before creation or review, the bounds, replay equals the fold). The
-property tests' random games (`random_games.hpp`) start from the start position or from
-positions that soon castle, promote or meet en passant, and pick moves by index into the sorted
-legal moves.
+failure, due never before creation or review, the bounds, replay equals the fold);
+`repertoire_test` (coverage worked out by hand on small stores: complete to a depth, a gap, a
+black repertoire, a transposition, truncation, the walk's ends, an illegal choice, the gaps'
+order, the store overload) and `repertoire_property_test` (on stores from random games and
+random repertoires: covered and the gaps add up to the whole, each gap is the colour's to move
+and reached by its line, the order, the same answer twice). The property tests' random games
+(`random_games.hpp`) start from the start position or from positions that soon castle, promote
+or meet en passant, and pick moves by index into the sorted legal moves.
