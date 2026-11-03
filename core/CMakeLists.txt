@@ -7,11 +7,13 @@ configure_file("${PROJECT_SOURCE_DIR}/cmake/version_info.hpp.in"
 add_library(core STATIC
   include/chesscoach/badges.hpp
   include/chesscoach/key.hpp
+  include/chesscoach/names.hpp
   include/chesscoach/position.hpp
   include/chesscoach/tier.hpp
   include/chesscoach/version.hpp
   src/board_key.cpp
   src/board_key.hpp
+  src/names.cpp
   src/position.cpp
   src/tier.cpp
   src/version.cpp
@@ -39,6 +41,12 @@ if(BUILD_TESTING)
   # The library's own hash is this test's oracle.
   target_include_directories(core_key_property_test SYSTEM PRIVATE
                              "${CHESSCOACH_CHESS_LIBRARY_INCLUDE_DIR}")
+  chesscoach_add_test(core_names_test MODULE core KIND unit
+                      SOURCES tests/names_test.cpp
+                      LIBS chesscoach::core)
+  target_compile_definitions(core_names_test PRIVATE
+                             CHESSCOACH_DATA_DIR="${PROJECT_SOURCE_DIR}/data"
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_position_test MODULE core KIND unit
                       SOURCES tests/position_test.cpp
                       LIBS chesscoach::core)
@@ -57,6 +65,7 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_badges_test)
   chesscoach_assert_no_qt(core_key_test)
   chesscoach_assert_no_qt(core_key_property_test)
+  chesscoach_assert_no_qt(core_names_test)
   chesscoach_assert_no_qt(core_position_test)
   chesscoach_assert_no_qt(core_position_property_test)
   chesscoach_assert_no_qt(core_tier_test)
