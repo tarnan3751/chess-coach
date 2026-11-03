@@ -1,0 +1,69 @@
+# CI: the full gate (tools/gates.sh) on macOS and Ubuntu on every push to main and every pull
+# request (PLAN.md §9; docs/reference/testing-tools.md, **CI**). Qt comes from Homebrew and apt,
+# never from vcpkg; vcpkg is cloned at the manifest's baseline, and its binary cache is kept in
+# the Actions cache, keyed by the manifest, the configuration and the overlay ports.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    env:
+      VCPKG_COMMIT: c653b77e80d1b61e5f5bd2eabf15bc6ec3bfe7ad
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja llvm clang-format stockfish qt
+
+      - name: Install the tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-format clang-tidy qt6-base-dev qt6-svg-dev \
+            libgl1-mesa-dev stockfish
+          # apt installs stockfish under /usr/games.
+          echo /usr/games >> "$GITHUB_PATH"
+
+      - name: Set up vcpkg at the baseline
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+          git -C "$RUNNER_TEMP/vcpkg" checkout --quiet "$VCPKG_COMMIT"
+          "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+          echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
+
+      - name: Restore the vcpkg binary cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      - name: Gate
+        run: tools/gates.sh
+
+      - name: Upload the failing tests' logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-failures-${{ matrix.os }}
+          path: build/gate-failures
+          if-no-files-found: ignore
