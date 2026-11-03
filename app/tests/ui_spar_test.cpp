@@ -2,10 +2,12 @@
 // engine and its legal script as the coach off book (tests/fake-stockfish.sh): a session as white
 // meeting an interruption on a Dubious move and another on an off-book move, the hand-off to the
 // engine, the end at the move limit with the summary and the saved session listed, its replay with
-// the interruptions at their plies; a session as black, where the coach moves first; and End
-// session saving a stopped session; and the Settings dialog's spar entries. Screenshots of the
-// interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
+// the interruptions at their plies; a session as black, where the coach moves first; End session
+// saving a stopped session, and closing the window saving one too; and the Settings dialog's spar
+// entries. Screenshots of the interruption, the summary and the replay (ui_harness.hpp,
+// fixture_db.hpp).
 #include <chesscoach/position.hpp>
+#include <chesscoach/profile_store.hpp>
 
 #include "board_view.hpp"
 #include "fixture_db.hpp"
@@ -266,6 +268,27 @@ class SparTest : public QObject {
         QTRY_COMPARE(rows(window, QStringLiteral("spar_sessions")), 1);
         QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 5), QStringLiteral("stopped"));
         QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("2"));
+    }
+
+    void closing_the_window_saves_a_running_session() {
+        Session session(*db_);
+        {
+            MainWindow& window = *session.window;
+            const auto& board = child<BoardView>(window, QStringLiteral("board"));
+            press(window, QStringLiteral("spar_start"));
+            QTRY_VERIFY(board.isEnabled());
+            click(board, "d2");
+            click(board, "d4");
+            QTRY_VERIFY(move_row(window, 0).count(QLatin1Char(' ')) == 2); // the coach replied
+        }
+        session.window.reset();
+        auto profiles = chesscoach::ProfileStore::open(session.data_dir.toStdString());
+        QVERIFY(profiles.has_value());
+        const auto saved = profiles->spar_sessions(profiles->profiles().front().id);
+        QCOMPARE(saved.size(), std::size_t{1});
+        QCOMPARE(saved.front().moves.size(), std::size_t{2});
+        QVERIFY(saved.front().phase != chesscoach::Phase::ended);
+        QVERIFY(!saved.front().ended_at.has_value());
     }
 
     void the_settings_dialog_sets_the_spar_settings() {

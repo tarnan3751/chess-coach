@@ -179,8 +179,13 @@ MainWindow::~MainWindow() {
     engine_worker_->cancel_before(std::numeric_limits<int>::max());
     engine_thread_.quit();
     engine_thread_.wait();
-    // The spar worker finishes the reply in progress, if any, and is not stopped: a session
-    // that was running is not saved.
+    // A running session is saved as stopped: the coach's search in progress, if any, stops at
+    // once, and the window waits for the worker to save the session before it joins the thread.
+    if (spar_running_) {
+        spar_worker_->stop_coach();
+        QMetaObject::invokeMethod(spar_worker_, &SparWorker::end_session,
+                                  Qt::BlockingQueuedConnection);
+    }
     spar_thread_.quit();
     spar_thread_.wait();
     db_thread_.quit();

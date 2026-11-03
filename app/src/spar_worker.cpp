@@ -10,7 +10,9 @@
 #include <QDir>
 #include <QFileInfo>
 #include <algorithm>
+#include <atomic>
 #include <exception>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -93,7 +95,8 @@ void register_spar_types() {
 }
 
 // The coach once off book: the worker's engine, started at the first reply asked of it with the
-// engine settings, through an EngineReplyProvider at the session's tier.
+// engine settings, through an EngineReplyProvider at the session's tier. stop() may be called
+// from another thread: the search in progress stops, and no other starts.
 class SparWorker::Coach final : public ReplyProvider {
   public:
     Coach(EngineSettings settings, double seconds)
@@ -101,9 +104,23 @@ class SparWorker::Coach final : public ReplyProvider {
 
     void set_tier(Tier tier) { tier_ = tier; }
 
+    void stop() {
+        stopped_.store(true);
+        const std::scoped_lock lock(engine_mutex_);
+        if (engine_.has_value()) {
+            engine_->stop();
+        }
+    }
+
     tl::expected<std::string, ProviderError> reply(const Position& position) override {
+        if (stopped_.load()) {
+            return tl::unexpected(ProviderError{translate("the window is closing").toStdString()});
+        }
         if (!engine_.has_value() || !engine_->is_alive()) {
-            engine_.reset();
+            {
+                const std::scoped_lock lock(engine_mutex_);
+                engine_.reset();
+            }
             const auto binary = find_engine_binary(settings_);
             if (!binary) {
                 return tl::unexpected(ProviderError{translate("no engine found").toStdString()});
@@ -116,8 +133,10 @@ class SparWorker::Coach final : public ReplyProvider {
                 return tl::unexpected(
                     ProviderError{translate("the engine did not start").toStdString()});
             }
+            const std::scoped_lock lock(engine_mutex_);
             engine_.emplace(std::move(*started));
         }
+        // Only this thread replaces engine_, and not before the search below returns.
         EngineReplyProvider provider(*engine_, tier_,
                                      ProviderConfig{.seconds = seconds_, .elo_offset = 100});
         return provider.reply(position);
@@ -127,6 +146,8 @@ class SparWorker::Coach final : public ReplyProvider {
     EngineSettings settings_;
     double seconds_;
     Tier tier_{};
+    std::atomic<bool> stopped_{false};
+    std::mutex engine_mutex_; // guards engine_'s replacement against stop()
     std::optional<Engine> engine_;
 };
 
@@ -136,10 +157,18 @@ SparWorker::SparWorker(const QString& data_dir, QString db, QObject* parent)
 
 SparWorker::~SparWorker() = default;
 
+void SparWorker::stop_coach() {
+    const std::scoped_lock lock(coach_mutex_);
+    coach_->stop();
+}
+
 void SparWorker::configure(const EngineSettings& engine, double seconds) {
     engine_settings_ = engine;
     seconds_ = seconds;
-    coach_ = std::make_unique<Coach>(engine_settings_, seconds_);
+    auto coach = std::make_unique<Coach>(engine_settings_, seconds_);
+    const std::scoped_lock lock(coach_mutex_);
+    coach_.swap(coach);
+    // The old coach's engine quits here, as coach goes.
 }
 
 const OpeningStore* SparWorker::open_store() {

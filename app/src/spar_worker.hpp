@@ -20,6 +20,7 @@
 #include <QtGlobal>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 
 namespace chesscoach::app {
@@ -33,6 +34,10 @@ class SparWorker : public QObject {
     SparWorker(const QString& data_dir, QString db, QObject* parent = nullptr);
     ~SparWorker() override;
     Q_DISABLE_COPY_MOVE(SparWorker)
+
+    // Thread-safe, for the window as it closes: the coach's search in progress stops at once, and
+    // the coach searches no more.
+    void stop_coach();
 
     // The engine for off-book replies and each reply's seconds; a running engine is dropped.
     Q_SLOT void configure(const chesscoach::app::EngineSettings& engine, double seconds);
@@ -76,6 +81,7 @@ class SparWorker : public QObject {
     double seconds_ = 0.5;
     std::optional<OpeningStore> store_;
     std::optional<ProfileStore> profiles_;
+    std::mutex coach_mutex_; // guards coach_'s replacement against stop_coach()
     std::unique_ptr<Coach> coach_;
     std::optional<SparSession> session_;
     std::int64_t started_at_ = 0;

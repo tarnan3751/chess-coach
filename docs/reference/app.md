@@ -184,8 +184,8 @@ engine's first line, and is hidden when there is neither; it follows the board's
 like the other two. It owns the live core `SparSession` (`docs/reference/core.md`), its own
 `OpeningStore` connection to `--db` (read-only, opened at the first start), its own `Engine` for
 the coach's replies off book, and its own `ProfileStore` connection for saving; the GUI thread
-touches none of them, and the engine worker's engine is not this one. Its slots, reached by
-queued connection:
+touches none of them. Its engine is not the engine worker's: while a session is off book two
+engine processes run, Explore's idle. Its slots, reached by queued connection:
 
 | Slot | Answer |
 |---|---|
@@ -209,8 +209,11 @@ rather than being stopped, its end time; it answers `session_ended` with the sum
 moves in SAN, the interruptions, the phase reached, the result and the saved id) and then the list.
 A replay runs `replay_spar_session` on the saved row, with its seed, moves, end move and
 `min_games`, and is refused, with a message, for a session played against another `data_version` of
-the opening database, whose book replies may differ. Closing the window while a session runs does
-not save it.
+the opening database, whose book replies may differ. Closing the window while a session runs saves
+it as stopped: the window calls `stop_coach()` from the GUI thread, which stops the coach's search
+in progress and keeps another from starting (the one call another thread makes, under the worker's
+mutex), then waits on `end_session` (a blocking queued call) before it joins the thread, so the wait
+is a save, not a search.
 
 **The window.** While Spar is the current screen, the board is the session's: a move on it goes
 to `user_move`, and the coach's replies are played on it with their animation. Explore's line,
