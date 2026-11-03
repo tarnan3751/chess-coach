@@ -1193,6 +1193,27 @@ TEST_CASE("A stray journal or WAL beside the replaced file is removed, unless an
     }
 }
 
+TEST_CASE("A source with a journal a read-only connection cannot roll back is busy",
+          "[profiles][export]") {
+    const DataDir dir("import-hot-source");
+    const DataDir writer_dir("import-hot-source-writer");
+    TestClock clock;
+    {
+        static_cast<void>(open_store(dir, clock));
+    }
+    {
+        static_cast<void>(open_store(writer_dir, clock));
+    }
+    const auto source = writer_dir.path() / "stopped" / "profiles.db";
+    copy_mid_transaction(writer_dir.file(), source);
+    const auto before = read_bytes(dir.file());
+    CHECK(ProfileStore::import_profiles(dir.path(), source, clock.clock()).error() ==
+          ProfileError::busy);
+    CHECK(read_bytes(dir.file()) == before);
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.importing"));
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.previous"));
+}
+
 TEST_CASE("A card stored out of range is reviewed without overflow", "[profiles][repertoire]") {
     const DataDir dir("out-of-range-card");
     TestClock clock{.now = 5000};

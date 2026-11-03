@@ -164,8 +164,9 @@ bool is_busy(const SQLite::Exception& error) {
 }
 
 // The schema_version of the profiles.db at path, read through a read-only connection: busy when
-// another connection keeps it locked past the busy timeout, not_profiles when it is not SQLite or
-// has no meta or no decimal schema_version.
+// another connection keeps it locked past the busy timeout, or when a hot journal beside it needs
+// a rollback a read-only connection cannot make (SQLITE_READONLY_ROLLBACK); not_profiles when it
+// is not SQLite or has no meta or no decimal schema_version.
 tl::expected<int, ProfileError> stored_version(const std::filesystem::path& path) {
     try {
         SQLite::Database db(path, SQLite::OPEN_READONLY);
@@ -179,7 +180,9 @@ tl::expected<int, ProfileError> stored_version(const std::filesystem::path& path
         }
         return *version;
     } catch (const SQLite::Exception& error) {
-        return tl::unexpected(is_busy(error) ? ProfileError::busy : ProfileError::not_profiles);
+        const bool unfinished = error.getExtendedErrorCode() == SQLITE_READONLY_ROLLBACK;
+        return tl::unexpected(is_busy(error) || unfinished ? ProfileError::busy
+                                                           : ProfileError::not_profiles);
     }
 }
 
