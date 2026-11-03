@@ -61,11 +61,13 @@ include(cmake/boundary.cmake)
 
 find_package(fmt CONFIG REQUIRED)
 find_package(tl-expected CONFIG REQUIRED)
+find_package(CLI11 CONFIG REQUIRED)
 if(BUILD_TESTING)
   include(cmake/testing.cmake)
 endif()
 
 add_subdirectory(core)
+add_subdirectory(pipeline)
 
 if(BUILD_TESTING)
   # The module boundary and the no-network rule over the sources, the same patterns as
