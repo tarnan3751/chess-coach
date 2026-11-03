@@ -1,0 +1,33 @@
+admitted_tier_0: 20
+admitted_tier_1: 0
+admitted_tier_2: 0
+admitted_tier_3: 1000
+admitted_tier_4: 0
+admitted_tier_5: 0
+admitted_tier_6: 100
+data_version: 0
+eval_db: none
+games_admitted: 1120
+games_skipped: 0
+max_ply: 8
+min_games: 10
+months: 2013-01
+openings_tsv: a.tsv,b.tsv,c.tsv,d.tsv,e.tsv
+schema_version: 1
+skipped_malformed: 0
+skipped_moves: 0
+skipped_rating: 0
+skipped_result: 0
+skipped_speed: 0
+skipped_unrated: 0
+skipped_variant: 0
+tiers: 1200,1400,1600,1800,2000,2200
+tier 0 (<1200): 2 nodes, 3 moves, 20 games at the start
+tier 1 (1200-1399): 0 nodes, 0 moves, 0 games at the start
+tier 2 (1400-1599): 0 nodes, 0 moves, 0 games at the start
+tier 3 (1600-1799): 9 nodes, 16 moves, 1000 games at the start
+tier 4 (1800-1999): 0 nodes, 0 moves, 0 games at the start
+tier 5 (2000-2199): 0 nodes, 0 moves, 0 games at the start
+tier 6 (2200+): 2 nodes, 3 moves, 100 games at the start
+named positions: 7
+evaluated positions: 8

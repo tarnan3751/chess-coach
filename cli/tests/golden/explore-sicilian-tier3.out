@@ -1,0 +1,6 @@
+fen: rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -
+key: 12927358150810715380
+name: B20 Sicilian Defense
+eval: cp 35 depth 38 best Nf3 g1f3
+Nf3 g1f3 BP 150 47% 7% 47% 60% no
+Nc3 b1c3 P 100 40% 10% 50% 40% no

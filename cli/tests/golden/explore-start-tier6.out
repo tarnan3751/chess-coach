@@ -1,0 +1,5 @@
+fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -
+key: 10026961946044190907
+eval: cp 19 depth 40 best e4 e2e4
+d4 d2d4 BP 55 45% 27% 27% 55% no
+e4 e2e4 BP 45 44% 33% 22% 45% yes

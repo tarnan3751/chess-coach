@@ -1,0 +1,30 @@
+meta	admitted_tier_0	20
+meta	admitted_tier_1	0
+meta	admitted_tier_2	0
+meta	admitted_tier_3	1000
+meta	admitted_tier_4	0
+meta	admitted_tier_5	0
+meta	admitted_tier_6	100
+meta	data_version	0
+meta	eval_db	none
+meta	games_admitted	1120
+meta	games_skipped	0
+meta	max_ply	8
+meta	min_games	10
+meta	months	2013-01
+meta	openings_tsv	a.tsv,b.tsv,c.tsv,d.tsv,e.tsv
+meta	schema_version	1
+meta	skipped_malformed	0
+meta	skipped_moves	0
+meta	skipped_rating	0
+meta	skipped_result	0
+meta	skipped_speed	0
+meta	skipped_unrated	0
+meta	skipped_variant	0
+meta	tiers	1200,1400,1600,1800,2000,2200
+position	2359393845585183869	rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq -	-	-	-	-1	99	d8h4
+position	4796638635495690917	rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq -	A04	Zukertort Opening	-	-	-	-
+position	6252488332901180994	rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -	A40	Queen's Pawn Game	20	-	35	d7d5
+position	7783912373576495621	rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -	D00	Queen's Pawn Game	18	-	33	c2c4
+position	8670092829528196834	rnbqkbnr/ppp1pppp/8/3p4/8/5N2/PPPPPPPP/RNBQKB1R w KQkq -	-	-	-	-	-	-
+position	10026961946044190907	rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -	-	-	19	-	40	e2e4
