@@ -38,11 +38,12 @@ and the spar session (`docs/reference/core.md`). **Phase 3 (app shell and Explor
 progress:** the board (SVG pieces, two-click and drag input, hints, highlights, animation, flip,
 promotion); the main window with the tier selector and the move list; the Explore screen on
 `--db` through a database worker on its own thread (moves with badges, result bars, scores and
-top-tier shares, the evaluation bar, going back along the line); light and dark themes; settings
-in `<data-dir>/settings.ini`; the About dialog; and the UI harness with screenshots
-(`tools/ui_tests.sh`, `docs/reference/app.md`). The engine worker follows. `PLAN.md` §7 lists the
-seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the resolved
-questions and §14 the deferred path.
+top-tier shares, the evaluation bar, going back along the line) and the engine worker on another
+(Stockfish's lines through the engine cache, a search stopped when the position changes); light
+and dark themes; settings in `<data-dir>/settings.ini`, with the engine's in Edit > Settings; the
+About dialog; and the UI harness with screenshots (`tools/ui_tests.sh`, `docs/reference/app.md`).
+`PLAN.md` §7 lists the seven phases with their sizes, §6 the data, §9 the process, §11 the
+decisions, §12 the resolved questions and §14 the deferred path.
 
 ## Stack (pinned)
 

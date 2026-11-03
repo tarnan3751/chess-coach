@@ -1,13 +1,14 @@
 # The app
 
 `chess-coach` is the Qt 6 Widgets application (`CLAUDE.md`, **app/ is presentation**). This file
-covers the main window, the board, the database worker, the Explore screen, the settings, the
-themes, the About dialog, and the UI harness. The engine worker comes with the engine, later in
-Phase 3 (`PLAN.md` §7).
+covers the main window, the board, the database worker, the engine worker, the Explore screen,
+the settings, the themes, the About dialog, and the UI harness.
 
 Every widget lives on the GUI thread. The opening database (`--db`) is opened read-only and read
-only by the database worker on its own thread (**Database worker**). The one file the app writes
-is `<data-dir>/settings.ini`, and only when a setting changes (**Settings**).
+only by the database worker on its own thread (**Database worker**); the engine and the engine
+cache belong to the engine worker on another (**Engine worker**). The app writes two files in
+`--data-dir`: `settings.ini`, only when a setting changes (**Settings**), and `profiles.db`, only
+when the engine worker stores a search (**Engine worker**).
 
 ## Code
 
@@ -16,11 +17,13 @@ is `<data-dir>/settings.ini`, and only when a setting changes (**Settings**).
 | `app/src/main.cpp` | The entry point, wiring only: `QApplication`, `--data-dir` and `--db`, the window |
 | `main_window.{hpp,cpp}` | `MainWindow`: the frame, the line played, the worker's thread (**Shell**) |
 | `db_worker.{hpp,cpp}` | `DbWorker`, the database worker on its own thread (**Database worker**) |
+| `engine_worker.{hpp,cpp}` | `EngineWorker`, the engine and its cache on their own thread (**Engine worker**) |
 | `explore_data.hpp` | `ExploreData` and `ExploreMove`, the worker's answer for a position |
 | `explore_model.{hpp,cpp}` | `ExploreModel`, the table model of the Explore screen (**Explore**) |
 | `explore_screen.{hpp,cpp}` | `ExploreScreen`, the Explore screen, and its result bar delegate |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
-| `settings.{hpp,cpp}` | `Settings`, the theme and the last tier in `settings.ini` (**Settings**) |
+| `settings.{hpp,cpp}` | `Settings`: the theme, the last tier and the engine in `settings.ini` (**Settings**) |
+| `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings for the engine (**Settings**) |
 | `about_dialog.{hpp,cpp}` | `AboutDialog`, the versions and the attributions (**About**) |
 | `board_view.{hpp,cpp}` | `BoardView`, the board: position, input, animation (**Board**) |
 | `board_scene.{hpp,cpp}` | `BoardScene`, the board's items and their layout, and the hit test |
@@ -42,8 +45,9 @@ which the executable and the UI tests link. The piece set and the two stylesheet
   (`flip_action`), and the tier selector (`tier_selector`), a `QComboBox` of the seven
   `tier_label` strings with the tier index as each item's data, at the last tier the settings
   hold, else tier 2 (`MainWindow::default_tier`).
-- **The menus**: *View > Theme* with *Light* and *Dark* (`theme_light`, `theme_dark`), and
-  *Help* with *About chess-coach* (`about_action`) and *About Qt* (`about_qt_action`).
+- **The menus**: *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with
+  *Light* and *Dark* (`theme_light`, `theme_dark`), and *Help* with *About chess-coach*
+  (`about_action`) and *About Qt* (`about_qt_action`).
 - **The evaluation bar** (`eval_bar`) and **the board** (`board`, a `BoardView`) on the left, and
   below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
   `1. e4 e5`.
@@ -52,14 +56,16 @@ which the executable and the UI tests link. The piece set and the two stylesheet
   placeholder label for now.
 - **The status bar**: `database_status`, "No database" or the `--db` file's name (its tooltip the
   full path); `data_version_status`, "Data version <v>" once the database is open; and
-  `engine_status`, "Engine: not started".
+  `engine_status`, "Engine: <state>" as the engine worker reports it ("not started" until then,
+  "not found", the engine's name when idle, "searching").
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key
 of every position along them. A move on the board (`move_played`) appends to it; clicking a row
 of the move list goes to the position after that row's last move, *Back* drops the last move, and
 *New game* drops them all: the window replays the line on a fresh `Position` into the board with
 `set_position`, without animation. After every change, and when the tier changes, the window asks
-the worker for the position at the end of the line at the selected tier.
+the database worker for the position at the end of the line at the selected tier; after every
+change of position (not of tier), and once at start, it asks the engine worker to evaluate it.
 
 **The database.** With `--db`, the window asks the worker to open it at start; the status bar
 names it and, once open, shows its data version. When it does not open, a non-blocking message
@@ -95,6 +101,45 @@ the move was not played there), and whether its child has a `nodes` row at the t
 `register_explore_types()` registers both types and the line of keys for the queued connections.
 The window drops an answer for a key or a tier it has left.
 
+## Engine worker
+
+`EngineWorker` is a `QObject` on its own `QThread`, set up like the database worker: started by
+the window, deleted on its thread when the thread finishes. It owns one core `Engine` and its own
+`ProfileStore` connection to `<data-dir>/profiles.db` for the engine cache (`docs/database.md`
+§12.2); the GUI thread touches neither. Its slots, reached by queued connection:
+
+| Slot | What it does |
+|---|---|
+| `configure(EngineSettings)` | Keeps the settings for the next search and drops the running engine, which quits, so the next search starts one with them |
+| `evaluate(key, fen, request_id)` | Answers `lines_ready(key, request_id, lines, cached)`, from the cache or a search, unless the request is stale; reports `engine_state(text)` and `engine_failed(message)` |
+
+**An evaluation.** First the cache: `cache_lookup(key, lines, 12)`, a hit needing every line at
+depth 12 or more, as the CLI's `eval`; a hit is answered with `cached` set and the engine is not
+touched. On a miss the worker finds the engine: the settings' binary, else
+`CHESS_COACH_STOCKFISH`, else `stockfish` on the `PATH`, else `stockfish` beside the app (the
+bundle's, from Phase 6), and reports "not found" when there is none. The engine starts at the
+first search (Threads and Hash from the settings) and again after it dies or times out. The worker
+reports "searching", runs `search` for the settings' line count and seconds, reports the engine's
+name, and stores a full result with `cache_store`, answering with what the cache then holds.
+`profiles.db` is opened only when it exists, for a lookup, or when a search is to be stored, so
+it is created by the first stored search and a run that searches nothing writes nothing.
+
+**One search at a time, cancelled by moving on.** The worker's slots run one at a time on its
+thread, and `Engine::search` blocks there, so two searches are never in flight. Each request the
+window sends carries the next request id; before sending it, the window calls
+`cancel_before(request_id)` directly from the GUI thread, which records the id and calls
+`Engine::stop()` (the one engine call another thread may make; the worker's mutex only keeps the
+engine from being replaced meanwhile). The search in progress then returns at once, marked
+stopped, and is neither stored nor answered; a request older than the recorded id is skipped
+unsearched; and the window drops an answer whose id or key is not its current one. The window
+never blocks: a 30 s search is stopped by the next move. Closing the window cancels the same way
+before it quits and joins the thread, and the engine quits with the worker.
+
+**Scores.** `EngineLine` carries the multipv, the depth, the score and the principal variation in
+SAN (at most ten moves, then "…"). UCI and the engine cache give scores from the side to move;
+the worker turns them to white's side, negating them when black is to move, so that they read
+like the stored evaluations of `openings.db`. Explore shows them that way.
+
 ## Explore
 
 `ExploreScreen` shows the worker's answer:
@@ -111,20 +156,30 @@ The window drops an answer for a key or a tier it has left.
 - **Off book**: when the position has no node at the tier, a label (`explore_message`) replaces
   the table: "Off book at <tier>: 0 games". The same label holds the empty state without a
   database.
+- **The engine's lines**, below: a label (`engine_label`), "Engine", "Engine (cached)", or
+  "Engine: searching", "Engine: not found" or the failure, and a short list (`engine_lines`) with
+  one line per multipv, "1: depth 18 -0.3 Nc6 Bb5 Nf6", the score from white's side written as
+  the stored evaluation is.
 
 The model updates by removing and inserting rows rather than resetting, so the view keeps its
 column settings (Result stretches; the others fit their contents).
 
 `EvalBar` is the vertical bar beside the board: white's share of it is
-`1 / (1 + e^(-0.00368208 * cp))` for a stored centipawn score, the curve lichess draws its bar
-with, and all or nothing for a mate; it is hidden when the position has no stored evaluation, and
-follows the board's flip.
+`1 / (1 + e^(-0.00368208 * cp))` for a centipawn score, the curve lichess draws its bar with, and
+all or nothing for a mate. It shows the position's stored evaluation when it has one, else the
+engine's first line, and is hidden when there is neither; it follows the board's flip.
 
 ## Settings
 
 `Settings` reads and writes `<data-dir>/settings.ini` through `QSettings` in INI format, never the
-registry or the platform's own settings store: `theme` (`light` or `dark`) and `tier` (the last
-tier selected). Reading does not create anything; the first write, when the theme or the tier
+registry or the platform's own settings store: `theme` (`light` or `dark`), `tier` (the last
+tier selected), and the engine's `engine/binary` (empty for the default binary),
+`engine/threads` (half the cores, at least one), `engine/hash_mb` (64), `engine/seconds` (2.0,
+0.1 to 60) and `engine/lines` (3, 1 to 10), each at its default when unset or out of range.
+*Edit > Settings…* (`SettingsDialog`, `settings_dialog`) edits the engine's: the binary with a
+Browse button, the threads, the hash, the seconds and the lines; accepting saves them, sends them
+to the engine worker, which restarts its engine with them at the next search, and evaluates the
+position again. Reading does not create anything; the first write, when the theme or the tier
 changes, creates the data directory and the file. This is the first thing the app writes: a run
 that changes no setting leaves the data directory as it found it, or absent.
 
@@ -242,6 +297,17 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   database that does not open; `settings.ini` appearing only after a theme change, alone in the
   data directory; both themes; the About dialog. Screenshots: `explore-start-tier3`,
   `explore-sicilian-light`, `explore-off-book`, `explore-light`, `explore-dark`, `about-dialog`.
+- `ui_engine_test`, with core's fake engine (`fake-uci`) set as the binary through
+  `app/tests/fake-stockfish.sh`, its script, delay and log chosen by environment variables: the
+  lines after a request, white to move and black to move, and the evaluation bar following the
+  first line where nothing is stored; a cache seeded through `ProfileStore` served without
+  starting the engine; a 30 s search stopped by a move while a timer keeps firing, and the window
+  closing at once; a missing binary; the Settings dialog saving and applying its values, and a new
+  window starting with them. Screenshots: `explore-engine`, `explore-engine-dark`,
+  `settings-dialog`.
+
+The other UI tests set `CHESS_COACH_STOCKFISH` to a path that does not exist, so no real engine
+runs in them and they write nothing.
 
 `tools/ui_tests.sh [<regex>]` builds the `dev` preset, runs the UI tests (`ctest -L ui`, filtered
 by name with the regex), and lists the screenshots of the run; the full gate runs the same tests
