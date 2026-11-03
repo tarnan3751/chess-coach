@@ -96,7 +96,11 @@ class ExploreTest : public QObject {
     std::unique_ptr<FixtureDb> db_;
 
   private slots:
-    void initTestCase() { db_ = std::make_unique<FixtureDb>(); }
+    void initTestCase() {
+        db_ = std::make_unique<FixtureDb>();
+        // These tests keep the engine out: the binary named here does not exist.
+        qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-explore-tests");
+    }
     void cleanupTestCase() { db_.reset(); }
 
     void opening_the_database_shows_the_start_position() {

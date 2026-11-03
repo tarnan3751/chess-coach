@@ -9,6 +9,7 @@
 #include "board_theme.hpp"
 #include "board_view.hpp"
 #include "db_worker.hpp"
+#include "engine_worker.hpp"
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
 
@@ -34,6 +35,7 @@
 #include <Qt>
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -51,9 +53,11 @@ QString tier_text(int tier) {
 
 MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     : QMainWindow(parent), settings_(data_dir), db_path_(std::move(db)), db_worker_(new DbWorker()),
-      board_(new BoardView()), eval_bar_(new EvalBar()), explore_(new ExploreScreen()),
-      move_list_(new QListWidget()), tier_selector_(new QComboBox()) {
+      engine_worker_(new EngineWorker(data_dir)), board_(new BoardView()), eval_bar_(new EvalBar()),
+      explore_(new ExploreScreen()), move_list_(new QListWidget()),
+      tier_selector_(new QComboBox()) {
     register_explore_types();
+    register_engine_types();
     setWindowTitle(tr("chess-coach %1").arg(QString::fromStdString(to_string(current_version()))));
     resize(1100, 720);
     line_keys_.append(Position::start().key());
@@ -116,9 +120,28 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     if (!db_path_.isEmpty()) {
         emit open_requested(db_path_);
     }
+
+    // The engine worker likewise, with the one engine and its cache connection; the window
+    // stops its search directly (cancel_before) and sends everything else queued.
+    engine_worker_->moveToThread(&engine_thread_);
+    connect(&engine_thread_, &QThread::finished, engine_worker_, &QObject::deleteLater);
+    connect(this, &MainWindow::configure_requested, engine_worker_, &EngineWorker::configure);
+    connect(this, &MainWindow::evaluate_requested, engine_worker_, &EngineWorker::evaluate);
+    connect(engine_worker_, &EngineWorker::engine_state, this, &MainWindow::engine_state);
+    connect(engine_worker_, &EngineWorker::lines_ready, this, &MainWindow::lines_ready);
+    connect(engine_worker_, &EngineWorker::engine_failed, this, &MainWindow::engine_failed);
+    engine_thread_.setObjectName(QStringLiteral("engine"));
+    engine_thread_.start();
+    emit configure_requested(settings_.engine());
+    request_evaluation();
 }
 
 MainWindow::~MainWindow() {
+    // A search in progress stops first, so the engine thread finishes at once; the worker's
+    // engine then quits with it.
+    engine_worker_->cancel_before(std::numeric_limits<int>::max());
+    engine_thread_.quit();
+    engine_thread_.wait();
     db_thread_.quit();
     db_thread_.wait();
 }
@@ -194,11 +217,11 @@ void MainWindow::build_status_bar() {
     data_version_label_ = new QLabel();
     data_version_label_->setObjectName(QStringLiteral("data_version_status"));
     data_version_label_->hide();
-    auto* engine = new QLabel(tr("Engine: not started"));
-    engine->setObjectName(QStringLiteral("engine_status"));
+    engine_label_ = new QLabel(tr("Engine: not started"));
+    engine_label_->setObjectName(QStringLiteral("engine_status"));
     statusBar()->addWidget(database_label_);
     statusBar()->addWidget(data_version_label_);
-    statusBar()->addPermanentWidget(engine);
+    statusBar()->addPermanentWidget(engine_label_);
 }
 
 int MainWindow::tier() const { return tier_selector_->currentIndex(); }
@@ -209,6 +232,7 @@ void MainWindow::move_played(const QString& uci, const QString& san) {
     line_keys_.append(board_->position().key());
     rebuild_move_list();
     request_query();
+    request_evaluation();
 }
 
 void MainWindow::jump_to(qsizetype ply) {
@@ -229,6 +253,7 @@ void MainWindow::jump_to(qsizetype ply) {
     board_->set_position(position);
     rebuild_move_list();
     request_query();
+    request_evaluation();
 }
 
 void MainWindow::rebuild_move_list() {
@@ -279,9 +304,56 @@ void MainWindow::position_ready(const ExploreData& explore) {
         return;
     }
     explore_->show_data(explore, tier_text(explore.tier));
-    const bool evaluated = explore.position && explore.position->eval_depth;
-    eval_bar_->set_evaluation(evaluated ? explore.position->eval_cp : std::nullopt,
-                              evaluated ? explore.position->eval_mate : std::nullopt);
+    stored_score_.reset();
+    if (explore.position && explore.position->eval_depth) {
+        stored_score_ = Score{.cp = explore.position->eval_cp, .mate = explore.position->eval_mate};
+    }
+    update_eval_bar();
+}
+
+void MainWindow::request_evaluation() {
+    // The search in progress, for a position the board has left, stops; its answer and any older
+    // request are dropped by their id.
+    ++request_id_;
+    engine_worker_->cancel_before(request_id_);
+    stored_score_.reset();
+    engine_score_.reset();
+    update_eval_bar();
+    const Position& position = board_->position();
+    emit evaluate_requested(position.key(), QString::fromStdString(position.fen()), request_id_);
+}
+
+void MainWindow::engine_state(const QString& text) {
+    engine_label_->setText(tr("Engine: %1").arg(text));
+    if (text == EngineWorker::tr("searching")) {
+        explore_->show_engine_searching();
+    } else {
+        explore_->show_engine_state(text);
+    }
+}
+
+void MainWindow::lines_ready(quint64 key, int request_id, const QVector<EngineLine>& lines,
+                             bool cached) {
+    if (request_id != request_id_ || key != line_keys_.back()) {
+        return;
+    }
+    explore_->show_engine_lines(lines, cached);
+    engine_score_.reset();
+    if (!lines.isEmpty()) {
+        const EngineLine& first = lines.front();
+        engine_score_ = Score{
+            .cp = first.cp ? std::optional<qint64>(*first.cp) : std::nullopt,
+            .mate = first.mate ? std::optional<qint64>(*first.mate) : std::nullopt,
+        };
+    }
+    update_eval_bar();
+}
+
+void MainWindow::engine_failed(const QString& message) { explore_->show_engine_state(message); }
+
+void MainWindow::update_eval_bar() {
+    const std::optional<Score>& score = stored_score_ ? stored_score_ : engine_score_;
+    eval_bar_->set_evaluation(score ? score->cp : std::nullopt, score ? score->mate : std::nullopt);
 }
 
 void MainWindow::choose_theme(const QString& theme) {

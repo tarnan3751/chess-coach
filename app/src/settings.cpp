@@ -6,7 +6,9 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
+#include <QThread>
 #include <QVariant>
+#include <algorithm>
 
 namespace chesscoach::app {
 
@@ -27,6 +29,43 @@ std::optional<int> Settings::last_tier() const {
     return tier;
 }
 
+EngineSettings Settings::default_engine() {
+    EngineSettings engine;
+    engine.threads = std::max(1, QThread::idealThreadCount() / 2);
+    return engine;
+}
+
+EngineSettings Settings::engine() const {
+    EngineSettings engine = default_engine();
+    engine.binary = read(QStringLiteral("engine/binary"));
+    bool ok = false;
+    if (const int threads = read(QStringLiteral("engine/threads")).toInt(&ok); ok && threads >= 1) {
+        engine.threads = threads;
+    }
+    if (const int hash = read(QStringLiteral("engine/hash_mb")).toInt(&ok); ok && hash >= 1) {
+        engine.hash_mb = hash;
+    }
+    if (const double seconds = read(QStringLiteral("engine/seconds")).toDouble(&ok);
+        ok && seconds >= 0.1 && seconds <= 60) {
+        engine.seconds = seconds;
+    }
+    if (const int lines = read(QStringLiteral("engine/lines")).toInt(&ok);
+        ok && lines >= 1 && lines <= 10) {
+        engine.lines = lines;
+    }
+    return engine;
+}
+
+void Settings::set_engine(const EngineSettings& engine) {
+    write({
+        {QStringLiteral("engine/binary"), engine.binary},
+        {QStringLiteral("engine/threads"), QString::number(engine.threads)},
+        {QStringLiteral("engine/hash_mb"), QString::number(engine.hash_mb)},
+        {QStringLiteral("engine/seconds"), QString::number(engine.seconds)},
+        {QStringLiteral("engine/lines"), QString::number(engine.lines)},
+    });
+}
+
 void Settings::set_theme(const QString& theme) { write(QStringLiteral("theme"), theme); }
 
 void Settings::set_last_tier(int tier) { write(QStringLiteral("tier"), QString::number(tier)); }
@@ -41,10 +80,14 @@ QString Settings::read(const QString& key) const {
     return settings.value(key).toString();
 }
 
-void Settings::write(const QString& key, const QString& value) {
+void Settings::write(const QString& key, const QString& value) { write({{key, value}}); }
+
+void Settings::write(const QList<std::pair<QString, QString>>& values) {
     QDir().mkpath(data_dir_);
     QSettings settings(file_, QSettings::IniFormat);
-    settings.setValue(key, value);
+    for (const auto& [key, value] : values) {
+        settings.setValue(key, value);
+    }
     settings.sync();
 }
 

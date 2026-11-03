@@ -10,6 +10,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QList>
+#include <QListWidget>
 #include <QPainter>
 #include <QRectF>
 #include <QStackedWidget>
@@ -87,30 +88,51 @@ class MoveTable : public QTableView {
 
 } // namespace
 
+QString score_text(std::optional<qint64> cp, std::optional<qint64> mate) {
+    if (mate) {
+        const qint64 moves = *mate;
+        return (moves < 0 ? QStringLiteral("-M") : QStringLiteral("M")) +
+               QString::number(moves < 0 ? -moves : moves);
+    }
+    const double pawns = static_cast<double>(cp.value_or(0)) / 100.0;
+    const QString text = QString::number(pawns, 'f', 1);
+    return pawns > 0 && text != QStringLiteral("0.0") ? QLatin1Char('+') + text : text;
+}
+
 QString evaluation_text(const std::optional<PositionRow>& position) {
     if (!position || !position->eval_depth) {
         return ExploreScreen::tr("no evaluation");
     }
-    if (position->eval_mate) {
-        const qint64 mate = *position->eval_mate;
-        return (mate < 0 ? QStringLiteral("-M") : QStringLiteral("M")) +
-               QString::number(mate < 0 ? -mate : mate);
+    return score_text(position->eval_cp, position->eval_mate);
+}
+
+QString engine_line_text(const EngineLine& line) {
+    const QString score = score_text(line.cp ? std::optional<qint64>(*line.cp) : std::nullopt,
+                                     line.mate ? std::optional<qint64>(*line.mate) : std::nullopt);
+    QString text =
+        ExploreScreen::tr("%1: depth %2 %3").arg(line.multipv).arg(line.depth).arg(score);
+    if (!line.pv_san.isEmpty()) {
+        text += QLatin1Char(' ') + line.pv_san;
     }
-    const double pawns = static_cast<double>(position->eval_cp.value_or(0)) / 100.0;
-    const QString text = QString::number(pawns, 'f', 1);
-    return pawns > 0 && text != QStringLiteral("0.0") ? QLatin1Char('+') + text : text;
+    return text;
 }
 
 ExploreScreen::ExploreScreen(QWidget* parent)
     : QWidget(parent), model_(new ExploreModel(this)), name_(new QLabel(this)),
       evaluation_(new QLabel(this)), games_(new QLabel(this)), content_(new QStackedWidget(this)),
-      table_(new MoveTable(this)), message_(new QLabel(this)) {
+      table_(new MoveTable(this)), message_(new QLabel(this)), engine_label_(new QLabel(this)),
+      engine_lines_(new QListWidget(this)) {
     setObjectName(QStringLiteral("explore_screen"));
     name_->setObjectName(QStringLiteral("explore_name"));
     evaluation_->setObjectName(QStringLiteral("explore_evaluation"));
     games_->setObjectName(QStringLiteral("explore_games"));
     table_->setObjectName(QStringLiteral("explore_table"));
     message_->setObjectName(QStringLiteral("explore_message"));
+    engine_label_->setObjectName(QStringLiteral("engine_label"));
+    engine_lines_->setObjectName(QStringLiteral("engine_lines"));
+    engine_lines_->setSelectionMode(QAbstractItemView::NoSelection);
+    engine_lines_->setFocusPolicy(Qt::NoFocus);
+    engine_lines_->setMaximumHeight(engine_lines_->fontMetrics().height() * 6);
     QFont bold = name_->font();
     bold.setBold(true);
     name_->setFont(bold);
@@ -138,7 +160,10 @@ ExploreScreen::ExploreScreen(QWidget* parent)
     column->addWidget(evaluation_);
     column->addWidget(games_);
     column->addWidget(content_, 1);
+    column->addWidget(engine_label_);
+    column->addWidget(engine_lines_);
     show_no_database();
+    show_engine_state(tr("not started"));
 }
 
 void ExploreScreen::show_data(const ExploreData& explore, const QString& tier_label) {
@@ -163,6 +188,21 @@ void ExploreScreen::show_no_database() {
     model_->set_moves({});
     message_->setText(tr("No database loaded. Open one with --db <file>."));
     content_->setCurrentWidget(message_);
+}
+
+void ExploreScreen::show_engine_lines(const QVector<EngineLine>& lines, bool cached) {
+    engine_label_->setText(cached ? tr("Engine (cached)") : tr("Engine"));
+    engine_lines_->clear();
+    for (const EngineLine& line : lines) {
+        engine_lines_->addItem(engine_line_text(line));
+    }
+}
+
+void ExploreScreen::show_engine_searching() { show_engine_state(tr("searching")); }
+
+void ExploreScreen::show_engine_state(const QString& text) {
+    engine_label_->setText(tr("Engine: %1").arg(text));
+    engine_lines_->clear();
 }
 
 } // namespace chesscoach::app

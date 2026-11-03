@@ -41,6 +41,12 @@ class MainWindowTest : public QObject {
     const QString data_dir_ = root_.filePath(QStringLiteral("data"));
 
   private slots:
+    void initTestCase() const {
+        QVERIFY(root_.isValid());
+        // These tests keep the engine out: the binary named here does not exist.
+        qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-window-tests");
+    }
+
     void title_names_the_version() const {
         const MainWindow window(data_dir_, QString());
         QCOMPARE(window.windowTitle(),
