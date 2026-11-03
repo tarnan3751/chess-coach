@@ -16,6 +16,7 @@ add_library(core STATIC
   include/chesscoach/random.hpp
   include/chesscoach/sampler.hpp
   include/chesscoach/score.hpp
+  include/chesscoach/spar.hpp
   include/chesscoach/tier.hpp
   include/chesscoach/version.hpp
   src/board_key.cpp
@@ -28,6 +29,7 @@ add_library(core STATIC
   src/profile_store.cpp
   src/sampler.cpp
   src/score.cpp
+  src/spar.cpp
   src/tier.cpp
   src/version.cpp
   "${PROJECT_BINARY_DIR}/generated/chesscoach/version_info.hpp")
@@ -110,6 +112,16 @@ if(BUILD_TESTING)
   chesscoach_add_test(core_score_property_test MODULE core KIND property
                       SOURCES tests/score_property_test.cpp
                       LIBS chesscoach::core rapidcheck)
+  chesscoach_add_test(core_spar_test MODULE core KIND unit
+                      SOURCES tests/spar_test.cpp tests/spar_fixture.hpp
+                      LIBS chesscoach::core SQLiteCpp)
+  target_compile_definitions(core_spar_test PRIVATE
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_add_test(core_spar_property_test MODULE core KIND property
+                      SOURCES tests/spar_property_test.cpp tests/spar_fixture.hpp
+                      LIBS chesscoach::core SQLiteCpp rapidcheck)
+  target_compile_definitions(core_spar_property_test PRIVATE
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_tier_test MODULE core KIND unit
                       SOURCES tests/tier_test.cpp
                       LIBS chesscoach::core)
@@ -134,6 +146,8 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_sampler_property_test)
   chesscoach_assert_no_qt(core_score_test)
   chesscoach_assert_no_qt(core_score_property_test)
+  chesscoach_assert_no_qt(core_spar_test)
+  chesscoach_assert_no_qt(core_spar_property_test)
   chesscoach_assert_no_qt(core_tier_test)
   chesscoach_assert_no_qt(core_version_test)
   chesscoach_assert_no_qt(core_version_property_test)

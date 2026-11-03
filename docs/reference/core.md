@@ -6,7 +6,8 @@ client and the profile store with the engine cache. What these must do is fixed 
 `docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11,
 `profiles.db` §12, the score's inputs §13); this file says how `core` does it. The rules it obeys
 are in `CLAUDE.md`, **`core/` is exact, deterministic and keyed by position**. The sparring
-sampler is described below; the scheduler is described here when it lands.
+sampler and the spar session are described below; the scheduler is described here when it
+lands.
 
 | Header (`core/include/chesscoach/`) | Holds |
 |---|---|
@@ -20,6 +21,7 @@ sampler is described below; the scheduler is described here when it lands.
 | `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
 | `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_loss`, the score's numbers |
 | `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
+| `spar.hpp` | `SparSession`, `SparConfig`, `Interruption`, `Summary`, `ReplyProvider`, `SparError` |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
 | `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
@@ -322,6 +324,48 @@ modulo the sum of the weights, selects the first candidate whose cumulative weig
 With no candidate it returns nothing and uses no output. No standard-library distribution is
 involved, so a seed draws the same replies on every platform.
 
+## The spar session
+
+`SparSession` is one sparring game from the start position against the coach at a tier
+(`PLAN.md` §5.4), over an `OpeningStore` the caller keeps alive. Its state machine:
+
+| Phase | The coach replies with | Ends |
+|---|---|---|
+| `book` | `sample_reply` over the position's moves at the tier | when the position reached has no `nodes` row at the tier, or the book position has no candidate |
+| `off_book` | the `ReplyProvider` (Stockfish at limited strength in the app, Phase 4b) | never: the book is not re-entered |
+| `ended` | nothing | — |
+
+A session starts in `book` when the start position has a `nodes` row at the tier, else in
+`off_book`. The user moves with `play_user_move(uci)` and the coach with `coach_reply(provider)`;
+calling either out of turn is a programming error (`std::logic_error`), a move that is not legal
+is a `MoveError`, and a provider's failure or illegal move is a `SparError` that changes nothing.
+
+**Interruptions.** While in book, a user move that carries the Dubious badge, or whose child
+has no `nodes` row at the tier (§7.3, even when the move itself was never played there and a
+transposition does not save it), is answered with one `Interruption`: the reason (`dubious`
+takes precedence when both apply), the move, its badges (none without a row), its loss
+(`score.hpp`'s `evaluation_loss`, when both evaluations exist), and the better choices: the
+position's other moves at the tier that are Book, or Popular and not Dubious, by total
+descending, then by move text, each with its SAN and its row. The move stands either way; an
+off-book child moves the session to `off_book`, and no move is interrupted after that. The
+coach's own move may leave the book too, without an interruption.
+
+**The end.** The session counts its own moves (the normalized position drops the counters):
+`move_number()` is 1 at the start and one more after each black move. After every move it ends
+when the side to move has no legal move, with the result of the mate (to the side that moved)
+or `1/2-1/2` for stalemate, or when the user is to move and `move_number()` has reached
+`SparConfig::end_move` (25 by default), with no result. `summary()` gives the moves in UCI from
+the start, the interruptions, the furthest phase reached (`book` or `off_book`), the result and
+the seed.
+
+**Determinism and replay.** The session's `Splitmix64`, seeded with its seed, is used only for
+the coach's book replies, one output each. `SparSession::replay(store, tier, colour, seed,
+moves, config)` plays a recorded session again: the user's moves and the coach's off-book moves
+as recorded (an engine's are not reproducible), the coach's book replies drawn again, each of
+which must equal the record (`replay_mismatch` otherwise, and for a record that runs past the
+end; `replay_illegal_move` for a recorded move that does not play). The summary it returns,
+interruptions and phases included, equals the original's.
+
 ## Tests
 
 `core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
@@ -342,6 +386,12 @@ error, migrations, the refused files, the cache rules and the version 1 fixture)
 (`Splitmix64` gives the Zobrist table and the reference outputs); `sampler_test` (min_games, the
 order, no draw without a candidate, the draw by cumulative weight, one sequence per seed, and
 the frequencies over 200,000 draws within one point of the weights) and `sampler_property_test`
-(a draw is a candidate and ignores the moves below min_games). The property tests' random games
-(`random_games.hpp`) start from the start position or from positions that soon castle, promote
-or meet en passant, and pick moves by index into the sorted legal moves.
+(a draw is a candidate and ignores the moves below min_games); `spar_test` (on a small tree
+built from `openings_schema_sql()`, `spar_fixture.hpp`: a scripted session with a Dubious and an
+off-book interruption, the sampler's book replies, the provider off book, the end, the summary
+and its replay; a session off book from the start, a book position without candidates, a mate's
+result, the provider's failures, the replay's refusals, the calls out of turn) and
+`spar_property_test` (sessions from generated seeds, colours, end moves and user moves replay to
+the same summary). The property tests' random games (`random_games.hpp`) start from the start
+position or from positions that soon castle, promote or meet en passant, and pick moves by index
+into the sorted legal moves.
