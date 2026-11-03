@@ -278,7 +278,7 @@ void MainWindow::position_ready(const ExploreData& explore) {
     if (explore.key != line_keys_.back() || explore.tier != tier()) {
         return;
     }
-    explore_->show_data(data, tier_text(explore.tier));
+    explore_->show_data(explore, tier_text(explore.tier));
     const bool evaluated = explore.position && explore.position->eval_depth;
     eval_bar_->set_evaluation(evaluated ? explore.position->eval_cp : std::nullopt,
                               evaluated ? explore.position->eval_mate : std::nullopt);
