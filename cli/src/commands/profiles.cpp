@@ -43,6 +43,9 @@ Result<void> run_profile(const ProfileOptions& options, std::ostream& out, const
             if (exported.error() == ProfileError::unwritable) {
                 return fail(fmt::format("{} exists or cannot be written", options.path));
             }
+            if (exported.error() == ProfileError::not_profiles) {
+                return fail(fmt::format("{} has no profiles.db to export", options.data_dir));
+            }
             return fail(
                 fmt::format("profiles.db in {} {}", options.data_dir, describe(exported.error())));
         }

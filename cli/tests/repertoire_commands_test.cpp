@@ -294,6 +294,11 @@ TEST_CASE("profile lists, creates and removes profiles, and exports and imports 
     REQUIRE(run(club) == "added: 1\nchanged: 0\nunchanged: 0\n");
 
     const std::string exported = scratch.file("export.db").string();
+    ProfileOptions nothing = profile_on(scratch.file("empty").string(), "export");
+    nothing.path = exported;
+    CHECK(run(nothing) ==
+          "error: " + scratch.file("empty").string() + " has no profiles.db to export");
+    CHECK_FALSE(std::filesystem::exists(scratch.file("empty")));
     ProfileOptions to = profile_on(data, "export");
     to.path = exported;
     CHECK(run(to) == "exported: " + exported + "\n");

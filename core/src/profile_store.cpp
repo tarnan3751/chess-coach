@@ -974,6 +974,11 @@ tl::expected<void, ProfileError>
 ProfileStore::export_profiles(const std::filesystem::path& data_dir,
                               const std::filesystem::path& destination) {
     std::error_code error;
+    const auto source = data_dir / "profiles.db";
+    if (!std::filesystem::is_regular_file(source, error) ||
+        std::filesystem::file_size(source, error) == 0) {
+        return tl::unexpected(ProfileError::not_profiles);
+    }
     if (std::filesystem::exists(destination, error)) {
         return tl::unexpected(ProfileError::unwritable);
     }

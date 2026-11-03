@@ -250,9 +250,9 @@ class ProfileStore {
     // The card's reviews in the order they were applied.
     [[nodiscard]] std::vector<Review> card_history(std::int64_t card_id) const;
 
-    // §12.5: writes a consistent copy of data_dir's profiles.db, opened (created or migrated) as
-    // open does, to destination with SQLite's backup API; unwritable when destination exists or
-    // cannot be written.
+    // §12.5: writes a consistent copy of data_dir's profiles.db, opened (migrated) as open does,
+    // to destination with SQLite's backup API; not_profiles, creating nothing, when data_dir has
+    // no profiles.db or an empty one; unwritable when destination exists or cannot be written.
     [[nodiscard]] static tl::expected<void, ProfileError>
     export_profiles(const std::filesystem::path& data_dir,
                     const std::filesystem::path& destination);

@@ -108,6 +108,7 @@ expect(2 profile --data-dir "${DATA_DIR}" remove Nobody)
 expect(2 profile --data-dir "${DATA_DIR}" remove Default)
 expect(2 profile --data-dir "${DATA_DIR}" import "${MISSING_DB}")
 expect(2 profile --data-dir "${DATA_DIR}" export "${DATA_DIR}/profiles.db")
+expect(2 profile --data-dir "${DATA_DIR}/none" export "${DATA_DIR}/none.db")
 
 if(failures)
   list(JOIN failures "\n  " listing)

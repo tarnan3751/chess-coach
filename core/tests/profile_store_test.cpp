@@ -931,6 +931,22 @@ TEST_CASE("An export is a copy, and importing it replaces profiles.db and keeps 
     CHECK(imported.card_history(card_id).size() == 1);
 }
 
+TEST_CASE("A data directory without profiles.db has nothing to export, and nothing is created",
+          "[profiles][export]") {
+    const DataDir dir("export-nothing");
+    const DataDir out("export-nothing-out");
+    std::filesystem::create_directories(out.path());
+    const auto copy = out.path() / "export.db";
+    CHECK(ProfileStore::export_profiles(dir.path(), copy).error() == ProfileError::not_profiles);
+    CHECK_FALSE(std::filesystem::exists(dir.path()));
+    CHECK_FALSE(std::filesystem::exists(copy));
+    // An empty file is not created into a profiles.db either.
+    write_bytes(dir.file(), "");
+    CHECK(ProfileStore::export_profiles(dir.path(), copy).error() == ProfileError::not_profiles);
+    CHECK(std::filesystem::file_size(dir.file()) == 0);
+    CHECK_FALSE(std::filesystem::exists(copy));
+}
+
 TEST_CASE("An older file is migrated as it is imported, and the source is left as it was",
           "[profiles][export]") {
     const DataDir dir("import-v1");

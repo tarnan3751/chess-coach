@@ -380,9 +380,10 @@ order)`, which a property test checks over random choices and reviews.
 **Export and import** (§12.5) are static, so that no store need be open:
 
 - `export_profiles(data_dir, destination)` opens the data directory's store as `open` does
-  (creating or migrating it), then copies it with SQLite's backup API, which is consistent even
-  while another connection, the app's, has the file open. A destination that exists, or that
-  cannot be written, is `unwritable`, and a partial copy is removed.
+  (migrating it), then copies it with SQLite's backup API, which is consistent even while another
+  connection, the app's, has the file open. A data directory without a `profiles.db`, or with an
+  empty one, is `not_profiles`, and nothing is created; a destination that exists, or that cannot
+  be written, is `unwritable`, and a partial copy is removed.
 - `import_profiles(data_dir, source, clock)` first opens the source read-only and refuses it
   unless it is SQLite with `meta` and a decimal `schema_version` (`not_profiles`) at most this
   build's (`newer_version`). It then backs it up into `profiles.db.importing` in the data
