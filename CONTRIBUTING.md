@@ -7,7 +7,8 @@ for anyone else. Everyone taking part follows the [code of conduct](CODE_OF_COND
 
 Bug reports and feature requests are issues, from the templates. A change is a pull request;
 for anything larger than a fix, open an issue first, so the design can be agreed before the code
-is written.
+is written. Contributions are accepted under the repository's MIT licence ([LICENSE](LICENSE)):
+what you contribute is licensed to everyone on the same terms as the rest of the code.
 
 ## Where to read
 
