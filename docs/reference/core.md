@@ -462,21 +462,20 @@ error, migrations, the refused files, the cache rules and the version 1 fixture)
 reference output of seed 0, one sequence per seed; `key_test`'s pinned values guard the tables);
 `sampler_test` (min_games, the
 order, no draw without a candidate, the draw by cumulative weight, one sequence per seed, and
-the frequencies over 200,000 draws within one point of the weights) and `sampler_property_test`
-(a draw is a candidate and ignores the moves below min_games); `spar_test` (on a small tree
-built from `openings_schema_sql()`, `spar_fixture.hpp`: a scripted session with a Dubious and an
-off-book interruption, the sampler's book replies, the provider off book, the end, the summary
-and its replay; a session off book from the start, a book position without candidates, a mate's
-result, the provider's failures, the replay's refusals, the calls out of turn) and
-`spar_property_test` (sessions from generated seeds, colours, end moves and user moves replay to
-the same summary); `scheduler_test` (a hand-computed sequence, also checked at compile time,
-`hard` and `easy`, the ease floor, the interval cap, when a card is due) and
-`scheduler_property_test` (over random histories: intervals grow on passes and reset on a
-failure, due never before creation or review, the bounds, replay equals the fold);
-`repertoire_test` (coverage worked out by hand on small stores: complete to a depth, a gap, a
-black repertoire, a transposition, truncation, the walk's ends, an illegal choice, the gaps'
-order, the store overload) and `repertoire_property_test` (on stores from random games and
-random repertoires: covered and the gaps add up to the whole, each gap is the colour's to move
-and reached by its line, the order, the same answer twice). The property tests' random games
-(`random_games.hpp`) start from the start position or from positions that soon castle, promote
-or meet en passant, and pick moves by index into the sorted legal moves.
+the frequencies over 200,000 draws within half a point of the weights) and `sampler_property_test`
+(a draw is a candidate and ignores the moves below min_games); `spar_test` (on a small tree built
+from `openings_schema_sql()`, `spar_fixture.hpp`: a scripted session with a Dubious and an off-book
+interruption, the sampler's book replies, the provider off book, the end, the summary and its
+replay; a session off book from the start, a book position without candidates, a mate's result, the
+provider's failures, the replay's refusals, the calls out of turn) and `spar_property_test`
+(sessions from generated seeds, colours, end moves and user moves replay to the same summary);
+`scheduler_test` (a hand-computed sequence, also checked at compile time, `hard` and `easy`, the
+ease floor, the interval cap, when a card is due) and `scheduler_property_test` (over random
+histories: intervals grow on passes and reset on a failure, due never before creation or review, the
+bounds, replay equals the fold); `repertoire_test` (coverage worked out by hand on small stores:
+complete to a depth, a gap, a black repertoire, a transposition, truncation, the walk's ends, an
+illegal choice, the gaps' order, the store overload) and `repertoire_property_test` (on stores from
+random games and random repertoires: covered and the gaps add up to the whole, each gap is the
+colour's to move and reached by its line, the order, the same answer twice). The property tests'
+random games (`random_games.hpp`) start from the start position or from positions that soon castle,
+promote or meet en passant, and pick moves by index into the sorted legal moves.

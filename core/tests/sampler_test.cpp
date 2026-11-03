@@ -1,7 +1,7 @@
 // Unit tests for chesscoach/sampler.hpp (core; unit): the candidates (min_games, move-text
 // order, weights), the draw (nullopt and no output used without a candidate, the same sequence
-// for a seed, the draw by cumulative weight), and the frequencies over 200,000 draws within one
-// percentage point of the weight shares (docs/database.md §13).
+// for a seed, the draw by cumulative weight), and the frequencies over 200,000 draws within half
+// a percentage point of the weight shares (docs/database.md §13).
 #include <chesscoach/sampler.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -97,7 +97,7 @@ TEST_CASE("sample_reply gives the same sequence for the same seed", "[sampler]")
     }
 }
 
-TEST_CASE("sample_reply's frequencies match the weights within one point over 200,000 draws",
+TEST_CASE("sample_reply's frequencies match the weights within half a point over 200,000 draws",
           "[sampler]") {
     const std::vector<Candidate> candidates{
         {.move = "c7c5", .weight = 250},
@@ -115,7 +115,7 @@ TEST_CASE("sample_reply's frequencies match the weights within one point over 20
     for (const Candidate& candidate : candidates) {
         const double frequency = static_cast<double>(counts[candidate.move]) / draws;
         const double share = static_cast<double>(candidate.weight) / 1000.0;
-        CHECK(frequency > share - 0.01);
-        CHECK(frequency < share + 0.01);
+        CHECK(frequency > share - 0.005);
+        CHECK(frequency < share + 0.005);
     }
 }
