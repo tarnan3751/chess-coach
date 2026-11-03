@@ -5,8 +5,8 @@ the read-only opening store with the canonical dump, the recommendation score, t
 client and the profile store with the engine cache. What these must do is fixed by
 `docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11,
 `profiles.db` §12, the score's inputs §13); this file says how `core` does it. The rules it obeys
-are in `CLAUDE.md`, **`core/` is exact, deterministic and keyed by position**. The scheduler and
-the sampler are described here when they land.
+are in `CLAUDE.md`, **`core/` is exact, deterministic and keyed by position**. The sparring
+sampler is described below; the scheduler is described here when it lands.
 
 | Header (`core/include/chesscoach/`) | Holds |
 |---|---|
@@ -19,6 +19,7 @@ the sampler are described here when they land.
 | `opening_schema.hpp` | `openings_schema_sql()`, `opening_schema_version` |
 | `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
 | `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_loss`, the score's numbers |
+| `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
 | `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
@@ -310,6 +311,17 @@ failed).
   lines than asked for (a position with fewer legal moves) is complete and stored as such.
 - A pv is stored as UCI moves separated by spaces; scores stay from the side to move.
 
+## The sampler
+
+`sampler_candidates(moves, config)` turns a position's `moves` rows at a tier into the
+candidates of `docs/database.md` §13: the rows with at least `config.min_games` plays (10 by
+default), ordered by move text bytewise, each weighted by its total, temperature 1.0 being the
+only one the contract defines. `sample_reply(candidates, generator)` draws one: a single raw
+output of the `Splitmix64` (`random.hpp`, §5.2's step, here seeded with the session's seed),
+modulo the sum of the weights, selects the first candidate whose cumulative weight exceeds it.
+With no candidate it returns nothing and uses no output. No standard-library distribution is
+involved, so a seed draws the same replies on every platform.
+
 ## Tests
 
 `core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
@@ -327,6 +339,9 @@ sound score equal to max(0, expected − penalty), the penalty within its cap, t
 to one, the order); `engine_test` (every fake script, `busy`, `stop`, the options sent, the
 timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
 error, migrations, the refused files, the cache rules and the version 1 fixture); `random_test`
-(`Splitmix64` gives the Zobrist table and the reference outputs). The property tests' random
-games (`random_games.hpp`) start from the start position or from positions that soon castle,
-promote or meet en passant, and pick moves by index into the sorted legal moves.
+(`Splitmix64` gives the Zobrist table and the reference outputs); `sampler_test` (min_games, the
+order, no draw without a candidate, the draw by cumulative weight, one sequence per seed, and
+the frequencies over 200,000 draws within one point of the weights) and `sampler_property_test`
+(a draw is a candidate and ignores the moves below min_games). The property tests' random games
+(`random_games.hpp`) start from the start position or from positions that soon castle, promote
+or meet en passant, and pick moves by index into the sorted legal moves.
