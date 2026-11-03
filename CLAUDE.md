@@ -33,13 +33,15 @@ and the read-only opening store with the canonical dump (`docs/reference/core.md
 sample corpus and its golden dump (`docs/reference/pipeline.md`). Phase 2's `core` part has
 begun: the recommendation score, the UCI engine client with its fake engine, and the profile
 store at version 1 with the engine cache (`docs/reference/core.md`), which `chess-coach-cli eval`
-and `explore --engine` search through. **Phase 3 (app shell and
-Explore) has begun:** the board (SVG pieces, two-click and drag input, hints, highlights,
-animation, flip, promotion), the main window's frame with the tier selector, the move list and
-placeholder screens, and the UI harness with screenshots (`tools/ui_tests.sh`,
-`docs/reference/app.md`); Explore's data and the engine worker follow Phase 2. `PLAN.md` §7
-lists the seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the
-resolved questions and §14 the deferred path.
+and `explore --engine` search through. **Phase 3 (app shell and Explore) is in progress:** the
+board (SVG pieces, two-click and drag input, hints, highlights, animation, flip, promotion); the
+main window with the tier selector and the move list; the Explore screen on `--db` through a
+database worker on its own thread (moves with badges, result bars, scores and top-tier shares,
+the evaluation bar, going back along the line); light and dark themes; settings in
+`<data-dir>/settings.ini`; the About dialog; and the UI harness with screenshots
+(`tools/ui_tests.sh`, `docs/reference/app.md`). The engine worker follows. `PLAN.md` §7 lists the
+seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the resolved
+questions and §14 the deferred path.
 
 ## Stack (pinned)
 

@@ -13,12 +13,15 @@ vcpkg, SQLite. `chess-coach` is a working name.
 
 Pre-alpha and private. The four modules (`core`, `pipeline`, `cli`, `app`) configure, build and
 test on macOS and Linux; the ingestion pipeline builds the tiered database from the Lichess
-dumps, the CLI queries it, and the app opens a window with a playable board. The next milestones
-are the engine and the app's first screen.
+dumps, the CLI queries it, and the app's Explore screen shows it at any tier on a playable
+board. The next milestones are the engine in the app and the other three screens.
 
-The board as the UI harness (`tools/ui_tests.sh`) renders it, after 1. e4 f5 2. Qh5+:
+Explore after 1. e4 at the 1600–1799 tier, in the light and the dark theme, as the UI harness
+(`tools/ui_tests.sh`) renders it on the tests' small fixture database:
 
-![The board after 1. e4 f5 2. Qh5+, the last move and the check highlighted](docs/images/board.png)
+![Explore after 1. e4, light theme: the board, the move list, and the table of black's replies with badges and result bars](docs/images/explore-light.png)
+
+![The same position in the dark theme](docs/images/explore-dark.png)
 
 ## How it will work
 
