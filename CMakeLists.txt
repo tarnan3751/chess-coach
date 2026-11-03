@@ -69,6 +69,7 @@ endif()
 add_subdirectory(core)
 add_subdirectory(pipeline)
 add_subdirectory(cli)
+add_subdirectory(app)
 
 if(BUILD_TESTING)
   # The module boundary and the no-network rule over the sources, the same patterns as
