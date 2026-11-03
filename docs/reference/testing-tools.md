@@ -122,7 +122,8 @@ every target of ours, is `-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-
 -Wformat=2 -Werror`, plus `-Wduplicated-cond -Wlogical-op -Wno-dangling-reference` on GCC (not `-Wuseless-cast`,
 which rejects the casts between `uint64_t` and `size_t` that macOS needs and Linux does not;
 GCC 13's `-Wdangling-reference`, part of its `-Wextra`, flags a `const auto&` bound to an
-accessor's returned reference, a false positive GCC 14 narrowed). Third-party
+accessor's returned reference, a false positive GCC 14 narrowed; and `-Wnull-dereference` is
+clang-only, because GCC's fires inside libstdc++'s `<optional>` at -O3). Third-party
 headers come in through imported targets as system headers, so the flags apply to our code
 only (Qt's moc output included). `CHESS_COACH_SANITIZE` (`cmake/sanitizers.cmake`) adds
 `-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer` to every

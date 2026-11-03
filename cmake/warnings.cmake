@@ -17,7 +17,9 @@ target_compile_options(
             -Wnon-virtual-dtor
             -Wold-style-cast
             -Woverloaded-virtual
-            -Wnull-dereference
+            # -Wnull-dereference on clang only: GCC's fires inside libstdc++'s <optional> at -O3
+            # (a known false positive), which failed the release build on Ubuntu.
+            "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wnull-dereference>"
             -Wdouble-promotion
             -Wformat=2
             -Werror
