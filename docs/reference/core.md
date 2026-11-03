@@ -315,8 +315,11 @@ its own thread. `stop()` and `stop_before()` may come from any other thread.
   slices, so all I/O stays on one thread and there is never a second `go` in flight. The search
   has one deadline, which a stop shortens for every line after it.
 - **Failure.** A missed bound is `timeout`, a closed pipe or failed write is `died`; either kills
-  the process, `is_alive()` turns false for good, and every later call returns `died`; the
-  caller starts a new engine. `start` ignores SIGPIPE process-wide, once, on POSIX, because
+  the process and `is_alive()` turns false for good. A later `new_game` or `search` then returns
+  `died`, after the answers each gives before it looks at the process: `busy` while another call
+  runs, and for `search` `invalid_request` for a request out of range and, for a search of a
+  stopped generation, a successful result with `stopped` set and no lines. The caller starts a
+  new engine. `start` ignores SIGPIPE process-wide, once, on POSIX, because
   writing to a dead engine's stdin would otherwise end this process.
 
 **The fake engine.** `core/tests/fake_uci.cpp` builds `fake-uci`, an executable `core_engine_test`
