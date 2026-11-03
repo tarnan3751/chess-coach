@@ -1,7 +1,8 @@
 // Unit tests for chesscoach/pgn_import.hpp (core; unit): a hand-written PGN with nested variations,
 // a NAG and a comment, a conflict, a move that does not play inside a line with a variation, a
 // [FEN] game and a [FEN] that does not parse, imported for white and for black, each choice and
-// count worked out by hand; an empty stream; a header without its closing quote.
+// count worked out by hand; an empty stream; a header without its closing quote; castling written
+// 0-0 in a variation; movetext without a header.
 #include <chesscoach/pgn_import.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -114,4 +115,39 @@ TEST_CASE("An empty stream has no games, and a broken header is an error", "[pgn
     const auto result = chesscoach::import_repertoire_pgn(broken, Color::white);
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error() == PgnImportError::malformed_header);
+}
+
+TEST_CASE("0-0 in a variation without its move number does not play, and O-O does", "[pgn]") {
+    // chess-library's tokenizer reads 0-0 after 4. c3 inside the variation as no move, so the
+    // variation ends there as unparsable; Lichess writes O-O, which plays.
+    const auto zeros = import("[Event \"Zeros\"]\n\n"
+                              "1. e4 e5 2. Nf3 Nf6 3. Bc4 Bc5 4. d3 (4. c3 0-0 5. d4) 4... d6 *\n",
+                              Color::black);
+    CHECK(zeros.choices == std::vector<RepertoireChoice>{
+                               choice("e4", "e7e5"),
+                               choice("e4 e5 Nf3", "g8f6"),
+                               choice("e4 e5 Nf3 Nf6 Bc4", "f8c5"),
+                               choice("e4 e5 Nf3 Nf6 Bc4 Bc5 d3", "d7d6"),
+                           });
+    CHECK(zeros.unparsable == 1);
+    const auto letters =
+        import("[Event \"Letters\"]\n\n"
+               "1. e4 e5 2. Nf3 Nf6 3. Bc4 Bc5 4. d3 (4. c3 O-O 5. d4) 4... d6 *\n",
+               Color::black);
+    CHECK(letters.choices == std::vector<RepertoireChoice>{
+                                 choice("e4", "e7e5"),
+                                 choice("e4 e5 Nf3", "g8f6"),
+                                 choice("e4 e5 Nf3 Nf6 Bc4", "f8c5"),
+                                 choice("e4 e5 Nf3 Nf6 Bc4 Bc5 c3", "e8g8"),
+                                 choice("e4 e5 Nf3 Nf6 Bc4 Bc5 d3", "d7d6"),
+                             });
+    CHECK(letters.unparsable == 0);
+}
+
+TEST_CASE("Movetext without a header is no game", "[pgn]") {
+    CHECK(import("1. e4 e5 2. Nf3 *\n", Color::white) == PgnImport{});
+    // A headed game after it is read on its own.
+    const auto after = import("1. e4 e5 2. Nf3 *\n\n[Event \"After\"]\n\n1. d4 *\n", Color::white);
+    CHECK(after.games == 1);
+    CHECK(after.choices == std::vector<RepertoireChoice>{choice("", "d2d4")});
 }

@@ -564,7 +564,8 @@ streaming parser, variations on, and plays every move through `Position`. `Reper
 
 - A game begins with its header. It starts at the start position, or at its `[FEN]` header's
   position; a `[FEN]` that does not parse makes the game count once in `unparsable` and adds
-  nothing.
+  nothing. Movetext with no header before it is not a game: a file of bare moves reads as no
+  games.
 - A variation, `(`, starts from the position before the move it replaces, and `)` returns to its
   line, so variations nest. NAGs (`$n`), comments and the result are not moves.
 - Wherever the colour is to move, the move played becomes the position's choice. The first
@@ -573,6 +574,9 @@ streaming parser, variations on, and plays every move through `Position`. `Reper
   replace it.
 - A move that does not play ends its line: the line's later moves and variations are skipped,
   down to its closing parenthesis or the game's end, and the line counts once in `unparsable`.
+- Castling is read as chess-library's tokenizer reads it: `O-O` and `O-O-O`, as Lichess writes
+  them, always play; `0-0` written with zeros inside a variation, where no move number comes
+  before it, is read as no move, so it ends that line as unparsable.
 - `games` and `variations` count what was read. An empty stream is no games; a header without
   its closing bracket or quote is `malformed_header`, a token longer than the parser reads
   `too_long`.
