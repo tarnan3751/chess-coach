@@ -118,6 +118,15 @@ class SparWorker::Coach final : public ReplyProvider {
 
     void set_tier(Tier tier) { tier_ = tier; }
 
+    // UCI's ucinewgame between games, when the engine runs; one that fails is dropped, and the
+    // next reply starts another.
+    void new_game() {
+        if (engine_.has_value() && engine_->is_alive() && !engine_->new_game()) {
+            const std::scoped_lock lock(engine_mutex_);
+            engine_.reset();
+        }
+    }
+
     void stop() {
         stopped_.store(true);
         const std::scoped_lock lock(engine_mutex_);
@@ -256,6 +265,7 @@ void SparWorker::start(int tier, bool user_white, quint64 seed, int end_move) {
     const SparSession& session = *session_;
     started_at_ = now();
     coach_->set_tier(*at);
+    coach_->new_game();
     emit session_started(seed, QString::fromStdString(session.position().fen()), state());
     if (session.phase() != Phase::ended && !session.user_to_move()) {
         coach_turn();

@@ -22,6 +22,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
+#include <QFile>
 #include <QFrame>
 #include <QLabel>
 #include <QListWidget>
@@ -270,6 +271,40 @@ class SparTest : public QObject {
         QTRY_COMPARE(rows(window, QStringLiteral("spar_sessions")), 1);
         QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 5), QStringLiteral("stopped"));
         QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("2"));
+    }
+
+    void each_session_after_the_first_starts_a_new_game() {
+        const QTemporaryDir logs;
+        const QString log = logs.filePath(QStringLiteral("engine.log"));
+        qputenv("CHESSCOACH_FAKE_UCI_LOG", log.toUtf8());
+        const auto new_games = [&log] {
+            QFile file(log);
+            if (!file.open(QIODevice::ReadOnly)) {
+                return -1;
+            }
+            return static_cast<int>(QString::fromUtf8(file.readAll())
+                                        .split(QLatin1Char('\n'))
+                                        .count(QStringLiteral("ucinewgame")));
+        };
+        const Session session(*db_);
+        MainWindow& window = *session.window;
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        // 1. h4 leaves the book, so the coach's engine starts and replies.
+        press(window, QStringLiteral("spar_start"));
+        QTRY_VERIFY(board.isEnabled());
+        click(board, "h2");
+        click(board, "h4");
+        QTRY_VERIFY(interruption_shown(window));
+        QTRY_VERIFY(move_row(window, 0).count(QLatin1Char(' ')) == 2);
+        const int first = new_games();
+        QVERIFY(first >= 0);
+        press(window, QStringLiteral("spar_continue"));
+        press(window, QStringLiteral("spar_end"));
+        QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
+        // The next session tells the running engine a new game begins.
+        press(window, QStringLiteral("spar_start"));
+        QTRY_COMPARE(new_games(), first + 1);
+        qunsetenv("CHESSCOACH_FAKE_UCI_LOG");
     }
 
     void closing_the_window_saves_a_running_session() {
