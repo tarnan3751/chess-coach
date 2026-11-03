@@ -131,4 +131,18 @@ std::int64_t percent(std::int64_t part, std::int64_t whole) {
     return ((200 * part) + whole) / (2 * whole);
 }
 
+std::string badge_letters(Badges badges) {
+    std::string letters;
+    if (badges.has(Badge::book)) {
+        letters += 'B';
+    }
+    if (badges.has(Badge::popular)) {
+        letters += 'P';
+    }
+    if (badges.has(Badge::dubious)) {
+        letters += 'D';
+    }
+    return letters.empty() ? "-" : letters;
+}
+
 } // namespace chesscoach::cli

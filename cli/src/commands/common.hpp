@@ -4,6 +4,7 @@
 // only through core's OpeningStore; chess rules only through core's Position.
 #pragma once
 
+#include <chesscoach/badges.hpp>
 #include <chesscoach/key.hpp>
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
@@ -54,6 +55,9 @@ struct OpeningName {
 };
 [[nodiscard]] std::optional<OpeningName> deepest_name(const OpeningStore& store,
                                                       const std::vector<Key>& path);
+
+// The badges as letters in the order B, P, D, or "-" for none (docs/database.md §7.3).
+[[nodiscard]] std::string badge_letters(Badges badges);
 
 // part / whole as a whole percentage rounded half up, for 0 <= part <= whole as the store's counts
 // are; 0 when whole is 0.

@@ -18,21 +18,6 @@ namespace chesscoach::cli {
 
 namespace {
 
-// The badges as letters in the order B, P, D, or "-" for none.
-std::string badge_letters(Badges badges) {
-    std::string letters;
-    if (badges.has(Badge::book)) {
-        letters += 'B';
-    }
-    if (badges.has(Badge::popular)) {
-        letters += 'P';
-    }
-    if (badges.has(Badge::dubious)) {
-        letters += 'D';
-    }
-    return letters.empty() ? "-" : letters;
-}
-
 // The SAN of a stored move, or an error naming it when the position has no such legal move.
 Result<std::string> san_of(const Position& position, const std::string& uci) {
     auto san = position.san_of(uci);
