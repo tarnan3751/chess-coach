@@ -13,7 +13,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -283,8 +282,10 @@ constexpr std::string_view golden_dump =
     "move\t11769534657094819628\t2\te7e5\t1\t10\t2\t8\t6\n";
 
 std::string read_bytes(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    const std::ifstream in(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
 }
 
 StoreError open_error(const std::filesystem::path& path) {
