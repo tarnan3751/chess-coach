@@ -6,8 +6,8 @@
 // sends each position at the selected tier to the database worker and each position to the
 // engine worker; it runs Spar's sessions through the spar worker; and it builds the repertoires
 // and drills their cards through the profile worker, each worker on its own thread, and shows
-// their answers. It never touches the opening store, the profile store or an engine itself, but
-// for replacing profiles.db on import once every worker has closed its connection. GUI thread
+// their answers. It never touches the opening store, the profile store or an engine itself: the
+// imports run on the database and profile workers too, once the others have let go. GUI thread
 // only. It writes settings.ini itself (settings.hpp) and sends Qt's own settings to the data
 // directory; the workers write profiles.db; a profile export goes where the user picks.
 #pragma once
@@ -74,8 +74,8 @@ class MainWindow : public QMainWindow {
     [[nodiscard]] const std::vector<std::string>& line() const { return line_uci_; }
 
     // File > Export profile and Import profile once their file dialogs have answered: a copy of
-    // profiles.db written to path; profiles.db replaced by the file at path, every screen then
-    // reading it. Errors in a message box (profile_error).
+    // profiles.db written to path; profiles.db replaced by the file at path on the profile
+    // worker, every screen then reading it. Errors in a message box (profile_error).
     void export_profile(const QString& path);
     void import_profile(const QString& path);
     // File > Import database once its chooser has answered: the opening database at path put in
@@ -110,6 +110,7 @@ class MainWindow : public QMainWindow {
     void review_requested(qint64 card_id, bool white, quint64 key, int grade);
     void export_requested(const QString& path);
     void database_changed(const QString& path);
+    void profile_import_requested(const QString& path);
     void database_import_requested(const QString& data_dir, const QString& source,
                                    const QString& current);
 
@@ -167,8 +168,10 @@ class MainWindow : public QMainWindow {
     void show_database_label();
     void database_imported(const QString& path, qint64 data_version, const QString& months);
     void database_import_failed(const QString& message);
-    void end_database_import();
+    void begin_import(const QString& text, const QString& name);
+    void end_import();
     void set_imports_enabled(bool enabled);
+    void profile_import_done(const QString& path, const QString& error);
     void jump_to(qsizetype ply);
     void rebuild_move_list();
     void request_query();
@@ -213,7 +216,7 @@ class MainWindow : public QMainWindow {
     QAction* back_action_ = nullptr;
     QAction* import_action_ = nullptr;          // File > Import profile…
     QAction* import_database_action_ = nullptr; // File > Import database…
-    QPointer<QProgressDialog> import_progress_; // while a database import runs
+    QPointer<QProgressDialog> import_progress_; // while an import runs
     QListWidget* move_list_;
     QComboBox* tier_selector_;
     QLabel* database_label_ = nullptr;

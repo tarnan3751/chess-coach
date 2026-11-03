@@ -56,6 +56,9 @@ class ProfileWorker : public QObject {
     // review_recorded: the grade (core's Grade value) applied to the card now; the card is the
     // colour's card with the id at the key, as cards_ready listed it.
     Q_SLOT void record_review(qint64 card_id, bool white, quint64 key, int grade);
+    // profiles_imported: profiles.db replaced by the file at path (ProfileStore::import_profiles),
+    // this worker's store closed first; the other workers must have closed theirs.
+    Q_SLOT void import_profiles(const QString& path);
     // profiles_exported: a copy of profiles.db at path; export_failed when a file is there.
     Q_SLOT void export_profiles(const QString& path);
 
@@ -70,6 +73,8 @@ class ProfileWorker : public QObject {
     void review_recorded(qint64 card_id, qint64 due_at);
     void profiles_exported(const QString& path);
     void export_failed(const QString& message);
+    // error is empty when the import succeeded.
+    void profiles_imported(const QString& path, const QString& error);
     void profile_failed(const QString& message);
 
   private:

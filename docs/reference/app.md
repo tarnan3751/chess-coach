@@ -333,6 +333,7 @@ repertoire creates nothing. Its slots, reached by queued connection:
 | `due_cards(white)` | `cards_ready(CardsData)`: the colour's cards due now, each with its FEN, its answer in SAN and its name, and both colours' due and total counts |
 | `record_review(card_id, white, key, grade)` | `review_recorded(card_id, due_at)`; the card must be the colour's card with the id at the key, as `cards_ready` listed it |
 | `export_profiles(path)` | `profiles_exported(path)`, or `export_failed(message)` |
+| `import_profiles(path)` | `profiles_imported(path, error)`, error empty on success (**Export and import**) |
 | `close_stores()` | Closes the profile store (**Export and import**) |
 
 A failure answers `profile_failed(message)`, which the current screen shows, or a message box
@@ -399,13 +400,18 @@ drill the same way, and closing the window records a grade still open.
 (`ProfileStore::export_profiles`, `docs/database.md` §12.5), to a file the chooser's save mode gives
 (**Files**). An export never replaces a file: the chooser refuses a name that is taken, and the
 worker refuses one that appeared since with a message box (`profile_error`). *File > Import
-profile…* replaces `profiles.db` with the chosen file. Every connection to it closes first: the
-engine worker's search stops, so that it answers at once, and the engine, spar and profile workers
-close their stores (`close_stores`, each a blocking queued call); then the window runs
-`ProfileStore::import_profiles` itself, a file operation, which migrates the copy and keeps the
-replaced file as `profiles.db.previous`. Each worker opens the file again at its next use, and the
-current screen reads it again. An error goes to the message box. A running spar session is kept and
-saved into the imported file when it ends.
+profile…* replaces `profiles.db` with the chosen file. The other connections to it close first: the
+engine worker's search stops, so that it answers at once, and the engine and spar workers close
+their stores (`close_stores`, each a blocking queued call, a reset and no more). Then the profile
+worker (`import_profiles`) closes its own and runs `ProfileStore::import_profiles` on its thread,
+the copy and the store's busy timeout being no work for the GUI thread, which migrates the copy and
+keeps the replaced file as `profiles.db.previous`; meanwhile a window-modal busy dialog
+(`profile_import_progress`), which neither Escape nor a close dismisses, takes the window's input,
+so that no move opens the engine cache and no End session saves a session while the file is swapped,
+and both of the File menu's imports are off until the worker answers `profiles_imported`. The engine
+and spar workers then close their stores once more, in case one opened the old file meanwhile; each
+opens the file again at its next use, and the current screen reads it again. An error goes to the
+message box. A running spar session is kept and saved into the imported file when it ends.
 
 ## Settings
 

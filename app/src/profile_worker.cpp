@@ -524,6 +524,14 @@ void ProfileWorker::record_review(qint64 card_id, bool white, quint64 key, int g
     }
 }
 
+void ProfileWorker::import_profiles(const QString& path) {
+    profiles_.reset();
+    const auto imported = ProfileStore::import_profiles(data_dir_, path.toStdString());
+    emit profiles_imported(
+        path, imported ? QString()
+                       : tr("The profile was not imported: %1.").arg(describe(imported.error())));
+}
+
 void ProfileWorker::export_profiles(const QString& path) {
     // An export never replaces a file (docs/database.md §12.5).
     if (QFileInfo::exists(path)) {
