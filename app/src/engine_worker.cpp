@@ -109,9 +109,9 @@ void EngineWorker::configure(const EngineSettings& settings) {
     drop_engine();
 }
 
-std::optional<std::filesystem::path> EngineWorker::binary() const {
-    if (!settings_.binary.isEmpty()) {
-        return existing(settings_.binary);
+std::optional<std::filesystem::path> find_engine_binary(const EngineSettings& settings) {
+    if (!settings.binary.isEmpty()) {
+        return existing(settings.binary);
     }
     if (const QString named = qEnvironmentVariable("CHESS_COACH_STOCKFISH"); !named.isEmpty()) {
         return existing(named);
@@ -172,7 +172,7 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
         emit engine_failed(tr("The engine cache could not be read: %1").arg(error.what()));
     }
 
-    const auto path = binary();
+    const auto path = find_engine_binary(settings_);
     if (!path) {
         drop_engine();
         emit engine_state(tr("not found"));

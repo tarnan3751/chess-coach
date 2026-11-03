@@ -49,6 +49,12 @@ struct EngineLine {
 // Registers EngineSettings and the lines for queued connections; idempotent.
 void register_engine_types();
 
+// The engine to run: the settings' binary; else CHESS_COACH_STOCKFISH; else stockfish on the
+// PATH; else stockfish beside the app (the bundle's, from Phase 6). nullopt when the one chosen
+// is not a file.
+[[nodiscard]] std::optional<std::filesystem::path>
+find_engine_binary(const EngineSettings& settings);
+
 class EngineWorker : public QObject {
     Q_OBJECT
 
@@ -79,7 +85,6 @@ class EngineWorker : public QObject {
 
   private:
     [[nodiscard]] bool stale(int request_id) const { return request_id < latest_request_.load(); }
-    [[nodiscard]] std::optional<std::filesystem::path> binary() const;
     // The cache connection, opened when profiles.db exists or create is set; nullptr when it
     // cannot be.
     [[nodiscard]] ProfileStore* open_profiles(bool create);
