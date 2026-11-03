@@ -205,7 +205,7 @@ data/            the chess-openings TSV, piece sets, release database metadata
 docs/            database.md (the data contract); reference/ (one file per area, as it lands)
 legal/           the full licence text of every component that ships (`NOTICE` names them)
 tools/           gates.sh, run_tests.sh, format.sh, land_series.sh, changelog.sh;
-                 run_corpus.sh, ui_tests.sh (Phase 3)
+                 run_corpus.sh, ui_tests.sh
 cmake/           warnings, sanitizers, the boundary check, packaging (Phase 0)
 vcpkg/           overlay ports (chess-library)
 .claude/agents/  scout, researcher, developer, reviewer
