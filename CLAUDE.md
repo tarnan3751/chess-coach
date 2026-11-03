@@ -47,9 +47,11 @@ worker on its own thread (moves with badges, result bars, scores and top-tier sh
 bar, going back along the line) and the engine worker on another (Stockfish's lines through the
 engine cache, a search stopped when the position changes); light and dark themes; settings in
 `<data-dir>/settings.ini`, with the engine's in Edit > Settings; the About dialog; and the UI
-harness with screenshots (`tools/ui_tests.sh`, `docs/reference/app.md`). `PLAN.md` §7 lists the
-seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the resolved
-questions and §14 the deferred path.
+harness with screenshots (`tools/ui_tests.sh`, `docs/reference/app.md`). Phase 6 has begun: the
+macOS package with Qt and Stockfish inside and the licence texts in `legal/`, checked by
+`tools/package.sh`, and the release workflow (`docs/reference/testing-tools.md`). `PLAN.md` §7
+lists the seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the
+resolved questions and §14 the deferred path.
 
 ## Stack (pinned)
 

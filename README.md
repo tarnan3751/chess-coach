@@ -32,6 +32,28 @@ better choices; the move stands and the coach has replied:
 
 ![Spar: the board after 1. a3 e5 and the interruption panel with the reason, the badges and loss of a3, and e4 and d4 as better choices](docs/images/spar-interruption.png)
 
+## Install
+
+On macOS, download `chess-coach-<version>-macos-<arch>.dmg` from the repository's releases (the
+arch is the CPU it was built for: `arm64` for Apple silicon), open it and drag `chess-coach.app`
+onto the Applications link beside it. The app carries Qt, a Stockfish binary with its licence
+and a link to its source (`Contents/Resources/engine/`), and the licence of every component it
+ships (`Contents/Resources/legal/`, listed in `NOTICE`). The opening database is a separate
+file, built by the pipeline (**The pipeline**) and given to the app with `--db`.
+
+The app is not signed or notarized, so Gatekeeper refuses its first start. Either right-click
+(or Control-click) it in Applications and choose Open, then Open again in the dialog; on macOS 15
+and later, try to open it once, then choose Open Anyway under System Settings > Privacy &
+Security. Or clear the quarantine flag once from a terminal:
+
+```
+xattr -dr com.apple.quarantine /Applications/chess-coach.app
+```
+
+The app keeps profiles, repertoires, settings and the engine cache in its data directory,
+`~/Library/Application Support/chess-coach`, or the directory `--data-dir` names; replacing or
+deleting the app leaves it in place.
+
 ## How it will work
 
 - **The pipeline** (`chess-coach-pipeline`) streams one or more monthly Lichess dumps, keeps

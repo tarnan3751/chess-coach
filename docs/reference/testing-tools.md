@@ -1,9 +1,10 @@
 # Tests and tools
 
 How the build is configured, how the tests are declared and selected, what the gate runs, the
-module boundary check, the compiler, format and tidy settings, CI, the macOS package, the
-pinned dependencies, and how lanes deliver and land a series. The commands are in `CLAUDE.md`,
-**Commands**; the rules they enforce are in `CLAUDE.md`, **Architecture rules**.
+module boundary check, the compiler, format and tidy settings, CI, the macOS package and the
+release workflow, the pinned dependencies, and how lanes deliver and land a series. The commands
+are in `CLAUDE.md`, **Commands**; the rules they enforce are in `CLAUDE.md`, **Architecture
+rules**.
 
 ## Presets
 
@@ -231,8 +232,23 @@ offscreen plugin and is still running three seconds later, having loaded no libr
 outside the bundle but the system's (`DYLD_PRINT_LIBRARIES`), which a Homebrew Qt on the build
 machine would otherwise hide; and the bundled Stockfish answers `uci` with `uciok`, with
 `COPYING` and `SOURCE.txt` beside it. It prints the image's path and size and exits non-zero on
-the first failure. It takes minutes, so it is not part of the gate; anyone changing the packaging
-runs it.
+the first failure. It takes minutes, so it is not part of the gate; the release workflow runs it,
+and so does anyone changing the packaging.
+
+## Release
+
+`.github/workflows/release.yml` runs on every pushed tag `v*` and by hand (`workflow_dispatch`),
+as one `macos-15` job: the same Homebrew tools, vcpkg at the baseline and binary cache as CI,
+then `tools/package.sh`. On a tag it checks that the image's version is the tag's, then makes a
+draft GitHub release named for the tag with the image attached and `tools/changelog.sh
+<version>` as its body (`gh release create --draft --verify-tag`; the checkout fetches the whole
+history and the tags for it). Run by hand on a branch, it keeps the image as the run's artifact
+`chess-coach-macos` instead. Publishing the draft is a person's step.
+
+To release: set `project(VERSION)` in the root `CMakeLists.txt`, land it, tag `main` as
+`vX.Y.Z` and push the tag; check the draft and publish it. `CHANGELOG.md` is generated from the
+commit log with `tools/changelog.sh` at the release and committed then, as its header says; the
+workflow does not write it.
 
 ## Dependencies
 

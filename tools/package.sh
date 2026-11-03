@@ -15,8 +15,9 @@
 #
 # macOS only. Needs what the release build needs (README.md, **Building and running**) and the
 # Stockfish to bundle: CHESS_COACH_STOCKFISH, else stockfish on the PATH. Not part of the gate,
-# since it takes minutes. Writes build/release/ in the tree it runs in, and a scratch directory
-# under $TMPDIR that it removes; the app it starts never sees the user's data directory.
+# since it takes minutes; the release workflow (.github/workflows/release.yml) runs it on every
+# tag. Writes build/release/ in the tree it runs in, and a scratch directory under $TMPDIR that it
+# removes; the app it starts never sees the user's data directory.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
