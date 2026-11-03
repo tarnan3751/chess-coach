@@ -149,7 +149,11 @@ warnings are left to the build, and `ExtraArgs: ['-Wno-unknown-warning-option']`
 reporting the GCC-only warning flags in a GCC build's compile commands. Every finding is an error; headers are checked
 when their path is under one of the four modules. The gate runs `run-clang-tidy` over the
 `gate` build's `compile_commands.json` for the sources under `core/`, `pipeline/`, `cli/` and
-`app/`. A `NOLINT` names its check and sits on the one line it excuses.
+`app/`. A `NOLINT` names its check and sits on the one line it excuses. `core/.clang-tidy`
+inherits this configuration and turns off `clang-analyzer-optin.core.EnumCastOutOfRange` and
+`clang-analyzer-security.ArrayBound` for core's sources: the analyzer follows core's calls into
+chess-library's header and reports false positives inside it, where no `NOLINT` can sit
+(`docs/reference/core.md`, **chess-library and the wrapper**).
 
 ## CI
 

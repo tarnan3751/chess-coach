@@ -1,0 +1,11 @@
+# core's translation units include chess-library's chess.hpp (core/src/position.cpp and
+# board_key.cpp, and core/tests/key_property_test.cpp, which uses the library's hash as its
+# oracle). The static analyzer follows our calls into the header and reports, inside it, enum
+# casts and a pawn-attack table index it cannot prove in range, on paths where a colour is NONE,
+# which the library's invariants exclude. A NOLINT cannot sit in a header we do not own, so these
+# two path-sensitive checks are off for core's sources; everything else is the root's
+# configuration (docs/reference/core.md, **chess-library and the wrapper**).
+InheritParentConfig: true
+Checks: >
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-security.ArrayBound
