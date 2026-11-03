@@ -6,21 +6,25 @@
 #include <chesscoach/version.hpp>
 
 #include "board_view.hpp"
+#include "explore_screen.hpp"
 #include "main_window.hpp"
 #include "ui_harness.hpp"
 
 #include <QAction>
 #include <QComboBox>
+#include <QFileInfo>
 #include <QLabel>
 #include <QListWidget>
 #include <QObject>
 #include <QStackedWidget>
 #include <QString>
 #include <QTabBar>
+#include <QTemporaryDir>
 #include <QTest>
 #include <string_view>
 
 using chesscoach::app::BoardView;
+using chesscoach::app::ExploreScreen;
 using chesscoach::app::MainWindow;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
@@ -31,7 +35,10 @@ namespace {
 class MainWindowTest : public QObject {
     Q_OBJECT
 
-    const QString data_dir_ = QStringLiteral("/scratch/chess-coach-data");
+    // A data directory the windows never write to: these tests change neither the theme nor
+    // the tier.
+    QTemporaryDir root_;
+    const QString data_dir_ = root_.filePath(QStringLiteral("data"));
 
   private slots:
     void title_names_the_version() const {
@@ -108,8 +115,11 @@ class MainWindowTest : public QObject {
             QStringLiteral("Repertoire"),
             QStringLiteral("Drill"),
         };
+        QVERIFY(qobject_cast<const ExploreScreen*>(screens.widget(0)) != nullptr);
         for (int i = 0; i < 4; ++i) {
             QCOMPARE(tabs.tabText(i), names.at(i));
+        }
+        for (int i = 1; i < 4; ++i) {
             const auto* label = qobject_cast<const QLabel*>(screens.widget(i));
             QTEST_ASSERT(label != nullptr);
             QCOMPARE(label->text(), names.at(i));
@@ -118,16 +128,17 @@ class MainWindowTest : public QObject {
         QCOMPARE(screens.currentIndex(), 2);
     }
 
-    void the_status_bar_names_the_database_and_the_engine() const {
-        const MainWindow without(data_dir_, QString());
-        QCOMPARE(child<QLabel>(without, QStringLiteral("database_status")).text(),
+    void the_status_bar_shows_no_database_and_the_engine() const {
+        const MainWindow window(data_dir_, QString());
+        QCOMPARE(child<QLabel>(window, QStringLiteral("database_status")).text(),
                  QStringLiteral("No database"));
-        QCOMPARE(child<QLabel>(without, QStringLiteral("engine_status")).text(),
+        QVERIFY(child<QLabel>(window, QStringLiteral("data_version_status")).isHidden());
+        QCOMPARE(child<QLabel>(window, QStringLiteral("engine_status")).text(),
                  QStringLiteral("Engine: not started"));
-
-        const MainWindow with(data_dir_, QStringLiteral("/scratch/dbs/openings.db"));
-        QCOMPARE(child<QLabel>(with, QStringLiteral("database_status")).text(),
-                 QStringLiteral("openings.db"));
+        QVERIFY(child<QLabel>(window, QStringLiteral("explore_message"))
+                    .text()
+                    .startsWith(QStringLiteral("No database loaded")));
+        QVERIFY(!QFileInfo::exists(data_dir_));
     }
 };
 

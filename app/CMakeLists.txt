@@ -13,6 +13,15 @@ add_library(app_lib STATIC
   src/board_theme.hpp
   src/board_view.cpp
   src/board_view.hpp
+  src/db_worker.cpp
+  src/db_worker.hpp
+  src/eval_bar.cpp
+  src/eval_bar.hpp
+  src/explore_data.hpp
+  src/explore_model.cpp
+  src/explore_model.hpp
+  src/explore_screen.cpp
+  src/explore_screen.hpp
   src/main_window.cpp
   src/main_window.hpp
   src/piece_set.cpp
@@ -33,19 +42,28 @@ qt_add_resources(app_lib "pieces"
   PREFIX "/pieces"
   BASE "${PROJECT_SOURCE_DIR}/data/pieces"
   FILES ${chesscoach_pieces})
-
 add_executable(app
   src/main.cpp)
 set_target_properties(app PROPERTIES OUTPUT_NAME chess-coach)
 target_link_libraries(app PRIVATE chesscoach::app_lib chesscoach::warnings)
 
 if(BUILD_TESTING)
+  # The fixture opening database the Explore tests open, written into core's schema with
+  # SQLiteCpp, as the CLI's tests write theirs.
+  find_package(SQLiteCpp CONFIG REQUIRED)
+  add_library(app_test_fixture STATIC
+    tests/fixture_db.cpp
+    tests/fixture_db.hpp)
+  target_include_directories(app_test_fixture PUBLIC tests)
+  target_link_libraries(app_test_fixture PUBLIC chesscoach::core PRIVATE SQLiteCpp
+                                                                          chesscoach::warnings)
+
   # Each UI test saves its screenshots here, as <test>-<state>.png (tools/ui_tests.sh).
   set(chesscoach_screenshots "${PROJECT_BINARY_DIR}/ui-screenshots")
-  foreach(test IN ITEMS ui_board_test ui_main_window_test)
+  foreach(test IN ITEMS ui_board_test ui_main_window_test ui_explore_test)
     chesscoach_add_test(app_${test} MODULE app KIND ui
                         SOURCES tests/${test}.cpp tests/ui_harness.hpp
-                        LIBS chesscoach::app_lib)
+                        LIBS chesscoach::app_lib app_test_fixture)
     target_compile_definitions(app_${test}
                                PRIVATE "CHESSCOACH_UI_SCREENSHOT_DIR=\"${chesscoach_screenshots}\"")
   endforeach()
