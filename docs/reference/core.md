@@ -4,8 +4,8 @@ How `core` works: the position key, `Position` over chess-library, tiers, badges
 and the read-only opening store with the canonical dump. What these must do is fixed by
 `docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11); this
 file says how `core` does it. The rules it obeys are in `CLAUDE.md`, **`core/` is exact,
-deterministic and keyed by position**. The score, the profile store, the scheduler, the sampler
-and the UCI client are described here when they land (Phase 2 onward).
+deterministic and keyed by position**. The recommendation score is described below; the profile
+store, the scheduler, the sampler and the UCI client are described here when they land.
 
 | Header (`core/include/chesscoach/`) | Holds |
 |---|---|
@@ -16,6 +16,7 @@ and the UCI client are described here when they land (Phase 2 onward).
 | `names.hpp` | `load_names`, `NameTable`, `Opening`, `NameError` |
 | `opening_schema.hpp` | `openings_schema_sql()`, `opening_schema_version` |
 | `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
+| `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_loss`, the score's numbers |
 | `version.hpp` | `Version` (Phase 0) |
 
 Errors are values (`tl::expected` with an `enum class` or a small struct). No public header
@@ -188,6 +189,38 @@ non-negative and then the negative ones: the order of the keys as unsigned, with
 in memory. Every column is written as stored: NULL as `-`, an integer in decimal (a key column
 as the unsigned value of its bits), text as it is.
 
+## The recommendation score
+
+`score_moves` ranks the moves of a position at one tier (`PLAN.md` §5.2; the inputs are
+`docs/database.md` §13). Every move with a `moves` row at the tier is a candidate, and each
+`ScoreComponents` exposes how its score came about:
+
+| Component | Rule |
+|---|---|
+| `loss` | §7.2's loss from the position's and the child's evaluations, from the mover's side, a mate m as sign(m) × (100000 − \|m\|); undefined when either is unevaluated |
+| `sound` | the loss is undefined or at most `soundness_margin_cp`, 50 cp, the Book margin |
+| `expected_score` | the mover's wins plus half the draws over the total, shrunk toward 0.5 by total / (total + 30): (wins + draws / 2 + 15) / (total + 30), so a move of 30 games weighs half |
+| `replies_needed` | the fewest of the child's most-played replies at the tier whose totals reach 80% of its moves' sum; 0 when the child is off book at the tier (`child_in_book` false) and 0 when it is in book there with no moves (visited only at the cap, or where its games ended), so neither carries a penalty |
+| `penalty` | 0.02 per reply beyond the first, capped at 0.3 |
+| `score` | max(0, `expected_score` − `penalty`) for a sound move, 0 for an unsound one, which is still listed, with its loss |
+| `share` | the move's share of the position's plays at the tier; shown beside the score, not part of it |
+
+The moves come back by score, highest first, equal scores by move text. The numbers (50 cp, 30
+games, 80%, 0.02, 0.3) are constants of `score.hpp` and tier A to change.
+
+The function is pure over the store's rows: `score_moves(position_row, moves, lookup)` takes the
+position's `positions` row (its evaluation, and the side to move from its FEN's second field) and
+`moves` rows at the tier, and a `ChildLookup` that gives a child's `positions` row, `nodes` row
+and `moves` rows at the same tier; the overload on an `OpeningStore` reads those rows and returns
+nothing for a position without a `positions` row. The arithmetic is integer where the formula
+allows (the expected score is one division of (2 × wins + draws + 30) by (2 × total + 60), the
+coverage test is `100 × covered >= 80 × sum`), and every floating-point value is one operation in
+a statement of its own, so no compiler fuses two into a multiply-add and the values and the order
+are the same on every platform.
+
+`evaluation_loss` repeats the rule the pipeline applies for the badges (`pipeline/src/badges.cpp`)
+with the same 50 cp margin; moving the pipeline onto `core`'s function is a later refactor.
+
 ## Tests
 
 `core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
@@ -197,6 +230,11 @@ directions) and `position_property_test` (FEN and SAN/UCI round trips); `tier_te
 `badges_test`; `names_test` (the committed files, first wins, the errors); `opening_store_test`
 (a small database built from `openings_schema_sql()` with keys either side of the sign bit, the
 lookups, the dump against a golden text written from §11, a read-only file left unchanged, and
-every refusal). The property tests' random games (`random_games.hpp`) start from the start
+every refusal); `score_test` (the shrink from either side, the 80% count at its boundary, the
+gate with defined, undefined and mate losses, the penalty and its cap, off-book and move-less
+children, the floor at zero, the shares and the sort, each number worked out by hand) and
+`score_property_test` (over generated rows: every score between 0 and 1, an unsound move at 0, a
+sound score equal to max(0, expected − penalty), the penalty within its cap, the shares summing
+to one, the order). The property tests' random games (`random_games.hpp`) start from the start
 position or from positions that soon castle, promote or meet en passant, and pick moves by index
 into the sorted legal moves.

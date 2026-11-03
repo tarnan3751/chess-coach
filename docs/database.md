@@ -471,10 +471,10 @@ differ between libstdc++ and libc++, because a session must replay identically o
 platform.
 
 **Score inputs.** For each candidate move at a position and a tier, the recommendation score reads
-the move's `moves` row at the tier, its share at tier 6 (§7.2), and the loss computed from the
-evaluations of the position and the child (§7.2). Its soundness margin is `book_margin` (§7.1),
-applied where the loss is defined. The formula, the simplicity penalty and the components the UI
-shows are in `docs/reference/core.md`.
+the move's `moves` row and the position's `moves` rows at the tier, the evaluations of the
+position and the child (for §7.2's loss), and the child's `nodes` row and `moves` rows at the
+tier. Its soundness margin is `book_margin` (§7.1), applied where the loss is defined. The
+formula, the simplicity penalty and the components the UI shows are in `docs/reference/core.md`.
 
 ## 14. Change procedure
 

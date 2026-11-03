@@ -11,6 +11,7 @@ add_library(core STATIC
   include/chesscoach/opening_schema.hpp
   include/chesscoach/opening_store.hpp
   include/chesscoach/position.hpp
+  include/chesscoach/score.hpp
   include/chesscoach/tier.hpp
   include/chesscoach/version.hpp
   src/board_key.cpp
@@ -19,6 +20,7 @@ add_library(core STATIC
   src/opening_schema.cpp
   src/opening_store.cpp
   src/position.cpp
+  src/score.cpp
   src/tier.cpp
   src/version.cpp
   "${PROJECT_BINARY_DIR}/generated/chesscoach/version_info.hpp")
@@ -63,6 +65,12 @@ if(BUILD_TESTING)
   chesscoach_add_test(core_position_property_test MODULE core KIND property
                       SOURCES tests/position_property_test.cpp tests/random_games.hpp
                       LIBS chesscoach::core rapidcheck)
+  chesscoach_add_test(core_score_test MODULE core KIND unit
+                      SOURCES tests/score_test.cpp
+                      LIBS chesscoach::core)
+  chesscoach_add_test(core_score_property_test MODULE core KIND property
+                      SOURCES tests/score_property_test.cpp
+                      LIBS chesscoach::core rapidcheck)
   chesscoach_add_test(core_tier_test MODULE core KIND unit
                       SOURCES tests/tier_test.cpp
                       LIBS chesscoach::core)
@@ -79,6 +87,8 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_opening_store_test)
   chesscoach_assert_no_qt(core_position_test)
   chesscoach_assert_no_qt(core_position_property_test)
+  chesscoach_assert_no_qt(core_score_test)
+  chesscoach_assert_no_qt(core_score_property_test)
   chesscoach_assert_no_qt(core_tier_test)
   chesscoach_assert_no_qt(core_version_test)
   chesscoach_assert_no_qt(core_version_property_test)
