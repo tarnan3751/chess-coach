@@ -25,10 +25,12 @@
 #
 #   tools/gates.sh [--quick]     (or GATE_QUICK=1 tools/gates.sh)
 #
-# --quick is the per-commit profile: layout, format, every target compiled in the dev preset (no
-# sanitizers), the unit tests only (ctest -L unit), and the boundary; it skips the property,
-# engine and UI tests, the benchmarks, clang-tidy and the corpus, and its summary line says
-# "(quick)". Without it the gate is the full one above, which reviews and landing run.
+# --quick is the fast profile, for the coordinator's own small changes on main and a developer's
+# checks while a series is in progress (never required per commit): layout, format, every target
+# compiled in the dev preset (no sanitizers), the unit tests only (ctest -L unit), and the
+# boundary; it skips the property, engine and UI tests, the benchmarks, clang-tidy and the
+# corpus, and its summary line says "(quick)". Without it the gate is the full one above, which a
+# series head, a tier A review and a landing batch each run once (CLAUDE.md, **Pace**).
 # Prints one line per gate, the failing gate's output in full, and exits non-zero when any gate
 # fails. When the tests fail, ctest's logs of this run (LastTest.log and LastTestsFailed.log, which
 # hold every failing test's output and a RapidCheck property's seed) are kept in

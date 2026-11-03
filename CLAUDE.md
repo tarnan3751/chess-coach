@@ -64,7 +64,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 
 | What | Command |
 |---|---|
-| The gate (format, build with warnings as errors under the sanitizers, every test, the benchmarks on an idle machine, clang-tidy, the boundary, the corpus); its quick per-commit profile (format, build in `dev`, unit tests, boundary) | `tools/gates.sh`; `tools/gates.sh --quick` |
+| The gate (format, build with warnings as errors under the sanitizers, every test, the benchmarks on an idle machine, clang-tidy, the boundary, the corpus); its quick profile (format, build in `dev`, unit tests, boundary) | `tools/gates.sh`; `tools/gates.sh --quick` |
 | Run all tests | `tools/run_tests.sh` |
 | Run one module's tests, optionally filtered by a ctest regex | `tools/run_tests.sh core 'Zobrist'` |
 | The benchmarks, in the release preset | `tools/run_tests.sh --bench` |
@@ -76,7 +76,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` (Phase 1) |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` (Phase 3) |
 | Package | `cmake --build --preset release --target package` (Phase 6) |
-| Land a delivered series | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash>` |
+| Land a delivered series; in a batch, every series but the last with `--no-gate` | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--no-gate]` |
 | The changelog section for a release, from the commit log | `tools/changelog.sh <version> [<from-ref>] [<to-ref>]` |
 
 **Any configure or build writes files**: `build/<preset>/` in the tree it runs in, the vcpkg
@@ -84,8 +84,9 @@ ports installed under it, and a normal app run reads and writes the owner's user
 (profiles, repertoires, the engine cache) under the OS application-support folder. The gate and
 the UI tests run the app only with `--data-dir` pointed at scratch.
 
-**Run the quick gate at every commit and the full gate at the head of a series, on a fresh
-clone; the landing runs the full gate again.**
+**Gates run in batches (Pace): the full gate once at the head of a series, on a fresh clone,
+and once per batch of series landed together; the quick gate is for the coordinator's own small
+changes and for a developer's checks while a series is in progress, never required per commit.**
 
 ## Where things live
 
@@ -254,19 +255,23 @@ afford to hold.
 - **Coordinator** (the top-level session) — talks to the owner, makes design decisions within
   `PLAN.md` or escalates them, writes briefs (each naming its **tier**, below), approves plans
   where a plan is required, routes work and review findings, reads the real diff of every tier A
-  change and of every fold, and lands series. It does not read large files itself (the scout
-  does), and does not write feature code in the main tree: trivial edits only, when spawning an
-  agent would cost more than the edit.
+  change and of every fold, and lands series. **Small work it does itself** (**Pace**): a doc, a
+  config or tooling change, a contained fix it can make and gate in minutes goes straight onto
+  `main` in the main tree under the quick gate, without a brief or a reviewer, unless it touches
+  tier A ground, which takes the tier A path whatever its size. It spawns an agent for anything
+  larger, reads what it needs itself when that is faster than a scout, and sends the scout on
+  sweeps.
 - **`developer`** (Opus) — works in a clone of its own (**Lanes**), implements the brief, runs
-  the quick gate at every commit and the full gate at the series head, verifies behaviour
-  through the tests, the CLI, the pipeline's sample corpus and the UI harness in its clone,
-  updates the docs the change invalidates, and delivers a patch series on the current `main`
-  with the tree it reproduces. Never writes to the main working tree. Plans first only when the
-  brief asks (tier A) or when it meets an open decision. **Continue the same agent from plan to
-  implementation** (`SendMessage`); respawning loses what it learned planning.
-- **`reviewer`** (Opus) — independent review of the series, applied in a clone of its own: the
-  full pass for tier A, the targeted pass for tier B (**Tiers**). Report-only; it is given the
-  code and the brief, never the developer's conclusions.
+  the full gate once at the series head (the quick gate while it works, as often as it helps,
+  never required per commit), verifies behaviour through the tests, the CLI, the pipeline's
+  sample corpus and the UI harness in its clone, updates the docs the change invalidates, and
+  delivers a patch series on the current `main` with the tree it reproduces. Never writes to
+  the main working tree. Plans first only when the brief asks (tier A) or when it meets an open
+  decision. **Continue the same agent from plan to implementation** (`SendMessage`); respawning
+  loses what it learned planning.
+- **`reviewer`** (Opus) — independent review of a series or a batch of them, applied in a clone
+  of its own: the full pass for tier A, the targeted pass for tier B (**Tiers**), a verdict per
+  series. Report-only; it is given the code and the brief, never the developer's conclusions.
 - **`scout`** / **`researcher`** (Sonnet) — read-only codebase lookups (including API shapes
   from the installed headers) and outside research (C++20, Qt 6, CMake, vcpkg, SQLite, zstd,
   the UCI protocol, the Lichess data, chess theory, licences). Neither configures or builds. A
@@ -295,6 +300,15 @@ afford to hold.
 Small later-scope items are **batched** by area, up to about five a slice, one commit each, one
 brief and one review.
 
+**Pace.** Speed is a goal of the process, not a by-product (`PLAN.md` §11, 2026-11-03). The
+coordinator keeps every seat busy: developers run in parallel wherever their areas are disjoint,
+scouts and researchers run alongside them, the next brief goes out while a review runs, and a
+reviewer takes the series ready at the time as one batch rather than one series at a time. Gates
+run in batches, never per commit: the developer's full gate once at the series head, the
+reviewer's once per batch for tier A, the landing's once per batch of series landed together.
+Work small enough for the coordinator to do in minutes is done by the coordinator, not briefed.
+Nothing waits that need not wait.
+
 **Briefs.** A brief is the whole of what an agent knows about the task, so it carries:
 
 - **Title and tier.**
@@ -319,9 +333,10 @@ and stays at `HEAD`: no agent writes to it or its index. A developer or a review
 `lanes/review-N`, series under `series/<brief>/`), never under the session scratchpad or `/tmp`:
 a reboot wipes `/private/tmp` (math-canvas lost every clone and a reviewed series that way on
 2026-10-28). The first configure in a lane compiles the vcpkg ports not yet in the machine-wide
-binary cache, which is slow once. Two developers may run at once on disjoint areas, under these
-rules: the second lane rebases its series onto `main` before delivery; a lane's docs changes stay
-within its area's reference file, the map only where a status line changes; a lane runs the app
+binary cache, which is slow once. Developers run at once, as many as there are disjoint areas
+(**Pace**), under these rules: a lane rebases its series onto the current `main` before
+delivery; a lane's docs changes stay within its area's reference file, the map only where a
+status line changes; a lane runs the app
 only through the UI harness or with `--data-dir` pointed at scratch, and **nobody runs the app
 without `--data-dir` in a clone**, because that opens the owner's data directory; **no lane runs
 the pipeline on a full monthly dump** (hours of every core: the sample dump and the small 2013
@@ -331,12 +346,14 @@ machine; no lane kills a process it did not start (`pkill ninja` or `pkill stock
 another lane's gate) or clears `~/.cache/vcpkg`. The UI tests run under the offscreen platform,
 so they need no display and no lock, and the full gate runs them.
 
-**Review routing.** The reviewer's findings go back to the **same** developer (`SendMessage`),
-which folds them into the series; the coordinator reads the fold's diff; then the reviewer
-re-reviews. A FAIL loops until it passes; PASS WITH FIXES is folded and read, re-reviewed when
-the fold touched tier A ground or the verdict was FAIL; otherwise the coordinator reads the fold
-and lands. Anything the developer did outside the brief (**Adjacent changes**) is kept or vetoed
-by the coordinator, not the reviewer.
+**Review routing.** Reviews go out in batches (**Pace**): the series ready at the time, from one
+lane or several, go to one reviewer in one brief, each with its tier, and come back with a
+verdict per series. The reviewer's findings go back to the **same** developer (`SendMessage`),
+which folds them into the series; the coordinator reads the fold's diff. A FAIL loops until it
+passes and is re-reviewed; PASS WITH FIXES is folded and read, re-reviewed only when the fold
+touched tier A ground; otherwise the coordinator reads the fold and lands. Anything the
+developer did outside the brief (**Adjacent changes**) is kept or vetoed by the coordinator, not
+the reviewer.
 
 **Delivery and landing.** A series is `git format-patch` files on the current `main`, one logical
 change per commit (refactors separate from features), each a **Conventional Commit**:
@@ -345,13 +362,15 @@ change per commit (refactors separate from features), each a **Conventional Comm
 `app`) or `data`, `tools`, `docs`, `ci`, `build`; the summary an imperative sentence in sentence
 case, no trailing period, at most 72 characters; a body of plain paragraphs saying what and why;
 **no trailers**: no commit in this repository carries one, the coordinator's own included. The
-series comes with the write-tree hash it reproduces and the full gate's tail at its head, the
-quick gate having run at every commit; small series land together in one batch under one gate.
-Once the review's findings are folded and the fold's diff read, the coordinator lands it with
+series comes with the write-tree hash it reproduces and the full gate's tail at its head. Once
+the review's findings are folded and the fold's diff read, the coordinator lands it with
 `tools/land_series.sh <patch-dir> <base-commit> <tree-hash>` (clean tree and HEAD at the base
 required; `git am`; the messages checked; the tree checked, with a rollback on mismatch; the gate
-run; the commits left in place). The coordinator pushes `main` to `origin` after each landing.
-The owner reviews at phase gates and whenever they choose.
+run; the commits left in place). Series land in batches (**Pace**): every series but the last
+with `--no-gate`, the last running the full gate over the whole batch; a failing batch gate is
+undone with `git reset --hard` to the pre-batch commit, and the series are relanded one at a
+time to find the culprit. The coordinator pushes `main` to `origin` after each landing. The
+owner reviews at phase gates and whenever they choose.
 
 Constraints:
 
