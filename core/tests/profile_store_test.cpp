@@ -688,7 +688,7 @@ TEST_CASE("A choice keeps its card in step when it is added, kept, changed and r
 
     // The same move again changes nothing, the card's reviews included.
     clock.now = 6000;
-    REQUIRE(store.record_review(id, Grade::good, 6000).has_value());
+    REQUIRE(store.record_review(1, Color::white, id, e4.key, Grade::good, 6000).has_value());
     CHECK(store.set_choice(1, Color::white, e4) == ChoiceChange::unchanged);
     CHECK(store.repertoire_nodes(1, Color::white) ==
           std::vector{RepertoireNode{.choice = e4, .created_at = 5000}});
@@ -705,7 +705,7 @@ TEST_CASE("A choice keeps its card in step when it is added, kept, changed and r
     CHECK(store.card_history(id).empty());
 
     // Removing the choice removes its card and the card's reviews; a second remove finds none.
-    REQUIRE(store.record_review(id, Grade::easy, 7100).has_value());
+    REQUIRE(store.record_review(1, Color::white, id, e4.key, Grade::easy, 7100).has_value());
     CHECK(store.remove_choice(1, Color::white, e4.key) == true);
     CHECK(store.repertoire_nodes(1, Color::white).empty());
     CHECK(store.cards(1, Color::white).empty());
@@ -791,7 +791,7 @@ TEST_CASE("Syncing the cards repairs them to the nodes, and a second sync change
         REQUIRE(store.set_choice(1, Color::white, choice) == ChoiceChange::added);
     }
     const Card nf3 = card_at(store, 1, Color::white, white_after_e5().key);
-    REQUIRE(store.record_review(nf3.id, Grade::good, 5500).has_value());
+    REQUIRE(store.record_review(1, Color::white, nf3.id, nf3.key, Grade::good, 5500).has_value());
     CHECK(store.sync_cards(1, Color::white) == CardSync{});
 
     // Broken behind the store's back: e4's card missing, Nf3's card on another move, and a card
@@ -846,11 +846,13 @@ TEST_CASE("Due cards come by due time and then key, and a review is the schedule
 
     // Good on the first, again on the second a little later: both leave the due list, and
     // come back in the order of their new due times.
-    const auto first = store.record_review(due.at(0).id, Grade::good, 6000);
+    const auto first =
+        store.record_review(1, Color::white, due.at(0).id, due.at(0).key, Grade::good, 6000);
     REQUIRE(first.has_value());
     CHECK(first->state == chesscoach::review(chesscoach::new_card(5000), Grade::good, 6000));
     CHECK(card_at(store, 1, Color::white, due.at(0).key) == *first);
-    const auto second = store.record_review(due.at(1).id, Grade::again, 6100);
+    const auto second =
+        store.record_review(1, Color::white, due.at(1).id, due.at(1).key, Grade::again, 6100);
     REQUIRE(second.has_value());
     CHECK(second->state == chesscoach::review(chesscoach::new_card(5000), Grade::again, 6100));
     CHECK(store.card_history(due.at(0).id) ==
@@ -867,14 +869,17 @@ TEST_CASE("Due cards come by due time and then key, and a review is the schedule
     CHECK(later.at(2).id == due.at(1).id);
 
     // A second review applies to the stored state, which stays the replay of the history.
-    const auto again = store.record_review(due.at(0).id, Grade::hard, first->state.due_at);
+    const auto again = store.record_review(1, Color::white, due.at(0).id, due.at(0).key,
+                                           Grade::hard, first->state.due_at);
     REQUIRE(again.has_value());
     CHECK(again->state == chesscoach::replay(5000, store.card_history(due.at(0).id)));
-    CHECK(store.record_review(999, Grade::good, 1).error() == ProfileError::no_such_card);
+    CHECK(store.record_review(1, Color::white, 999, white_start().key, Grade::good, 1).error() ==
+          ProfileError::no_such_card);
     CHECK(store.card_history(999).empty());
 }
 
-TEST_CASE("Removing a profile removes its repertoires, cards and reviews", "[profiles]") {
+TEST_CASE("A card is reviewed through its profile and colour, and goes with its profile",
+          "[profiles]") {
     const DataDir dir("remove-repertoire");
     TestClock clock;
     auto store = open_store(dir, clock);
@@ -883,7 +888,20 @@ TEST_CASE("Removing a profile removes its repertoires, cards and reviews", "[pro
     REQUIRE(store.set_choice(club->id, Color::white, white_start()) == ChoiceChange::added);
     REQUIRE(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
     const Card card = card_at(store, club->id, Color::white, white_start().key);
-    REQUIRE(store.record_review(card.id, Grade::good, 2000).has_value());
+    REQUIRE(store.record_review(club->id, Color::white, card.id, card.key, Grade::good, 2000)
+                .has_value());
+    // A card is reviewed only through its own profile and colour.
+    CHECK(store.record_review(1, Color::white, card.id, card.key, Grade::good, 2100).error() ==
+          ProfileError::no_such_card);
+    CHECK(
+        store.record_review(club->id, Color::black, card.id, card.key, Grade::good, 2100).error() ==
+        ProfileError::no_such_card);
+    // Nor under another key: an id reused by a later card does not grade it.
+    CHECK(
+        store
+            .record_review(club->id, Color::white, card.id, white_after_e5().key, Grade::good, 2100)
+            .error() == ProfileError::no_such_card);
+    CHECK(store.card_history(card.id).size() == 1);
 
     REQUIRE(store.remove_profile(club->id).has_value());
     CHECK(store.repertoire_nodes(club->id, Color::white).empty());
@@ -906,7 +924,8 @@ TEST_CASE("An export is a copy, and importing it replaces profiles.db and keeps 
         REQUIRE(store.create_profile("Club", Tier::r1800_1999).has_value());
         REQUIRE(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
         card_id = card_at(store, 1, Color::white, white_start().key).id;
-        REQUIRE(store.record_review(card_id, Grade::good, 6000).has_value());
+        REQUIRE(store.record_review(1, Color::white, card_id, white_start().key, Grade::good, 6000)
+                    .has_value());
         REQUIRE(ProfileStore::export_profiles(from.path(), copy).has_value());
         // Never over an existing file.
         CHECK(ProfileStore::export_profiles(from.path(), copy).error() == ProfileError::unwritable);
@@ -1068,7 +1087,10 @@ TEST_CASE("Write the version 3 fixture", "[.fixture]") {
         REQUIRE(store.set_choice(2, Color::black, black_after_e4()) == ChoiceChange::added);
         const Card e4 = card_at(store, 1, Color::white, white_start().key);
         for (const Review& review : fixture_reviews()) {
-            REQUIRE(store.record_review(e4.id, review.grade, review.reviewed_at).has_value());
+            REQUIRE(
+                store
+                    .record_review(1, Color::white, e4.id, e4.key, review.grade, review.reviewed_at)
+                    .has_value());
         }
     }
     std::filesystem::copy_file(dir.file(),

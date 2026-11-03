@@ -366,8 +366,11 @@ transaction, stamped by the clock:
 **Cards** (§12.4). A card's state columns are always `replay(created_at, its reviews in id
 order)`, which a property test checks over random choices and reviews.
 
-- `record_review(card_id, grade, reviewed_at)` applies the scheduler's `review` to the stored
-  state and inserts the review, in one transaction, and returns the new `Card`, or `no_such_card`.
+- `record_review(profile_id, colour, card_id, key, grade, reviewed_at)` applies the scheduler's
+  `review` to the stored state and inserts the review, in one transaction, and returns the new
+  `Card`, or `no_such_card` unless the card with the id is that profile's card for that colour at
+  that key: a removed card's id can be given to a later card, so a caller holding an old id does
+  not grade the new one.
   The time is the caller's, so a drill can grade at a given moment.
 - `cards(profile_id, colour)` lists the cards by key; `due_cards(profile_id, colour, now)` those
   whose `due_at` is at most `now`, by `due_at` and then key; `card_history(card_id)` the card's
@@ -559,8 +562,9 @@ to one, the order); `engine_test` (every fake script, `busy`, `stop`, the option
 timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
 error, migrations, the refused files, the cache rules, the spar sessions saved, read and removed
 with their profile, the repertoire's validation and card rules, the import of choices, the card
-repair, the due order, the reviews against the scheduler, the export and import round trip and
-every refusal, the version 1 and 2 fixtures migrated and the version 3 one opened unchanged);
+repair, the due order, the reviews against the scheduler and refused outside their profile and
+colour, the export and import round trip and every refusal, the version 1 and 2 fixtures migrated
+and the version 3 one opened unchanged);
 `profile_store_property_test` (over random choices for one position and random reviews, a card's
 stored state is the replay of its stored reviews);
 `random_test` (the reference output of seed 0, one sequence per seed; `key_test`'s pinned values

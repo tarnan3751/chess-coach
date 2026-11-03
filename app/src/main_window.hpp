@@ -94,7 +94,7 @@ class MainWindow : public QMainWindow {
     void pgn_import_requested(const QString& path, bool white);
     void sync_requested(bool white);
     void due_requested(bool white);
-    void review_requested(qint64 card_id, int grade);
+    void review_requested(qint64 card_id, bool white, quint64 key, int grade);
     void export_requested(const QString& path);
 
   private:

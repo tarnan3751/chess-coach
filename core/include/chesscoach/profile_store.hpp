@@ -243,8 +243,12 @@ class ProfileStore {
     [[nodiscard]] std::vector<Card> due_cards(std::int64_t profile_id, Color colour,
                                               std::int64_t now) const;
 
-    // Applies the scheduler's review to the card and records the review, in one transaction.
-    [[nodiscard]] tl::expected<Card, ProfileError> record_review(std::int64_t card_id, Grade grade,
+    // Applies the scheduler's review to the card and records the review, in one transaction;
+    // no_such_card unless the card with the id is the profile's card for the colour at the key,
+    // since a deleted card's id may be given to a later card.
+    [[nodiscard]] tl::expected<Card, ProfileError> record_review(std::int64_t profile_id,
+                                                                 Color colour, std::int64_t card_id,
+                                                                 Key key, Grade grade,
                                                                  std::int64_t reviewed_at);
 
     // The card's reviews in the order they were applied.

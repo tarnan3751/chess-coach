@@ -485,7 +485,7 @@ void ProfileWorker::due_cards(bool white) {
     emit cards_ready(data);
 }
 
-void ProfileWorker::record_review(qint64 card_id, int grade) {
+void ProfileWorker::record_review(qint64 card_id, bool white, quint64 key, int grade) {
     Grade applied = Grade::again;
     switch (grade) {
     case static_cast<int>(Grade::again):
@@ -503,7 +503,8 @@ void ProfileWorker::record_review(qint64 card_id, int grade) {
         if (!writable) {
             return;
         }
-        const auto card = writable->store->record_review(card_id, applied, now());
+        const auto card = writable->store->record_review(writable->profile, colour_of(white),
+                                                         card_id, key, applied, now());
         if (!card) {
             fail(tr("The review was not recorded: %1.").arg(describe(card.error())));
             return;

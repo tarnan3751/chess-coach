@@ -122,7 +122,7 @@ void MainWindow::drill_record() {
         return;
     }
     recorded_ = true;
-    emit review_requested(card_->id, grade_);
+    emit review_requested(card_->id, card_->white, card_->key, grade_);
     drill_->grade_recorded();
 }
 

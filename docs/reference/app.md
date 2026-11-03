@@ -278,7 +278,7 @@ repertoire creates nothing. Its slots, reached by queued connection:
 | `import_pgn(path, white)` | `pgn_imported(PgnImportInfo)`, then `repertoire_changed`: `import_repertoire_pgn` and `import_choices` |
 | `sync_cards(white)` | `cards_synced(white, created, reset, deleted)` |
 | `due_cards(white)` | `cards_ready(CardsData)`: the colour's cards due now, each with its FEN, its answer in SAN and its name, and both colours' due and total counts |
-| `record_review(card_id, grade)` | `review_recorded(card_id, due_at)` |
+| `record_review(card_id, white, key, grade)` | `review_recorded(card_id, due_at)`; the card must be the colour's card with the id at the key, as `cards_ready` listed it |
 | `export_profiles(path)` | `profiles_exported(path)`, or `export_failed(message)` |
 | `close_stores()` | Closes the profile store (**Export and import**) |
 

@@ -51,8 +51,9 @@ class ProfileWorker : public QObject {
     Q_SLOT void sync_cards(bool white);
     // cards_ready: the colour's cards due now, with both repertoires' progress.
     Q_SLOT void due_cards(bool white);
-    // review_recorded: the grade (core's Grade value) applied to the card now.
-    Q_SLOT void record_review(qint64 card_id, int grade);
+    // review_recorded: the grade (core's Grade value) applied to the card now; the card is the
+    // colour's card with the id at the key, as cards_ready listed it.
+    Q_SLOT void record_review(qint64 card_id, bool white, quint64 key, int grade);
     // profiles_exported: a copy of profiles.db at path; export_failed when a file is there.
     Q_SLOT void export_profiles(const QString& path);
 

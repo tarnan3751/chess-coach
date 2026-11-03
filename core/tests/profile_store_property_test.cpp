@@ -78,7 +78,8 @@ TEST_CASE("A card's stored state is the replay of its reviews", "[profiles][prop
                 *rc::gen::inRange<std::int64_t>(0, std::int64_t{90} * chesscoach::seconds_per_day);
             const auto grade =
                 *rc::gen::element(Grade::again, Grade::hard, Grade::good, Grade::easy);
-            const auto reviewed = store.record_review(card.id, grade, at);
+            const auto reviewed =
+                store.record_review(1, Color::white, card.id, card.key, grade, at);
             RC_ASSERT(reviewed.has_value());
             RC_ASSERT(reviewed->state == chesscoach::review(card.state, grade, at));
             card = *reviewed;

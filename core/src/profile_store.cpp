@@ -921,13 +921,19 @@ std::vector<Card> ProfileStore::due_cards(std::int64_t profile_id, Color colour,
     return found;
 }
 
-tl::expected<Card, ProfileError> ProfileStore::record_review(std::int64_t card_id, Grade grade,
+tl::expected<Card, ProfileError> ProfileStore::record_review(std::int64_t profile_id, Color colour,
+                                                             std::int64_t card_id, Key key,
+                                                             Grade grade,
                                                              std::int64_t reviewed_at) {
     try {
         SQLite::Transaction transaction(impl_->db);
-        SQLite::Statement find(impl_->db,
-                               std::string("SELECT ") + card_columns + " FROM cards WHERE id = ?1");
+        SQLite::Statement find(impl_->db, std::string("SELECT ") + card_columns +
+                                              " FROM cards WHERE id = ?1 AND profile_id = ?2 "
+                                              "AND colour = ?3 AND key = ?4");
         find.bind(1, card_id);
+        find.bind(2, profile_id);
+        find.bind(3, colour_index(colour));
+        find.bind(4, key_to_sql(key));
         if (!find.executeStep()) {
             return tl::unexpected(ProfileError::no_such_card);
         }

@@ -63,13 +63,15 @@ Result<void> run_drill(const DrillOptions& options, std::ostream& out, const Clo
         return {};
     }
     if (options.action == "review" && grade) {
-        // Only a card of this profile's repertoire for the colour.
+        // Only a card of this profile's repertoire for the colour, with the key it has there.
         const auto cards = store.cards(profile, *colour);
-        if (std::ranges::find(cards, options.card, &Card::id) == cards.end()) {
+        const auto card = std::ranges::find(cards, options.card, &Card::id);
+        if (card == cards.end()) {
             return fail(fmt::format("no card {} in {}'s {} repertoire", options.card,
                                     opened->profile.name, options.colour));
         }
-        const auto reviewed = store.record_review(options.card, *grade, now);
+        const auto reviewed =
+            store.record_review(profile, *colour, options.card, card->key, *grade, now);
         if (!reviewed) {
             return fail(fmt::format("profiles.db {}", describe(reviewed.error())));
         }

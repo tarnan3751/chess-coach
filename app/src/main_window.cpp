@@ -248,10 +248,13 @@ MainWindow::~MainWindow() {
     // A correct answer's grade not yet recorded is recorded before the profile worker stops.
     if (card_.has_value() && answered_ && !recorded_) {
         recorded_ = true;
-        const qint64 card = card_->id;
+        const DrillCard card = *card_;
         const int grade = grade_;
         QMetaObject::invokeMethod(
-            profile_worker_, [this, card, grade] { profile_worker_->record_review(card, grade); },
+            profile_worker_,
+            [this, card, grade] {
+                profile_worker_->record_review(card.id, card.white, card.key, grade);
+            },
             Qt::BlockingQueuedConnection);
     }
     profile_thread_.quit();
