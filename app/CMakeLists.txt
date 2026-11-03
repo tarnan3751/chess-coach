@@ -42,10 +42,7 @@ target_link_libraries(app PRIVATE chesscoach::app_lib chesscoach::warnings)
 if(BUILD_TESTING)
   # Each UI test saves its screenshots here, as <test>-<state>.png (tools/ui_tests.sh).
   set(chesscoach_screenshots "${PROJECT_BINARY_DIR}/ui-screenshots")
-  chesscoach_add_test(app_main_window_test MODULE app KIND ui
-                      SOURCES tests/main_window_test.cpp
-                      LIBS chesscoach::app_lib)
-  foreach(test IN ITEMS ui_board_test)
+  foreach(test IN ITEMS ui_board_test ui_main_window_test)
     chesscoach_add_test(app_${test} MODULE app KIND ui
                         SOURCES tests/${test}.cpp tests/ui_harness.hpp
                         LIBS chesscoach::app_lib)

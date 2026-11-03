@@ -1,7 +1,8 @@
 // chess-coach: the entry point. Parses --data-dir and --db and opens the main window. The data
 // directory is the option's, or the platform's application data location when it is absent
 // (QStandardPaths::AppDataLocation, the owner's real data, which is why tests and agents always
-// pass --data-dir); it is neither created, read nor written yet.
+// pass --data-dir); it is neither created, read nor written yet. Wiring only: the window and the
+// board are app_lib's.
 #include <chesscoach/version.hpp>
 
 #include "main_window.hpp"
@@ -43,7 +44,7 @@ int main(int argc, char* argv[]) {
         parser.isSet(data_dir_option)
             ? parser.value(data_dir_option)
             : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    chesscoach::MainWindow window(data_dir, parser.value(db_option));
+    chesscoach::app::MainWindow window(data_dir, parser.value(db_option));
     window.show();
     return QApplication::exec();
 }
