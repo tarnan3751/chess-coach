@@ -34,17 +34,34 @@ endif()
 
 # A sanitized build on macOS (the gate preset) compiles with Homebrew's LLVM clang when it is
 # installed and no compiler was given: Apple clang 15's AddressSanitizer runtime crashes before
-# main on macOS 26. The dev and release presets stay on Apple clang
-# (docs/reference/testing-tools.md, **Presets**).
+# main on macOS 26. Homebrew's llvm is found through `brew --prefix llvm`, or at the Apple
+# silicon or the Intel prefix when brew is not on the PATH. The dev and release presets stay on
+# Apple clang (docs/reference/testing-tools.md, **Presets**).
 if(CHESS_COACH_SANITIZE
    AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin"
    AND NOT DEFINED CMAKE_CXX_COMPILER
-   AND NOT DEFINED ENV{CXX}
-   AND EXISTS "/opt/homebrew/opt/llvm/bin/clang++")
-  set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/llvm/bin/clang++")
-  set(CMAKE_C_COMPILER "/opt/homebrew/opt/llvm/bin/clang")
-  message(STATUS "CHESS_COACH_SANITIZE on macOS: compiling with ${CMAKE_CXX_COMPILER}, because "
-                 "Apple clang 15's AddressSanitizer runtime crashes on macOS 26")
+   AND NOT DEFINED ENV{CXX})
+  execute_process(
+    COMMAND brew --prefix llvm
+    OUTPUT_VARIABLE chesscoach_llvm_prefix
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE chesscoach_brew_result)
+  if(NOT chesscoach_brew_result EQUAL 0)
+    set(chesscoach_llvm_prefix "")
+    foreach(prefix IN ITEMS /opt/homebrew/opt/llvm /usr/local/opt/llvm)
+      if(EXISTS "${prefix}/bin/clang++")
+        set(chesscoach_llvm_prefix "${prefix}")
+        break()
+      endif()
+    endforeach()
+  endif()
+  if(chesscoach_llvm_prefix AND EXISTS "${chesscoach_llvm_prefix}/bin/clang++")
+    set(CMAKE_CXX_COMPILER "${chesscoach_llvm_prefix}/bin/clang++")
+    set(CMAKE_C_COMPILER "${chesscoach_llvm_prefix}/bin/clang")
+    message(STATUS "CHESS_COACH_SANITIZE on macOS: compiling with ${CMAKE_CXX_COMPILER}, because "
+                   "Apple clang 15's AddressSanitizer runtime crashes on macOS 26")
+  endif()
 endif()
 
 project(chess-coach VERSION 0.1.0 LANGUAGES CXX)

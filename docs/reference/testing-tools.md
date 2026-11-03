@@ -30,7 +30,8 @@ macOS it appends `brew --prefix qt` to `CMAKE_PREFIX_PATH` unless `Qt6_DIR` is s
 is found on the default prefix. Qt is never a vcpkg port.
 
 On macOS a sanitized configure (the `gate` preset) compiles our code with Homebrew's LLVM clang
-(`/opt/homebrew/opt/llvm/bin/clang++` and `clang`) when it is installed and no compiler was
+(`clang++` and `clang` under `brew --prefix llvm`, or under `/opt/homebrew/opt/llvm` or
+`/usr/local/opt/llvm` when `brew` is not on the `PATH`) when it is installed and no compiler was
 given, because Apple clang 15's AddressSanitizer runtime crashes before `main` on macOS 26; the
 vcpkg ports stay built by Apple clang and the binaries link the system libc++. `dev` and
 `release` stay on Apple clang, so a library feature Apple clang 15 lacks still fails the full
