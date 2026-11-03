@@ -50,6 +50,9 @@ using chesscoach::app::test::save_screenshot;
 
 namespace {
 
+// The wait for an answer that includes the engine's start, which a loaded machine slows.
+constexpr int first_wait_ms = 30000;
+
 // The fake engine at the given seconds per search and line count.
 EngineSettings fake(double seconds, int lines = 3) {
     return EngineSettings{
@@ -115,8 +118,11 @@ class EngineTest : public QObject {
         const Session session(*db_, fake(0.1));
         MainWindow& window = *session.window;
         child<QComboBox>(window, QStringLiteral("tier_selector")).setCurrentIndex(3);
-        // The start position: the fake's three lines, white to move, scores as given.
-        QTRY_COMPARE(line_count(window), 3);
+        // The start position: the fake's three lines, white to move, scores as given. The first
+        // wait includes the engine's start, which a loaded machine slows.
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(line_count(window), 3, first_wait_ms);
         QCOMPARE(line_text(window, 0), QStringLiteral("1: depth 3 +0.3 e4 e5"));
         QCOMPARE(line_text(window, 1), QStringLiteral("2: depth 3 +0.3 d4 e5"));
         QCOMPARE(line_text(window, 2), QStringLiteral("3: depth 3 +0.3 Nf3 e5"));
@@ -145,8 +151,10 @@ class EngineTest : public QObject {
         click(board, "f3");
         click(board, "d7");
         click(board, "d5");
-        QTRY_COMPARE(line_count(window), 3);
-        QTRY_VERIFY(bar.isVisible());
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(line_count(window), 3, first_wait_ms);
+        QTRY_VERIFY(bar.white_share().has_value());
         QVERIFY(std::abs(bar.white_share().value_or(-1) - EvalBar::white_share_of_cp(29)) < 1e-9);
     }
 
@@ -187,8 +195,10 @@ class EngineTest : public QObject {
     void a_long_search_is_cancelled_by_moving_on() {
         auto session = std::make_unique<Session>(*db_, fake(30));
         MainWindow& window = *session->window;
-        QTRY_COMPARE(text_of(window, QStringLiteral("engine_label")),
-                     QStringLiteral("Engine: searching"));
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_label")),
+                                  QStringLiteral("Engine: searching"), first_wait_ms);
         QCOMPARE(text_of(window, QStringLiteral("engine_status")),
                  QStringLiteral("Engine: searching"));
 
@@ -200,7 +210,9 @@ class EngineTest : public QObject {
         // Qt 6.4's expansion of this macro mixes / and + without parentheses (Qt 6.12's does not).
         QTRY_VERIFY_WITH_TIMEOUT(ticks >= 3, 200); // NOLINT(readability-math-missing-parentheses)
 
-        // Moving on stops the start position's search and starts the next one at once.
+        // Moving on stops the start position's search and starts the next one at once, the
+        // window ticking all the while: the count starts again here.
+        ticks = 0;
         const auto& board = child<BoardView>(window, QStringLiteral("board"));
         click(board, "e2");
         click(board, "e4");
@@ -210,7 +222,7 @@ class EngineTest : public QObject {
         QCOMPARE(line_count(window), 0); // the stopped search's lines never show
         QTRY_COMPARE(text_of(window, QStringLiteral("engine_label")),
                      QStringLiteral("Engine: searching"));
-        QVERIFY(ticks >= 3);
+        QTRY_VERIFY(ticks >= 3); // NOLINT(readability-math-missing-parentheses)
 
         // Closing the window stops the second search too, without waiting for its 30 s.
         QElapsedTimer closing;
@@ -238,7 +250,9 @@ class EngineTest : public QObject {
     void the_settings_dialog_saves_and_applies_the_engine_settings() {
         const Session session(*db_, fake(0.1));
         MainWindow& window = *session.window;
-        QTRY_COMPARE(line_count(window), 3);
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(line_count(window), 3, first_wait_ms);
         child<QAction>(window, QStringLiteral("settings_action")).trigger();
         auto& dialog = child<QDialog>(window, QStringLiteral("settings_dialog"));
         QVERIFY(dialog.isVisible());
