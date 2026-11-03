@@ -2,7 +2,8 @@
 
 How `core` works: the position key, `Position` over chess-library, tiers, badges, opening names,
 the read-only opening store with the canonical dump, the recommendation score, the UCI engine
-client and the profile store with the engine cache. What these must do is fixed by
+client and the profile store with the engine cache, the spar sessions, the repertoires and their
+cards. What these must do is fixed by
 `docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11,
 `profiles.db` §12, the score's inputs §13); this file says how `core` does it. The rules it obeys
 are in `CLAUDE.md`, **`core/` is exact, deterministic and keyed by position**. The sparring
@@ -26,7 +27,7 @@ sampler, the spar session, the scheduler and repertoire coverage are described b
 | `pgn_import.hpp` | `import_repertoire_pgn`, `PgnImport`, `PgnImportError` |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
 | `engine_reply_provider.hpp` | `EngineReplyProvider`, `ProviderConfig`, `provider_elo` |
-| `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `SparSessionRow`, `Migration`, `Clock`, `ProfileError` |
+| `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `SparSessionRow`, `RepertoireNode`, `Card`, `ChoiceChange`, `ChoiceImport`, `CardSync`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
 
 Errors are values (`tl::expected` with an `enum class` or a small struct). No public header
@@ -301,18 +302,19 @@ on. The clock (Unix seconds, UTC; `system_clock_seconds` by default) is injected
 connection registers `chesscoach_now()`, an SQL function answered from it, so a migration script
 can timestamp rows and stay plain SQL.
 
-**Versions** (§12.1). `profile_migrations()` lists one script per version; version 1 creates
-`meta`, `profiles` and `engine_cache` and the profile `Default` at tier 2, and version 2 creates
-`spar_sessions` (§12.3). An absent or zero-length file is created by running every script; an
-existing file must have a `meta` table with a positive decimal `schema_version`, else it is
-refused as `not_profiles` without being modified; a version above the last script's is
-`newer_version`, also unmodified; an older one runs each later script in its own transaction,
-which records `schema_version` as its last statement, so a failing script (`migration_failed`)
-leaves the file at the last version that succeeded. Tests pass longer migration lists to exercise
-all of this. Each version's file is kept as a fixture (`core/tests/fixtures/profiles-v1.db`,
-`profiles-v2.db`), written by a hidden test case `[.fixture]` that opens the file with the
-migrations up to its version only, so a later build writes the same file; the current version's
-fixture opens unchanged, and every earlier one migrates with its rows kept.
+**Versions** (§12.1). `profile_migrations()` lists one script per version; version 1 creates `meta`,
+`profiles` and `engine_cache` and the profile `Default` at tier 2, version 2 creates `spar_sessions`
+(§12.3), and version 3 creates `repertoire_nodes`, `cards` and `reviews` (§12.4). An absent or
+zero-length file is created by running every script; an existing file must have a `meta` table with
+a positive decimal `schema_version`, else it is refused as `not_profiles` without being modified; a
+version above the last script's is `newer_version`, also unmodified; an older one runs each later
+script in its own transaction, which records `schema_version` as its last statement, so a failing
+script (`migration_failed`) leaves the file at the last version that succeeded. Tests pass longer
+migration lists to exercise all of this. Each version's file is kept as a fixture
+(`core/tests/fixtures/profiles-v1.db`, `profiles-v2.db`, `profiles-v3.db`), written by a hidden test
+case `[.fixture]` that opens the file with the migrations up to its version only, so a later build
+writes the same file; the current version's fixture opens unchanged, and every earlier one migrates
+with its rows kept.
 
 **Profiles.** `profiles()` by id; `create_profile`, `rename_profile`, `set_tier` and
 `remove_profile` return the profile or an error: `invalid_name` (empty), `duplicate_name`,
@@ -342,6 +344,38 @@ stored end move and `min_games`, refusing a store of another `data_version` as
 `replay_database_mismatch`; a row whose tier, colour or
 phase is out of range throws, as a corrupted file does. Removing a profile removes its sessions
 (`ON DELETE CASCADE`, with foreign keys on).
+
+**Repertoires** (§12.4). A profile has one repertoire per colour: the positions where that colour
+is to move, each with its chosen move. Every mutator keeps the cards in step in the same
+transaction, stamped by the clock:
+
+- `set_choice(profile_id, colour, choice)` validates the `RepertoireChoice` through `Position`: its
+  FEN must parse to its key, the colour must be to move there and the move must be legal, else
+  `invalid_choice`; the FEN is stored normalized and the move as `Position` writes it in UCI. A new
+  position is `added` with a new card, due at once; the same move again is `unchanged` and touches
+  nothing; another move is `changed`: the node's move and `created_at` change, and its card keeps
+  its id while its reviews are deleted and its state and `created_at` restart.
+- `remove_choice(profile_id, colour, key)` removes the node with its card and the card's reviews,
+  and says whether there was one. Removing a profile removes its nodes, cards and reviews.
+- `import_choices(profile_id, colour, choices)` adds, in one transaction, the choices whose
+  positions the repertoire does not answer, with their cards; a position it answers is kept and
+  counted `unchanged` (the same move) or as a conflict. One invalid choice refuses the whole import.
+- `repertoire_nodes(profile_id, colour)` lists the nodes by key, unsigned; `repertoire(profile_id,
+  colour)` is the same as the `Repertoire` map `compute_coverage` reads.
+
+**Cards** (§12.4). A card's state columns are always `replay(created_at, its reviews in id
+order)`, which a property test checks over random choices and reviews.
+
+- `record_review(card_id, grade, reviewed_at)` applies the scheduler's `review` to the stored
+  state and inserts the review, in one transaction, and returns the new `Card`, or `no_such_card`.
+  The time is the caller's, so a drill can grade at a given moment.
+- `cards(profile_id, colour)` lists the cards by key; `due_cards(profile_id, colour, now)` those
+  whose `due_at` is at most `now`, by `due_at` and then key; `card_history(card_id)` the card's
+  reviews in id order.
+- `sync_cards(profile_id, colour)` is the idempotent repair: it makes a card for each node without
+  one, resets a card whose move is not its node's, and deletes a card whose node is gone, with its
+  reviews, and returns the three counts. The mutators keep it at zero; a file changed by anything
+  else is what it repairs.
 
 ## The engine reply provider
 
@@ -509,7 +543,11 @@ sound score equal to max(0, expected − penalty), the penalty within its cap, t
 to one, the order); `engine_test` (every fake script, `busy`, `stop`, the options sent, the
 timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
 error, migrations, the refused files, the cache rules, the spar sessions saved, read and removed
-with their profile, the version 1 fixture migrated and the version 2 one opened unchanged);
+with their profile, the repertoire's validation and card rules, the import of choices, the card
+repair, the due order, the reviews against the scheduler, the version 1 and 2 fixtures migrated
+and the version 3 one opened unchanged);
+`profile_store_property_test` (over random choices for one position and random reviews, a card's
+stored state is the replay of its stored reviews);
 `random_test` (the reference output of seed 0, one sequence per seed; `key_test`'s pinned values
 guard the tables); `sampler_test` (min_games, the order, no draw without a candidate, the draw by
 cumulative weight, one sequence per seed, and the frequencies over 200,000 draws within half a point

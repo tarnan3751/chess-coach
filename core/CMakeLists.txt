@@ -114,6 +114,11 @@ if(BUILD_TESTING)
   target_compile_definitions(core_profile_store_test PRIVATE
                              CHESSCOACH_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_add_test(core_profile_store_property_test MODULE core KIND property
+                      SOURCES tests/profile_store_property_test.cpp
+                      LIBS chesscoach::core rapidcheck)
+  target_compile_definitions(core_profile_store_property_test PRIVATE
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_random_test MODULE core KIND unit
                       SOURCES tests/random_test.cpp
                       LIBS chesscoach::core)
@@ -174,6 +179,7 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_position_test)
   chesscoach_assert_no_qt(core_position_property_test)
   chesscoach_assert_no_qt(core_profile_store_test)
+  chesscoach_assert_no_qt(core_profile_store_property_test)
   chesscoach_assert_no_qt(core_random_test)
   chesscoach_assert_no_qt(core_repertoire_test)
   chesscoach_assert_no_qt(core_repertoire_property_test)

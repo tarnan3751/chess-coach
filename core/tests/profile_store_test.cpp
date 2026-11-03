@@ -2,11 +2,15 @@
 // profiles.db at the current version with the Default profile, every ProfileError, the migration
 // framework over longer test lists (in order, one transaction each, a failing script, a newer file
 // refused unmodified), the files refused without being touched, the engine cache's hit, miss and
-// replace rules, the spar sessions saved, read and removed with their profile, the committed
-// version 1 fixture migrated to version 2, and the committed version 2 fixture opened unchanged.
-// The clock is injected.
+// replace rules, the spar sessions saved, read and removed with their profile, the repertoire's
+// choices and the cards they keep in step (§12.4: validation, the card rules, the import, the
+// repair, the due order, the reviews), the committed version 1 and 2 fixtures migrated to version
+// 3, and the committed version 3 fixture opened unchanged. The clock is injected.
 #include <chesscoach/opening_store.hpp>
+#include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
+#include <chesscoach/repertoire.hpp>
+#include <chesscoach/scheduler.hpp>
 #include <chesscoach/spar.hpp>
 
 #include "spar_fixture.hpp"
@@ -14,7 +18,9 @@
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -25,16 +31,25 @@
 #include <vector>
 
 using chesscoach::CachedSearch;
+using chesscoach::Card;
+using chesscoach::CardSync;
+using chesscoach::ChoiceChange;
+using chesscoach::ChoiceImport;
 using chesscoach::Color;
+using chesscoach::Grade;
 using chesscoach::Key;
 using chesscoach::Migration;
 using chesscoach::OpeningStore;
 using chesscoach::Phase;
+using chesscoach::Position;
 using chesscoach::Profile;
 using chesscoach::ProfileError;
 using chesscoach::ProfileStore;
 using chesscoach::ProviderError;
+using chesscoach::RepertoireChoice;
+using chesscoach::RepertoireNode;
 using chesscoach::ReplyProvider;
+using chesscoach::Review;
 using chesscoach::SearchLine;
 using chesscoach::SearchResult;
 using chesscoach::SparSession;
@@ -195,6 +210,7 @@ constexpr Migration version_2{
            "INSERT INTO extra VALUES (chesscoach_now());",
 };
 constexpr Migration version_3{.version = 3, .sql = "ALTER TABLE extra ADD COLUMN note TEXT;"};
+constexpr Migration version_4{.version = 4, .sql = "CREATE TABLE later (x INTEGER);"};
 constexpr Migration failing_version_3{
     .version = 3,
     .sql = "CREATE TABLE half (x INTEGER); INSERT INTO no_such_table VALUES (1);",
@@ -202,6 +218,11 @@ constexpr Migration failing_version_3{
 
 std::array<Migration, 3> three_versions() {
     return {chesscoach::profile_migrations().front(), version_2, version_3};
+}
+
+// One version past the real ones.
+std::array<Migration, 4> four_versions() {
+    return {chesscoach::profile_migrations().front(), version_2, version_3, version_4};
 }
 
 std::array<Migration, 3> failing_third() {
@@ -221,6 +242,58 @@ CachedSearch cached(std::vector<SearchLine> lines, std::int64_t created_at) {
     return {.lines = std::move(lines), .engine = "Stockfish 19", .created_at = created_at};
 }
 
+// The choice of the move at the position the UCI line reaches from the start position.
+RepertoireChoice choice_after(const std::vector<std::string>& line, std::string move) {
+    auto position = Position::start();
+    for (const auto& played : line) {
+        REQUIRE(position.play_uci(played).has_value());
+    }
+    return {.key = position.key(), .fen = position.fen(), .move = std::move(move)};
+}
+
+// The choices of the version 3 fixture: Default's white 1. e4 and 2. Nf3 after 1... e5, and
+// Club's black 1... c5 after 1. e4, all made at 5000.
+RepertoireChoice white_start() { return choice_after({}, "e2e4"); }
+RepertoireChoice white_after_e5() { return choice_after({"e2e4", "e7e5"}, "g1f3"); }
+RepertoireChoice black_after_e4() { return choice_after({"e2e4"}, "c7c5"); }
+
+// The reviews of the fixture's card for 1. e4: good at 6000, hard two days later.
+std::vector<Review> fixture_reviews() {
+    return {
+        Review{.grade = Grade::good, .reviewed_at = 6000},
+        Review{.grade = Grade::hard, .reviewed_at = 6000 + (2 * chesscoach::seconds_per_day)},
+    };
+}
+
+std::vector<RepertoireNode> by_key(std::vector<RepertoireNode> nodes) {
+    std::ranges::sort(nodes, [](const RepertoireNode& a, const RepertoireNode& b) {
+        return a.choice.key < b.choice.key;
+    });
+    return nodes;
+}
+
+// The card of the position, which the test requires there to be.
+Card card_at(const ProfileStore& store, std::int64_t profile_id, Color colour, Key key) {
+    const auto cards = store.cards(profile_id, colour);
+    const auto found = std::ranges::find(cards, key, &Card::key);
+    REQUIRE(found != cards.end());
+    return *found;
+}
+
+// A new card for the node, as the store makes it at created_at.
+Card new_card_for(std::int64_t id, std::int64_t profile_id, Color colour,
+                  const RepertoireChoice& choice, std::int64_t created_at) {
+    return {
+        .id = id,
+        .profile_id = profile_id,
+        .colour = colour,
+        .key = choice.key,
+        .move = choice.move,
+        .state = chesscoach::new_card(created_at),
+        .created_at = created_at,
+    };
+}
+
 } // namespace
 
 TEST_CASE("A new data directory gets profiles.db at the current version with the Default profile",
@@ -229,8 +302,8 @@ TEST_CASE("A new data directory gets profiles.db at the current version with the
     TestClock clock;
     const auto store = open_store(dir, clock);
     CHECK(std::filesystem::is_regular_file(dir.file()));
-    CHECK(store.schema_version() == 2);
-    CHECK(chesscoach::profile_schema_version == 2);
+    CHECK(store.schema_version() == 3);
+    CHECK(chesscoach::profile_schema_version == 3);
     CHECK(store.profiles() ==
           std::vector{
               Profile{.id = 1, .name = "Default", .tier = Tier::r1400_1599, .created_at = 1000}});
@@ -241,7 +314,7 @@ TEST_CASE("A zero-length profiles.db is created by every script", "[profiles]") 
     write_bytes(dir.file(), "");
     TestClock clock;
     const auto store = open_store(dir, clock);
-    CHECK(store.schema_version() == 2);
+    CHECK(store.schema_version() == 3);
     CHECK(store.profiles().size() == 1);
 }
 
@@ -315,9 +388,9 @@ TEST_CASE("A newer profiles.db is refused and left as it was", "[profiles]") {
     const DataDir dir("newer");
     {
         TestClock clock;
-        const auto store = ProfileStore::open(dir.path(), clock.clock(), three_versions());
+        const auto store = ProfileStore::open(dir.path(), clock.clock(), four_versions());
         REQUIRE(store.has_value());
-        CHECK(store->schema_version() == 3);
+        CHECK(store->schema_version() == 4);
     }
     const auto before = read_bytes(dir.file());
     CHECK(open_error(dir) == ProfileError::newer_version);
@@ -441,14 +514,14 @@ TEST_CASE("Limited, stopped and empty results are not cached", "[profiles]") {
     CHECK_FALSE(store.cache_lookup(start_key, 1, 0).has_value());
 }
 
-TEST_CASE("The committed version 1 file migrates to version 2 with its rows kept", "[profiles]") {
+TEST_CASE("The committed version 1 file migrates to version 3 with its rows kept", "[profiles]") {
     const DataDir dir("fixture");
     std::filesystem::create_directories(dir.path());
     std::filesystem::copy_file(std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v1.db",
                                dir.file());
     TestClock clock{.now = 9999};
-    const auto store = open_store(dir, clock);
-    CHECK(store.schema_version() == 2);
+    auto store = open_store(dir, clock);
+    CHECK(store.schema_version() == 3);
     CHECK(store.profiles() ==
           std::vector{
               Profile{.id = 1, .name = "Default", .tier = Tier::r1400_1599, .created_at = 1000},
@@ -456,21 +529,56 @@ TEST_CASE("The committed version 1 file migrates to version 2 with its rows kept
     CHECK(store.cache_lookup(start_key, 3, 20) == cached(fixture_search().lines, 3000));
     CHECK(store.spar_sessions(1).empty());
     CHECK(store.spar_sessions(2).empty());
+    CHECK(store.repertoire_nodes(1, Color::white).empty());
+    CHECK(store.cards(1, Color::white).empty());
+    CHECK(store.set_choice(2, Color::black, black_after_e4()) == ChoiceChange::added);
 }
 
-TEST_CASE("The committed version 2 file opens unchanged", "[profiles]") {
+TEST_CASE("The committed version 2 file migrates to version 3 with its rows kept", "[profiles]") {
     const DataDir dir("fixture-v2");
     std::filesystem::create_directories(dir.path());
     std::filesystem::copy_file(std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v2.db",
+                               dir.file());
+    TestClock clock{.now = 9999};
+    auto store = open_store(dir, clock);
+    CHECK(store.schema_version() == 3);
+    CHECK(store.profiles().size() == 2);
+    CHECK(store.cache_lookup(start_key, 3, 20) == cached(fixture_search().lines, 3000));
+    CHECK(store.spar_sessions(1) == std::vector{fixture_session()});
+    CHECK(store.repertoire_nodes(1, Color::white).empty());
+    CHECK(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
+    CHECK(store.cards(1, Color::white) ==
+          std::vector{new_card_for(1, 1, Color::white, white_start(), 9999)});
+}
+
+TEST_CASE("The committed version 3 file opens unchanged", "[profiles]") {
+    const DataDir dir("fixture-v3");
+    std::filesystem::create_directories(dir.path());
+    std::filesystem::copy_file(std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v3.db",
                                dir.file());
     const auto before = read_bytes(dir.file());
     {
         TestClock clock{.now = 9999};
         const auto store = open_store(dir, clock);
-        CHECK(store.schema_version() == 2);
+        CHECK(store.schema_version() == 3);
         CHECK(store.profiles().size() == 2);
         CHECK(store.cache_lookup(start_key, 3, 20) == cached(fixture_search().lines, 3000));
         CHECK(store.spar_sessions(1) == std::vector{fixture_session()});
+        CHECK(store.repertoire_nodes(1, Color::white) ==
+              by_key({
+                  RepertoireNode{.choice = white_start(), .created_at = 5000},
+                  RepertoireNode{.choice = white_after_e5(), .created_at = 5000},
+              }));
+        CHECK(store.repertoire_nodes(2, Color::black) ==
+              std::vector{RepertoireNode{.choice = black_after_e4(), .created_at = 5000}});
+        CHECK(store.repertoire_nodes(1, Color::black).empty());
+        const Card e4 = card_at(store, 1, Color::white, white_start().key);
+        CHECK(store.card_history(e4.id) == fixture_reviews());
+        CHECK(e4.state == chesscoach::replay(5000, fixture_reviews()));
+        const Card nf3 = card_at(store, 1, Color::white, white_after_e5().key);
+        CHECK(nf3 == new_card_for(nf3.id, 1, Color::white, white_after_e5(), 5000));
+        CHECK(store.card_history(nf3.id).empty());
+        CHECK(store.cards(2, Color::black).size() == 1);
     }
     CHECK(read_bytes(dir.file()) == before);
 }
@@ -559,6 +667,231 @@ TEST_CASE("A saved session replays with its own end move and refuses another dat
     }
 }
 
+TEST_CASE("A choice keeps its card in step when it is added, kept, changed and removed",
+          "[profiles][repertoire]") {
+    const DataDir dir("choices");
+    TestClock clock{.now = 5000};
+    auto store = open_store(dir, clock);
+    const RepertoireChoice e4 = white_start();
+
+    // A new node gets a new card, due at once.
+    CHECK(store.set_choice(1, Color::white, e4) == ChoiceChange::added);
+    CHECK(store.repertoire_nodes(1, Color::white) ==
+          std::vector{RepertoireNode{.choice = e4, .created_at = 5000}});
+    const auto cards = store.cards(1, Color::white);
+    REQUIRE(cards.size() == 1);
+    const std::int64_t id = cards.front().id;
+    CHECK(cards == std::vector{new_card_for(id, 1, Color::white, e4, 5000)});
+    CHECK(store.due_cards(1, Color::white, 5000) == cards);
+    CHECK(store.repertoire(1, Color::white) == chesscoach::Repertoire{{e4.key, "e2e4"}});
+
+    // The same move again changes nothing, the card's reviews included.
+    clock.now = 6000;
+    REQUIRE(store.record_review(id, Grade::good, 6000).has_value());
+    CHECK(store.set_choice(1, Color::white, e4) == ChoiceChange::unchanged);
+    CHECK(store.repertoire_nodes(1, Color::white) ==
+          std::vector{RepertoireNode{.choice = e4, .created_at = 5000}});
+    CHECK(store.card_history(id).size() == 1);
+
+    // Another move restarts the node and its card, whose id stays and whose reviews go.
+    clock.now = 7000;
+    RepertoireChoice d4 = e4;
+    d4.move = "d2d4";
+    CHECK(store.set_choice(1, Color::white, d4) == ChoiceChange::changed);
+    CHECK(store.repertoire_nodes(1, Color::white) ==
+          std::vector{RepertoireNode{.choice = d4, .created_at = 7000}});
+    CHECK(store.cards(1, Color::white) == std::vector{new_card_for(id, 1, Color::white, d4, 7000)});
+    CHECK(store.card_history(id).empty());
+
+    // Removing the choice removes its card and the card's reviews; a second remove finds none.
+    REQUIRE(store.record_review(id, Grade::easy, 7100).has_value());
+    CHECK(store.remove_choice(1, Color::white, e4.key) == true);
+    CHECK(store.repertoire_nodes(1, Color::white).empty());
+    CHECK(store.cards(1, Color::white).empty());
+    CHECK(store.card_history(id).empty());
+    CHECK(store.remove_choice(1, Color::white, e4.key) == false);
+    CHECK(store.repertoire(1, Color::white).empty());
+}
+
+TEST_CASE("A choice that is not valid is refused, and a valid one's FEN is stored normalized",
+          "[profiles][repertoire]") {
+    const DataDir dir("invalid-choices");
+    TestClock clock;
+    auto store = open_store(dir, clock);
+    const RepertoireChoice e4 = white_start();
+    RepertoireChoice wrong_key = e4;
+    wrong_key.key ^= 1U;
+    RepertoireChoice bad_fen = e4;
+    bad_fen.fen = "not a position";
+    RepertoireChoice illegal = e4;
+    illegal.move = "e2e5";
+    RepertoireChoice san = e4;
+    san.move = "e4";
+    for (const auto& choice : {wrong_key, bad_fen, illegal, san}) {
+        CHECK(store.set_choice(1, Color::white, choice).error() == ProfileError::invalid_choice);
+    }
+    // White is to move at the start, so it is not a black choice.
+    CHECK(store.set_choice(1, Color::black, e4).error() == ProfileError::invalid_choice);
+    CHECK(store.set_choice(9, Color::white, e4).error() == ProfileError::no_such_profile);
+    CHECK(store.repertoire_nodes(1, Color::white).empty());
+    CHECK(store.cards(1, Color::white).empty());
+
+    // The counters and an en passant square no capture uses are not part of the stored FEN.
+    const RepertoireChoice spelled{
+        .key = black_after_e4().key,
+        .fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+        .move = "c7c5",
+    };
+    CHECK(store.set_choice(1, Color::black, spelled) == ChoiceChange::added);
+    CHECK(store.repertoire_nodes(1, Color::black) ==
+          std::vector{RepertoireNode{.choice = black_after_e4(), .created_at = 1000}});
+}
+
+TEST_CASE("An import adds only the positions the repertoire does not answer, or nothing",
+          "[profiles][repertoire]") {
+    const DataDir dir("import-choices");
+    TestClock clock{.now = 5000};
+    auto store = open_store(dir, clock);
+    REQUIRE(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
+
+    clock.now = 6000;
+    RepertoireChoice c4 = white_start();
+    c4.move = "c2c4";
+    const RepertoireChoice bb5 = choice_after({"e2e4", "e7e5", "g1f3", "b8c6"}, "f1b5");
+    const std::vector choices{c4, white_after_e5(), white_start(), bb5};
+    CHECK(store.import_choices(1, Color::white, choices) ==
+          ChoiceImport{.added = 2, .unchanged = 1, .conflicts = 1});
+    CHECK(store.repertoire_nodes(1, Color::white) ==
+          by_key({
+              RepertoireNode{.choice = white_start(), .created_at = 5000},
+              RepertoireNode{.choice = white_after_e5(), .created_at = 6000},
+              RepertoireNode{.choice = bb5, .created_at = 6000},
+          }));
+    const Card nf3 = card_at(store, 1, Color::white, white_after_e5().key);
+    CHECK(nf3 == new_card_for(nf3.id, 1, Color::white, white_after_e5(), 6000));
+    CHECK(store.cards(1, Color::white).size() == 3);
+
+    // One choice that is not valid refuses the whole import.
+    RepertoireChoice bad = choice_after({"d2d4", "d7d5"}, "e1e8");
+    const std::vector refused{choice_after({"d2d4", "d7d5"}, "c2c4"), bad};
+    CHECK(store.import_choices(1, Color::white, refused).error() == ProfileError::invalid_choice);
+    CHECK(store.repertoire_nodes(1, Color::white).size() == 3);
+    CHECK(store.cards(1, Color::white).size() == 3);
+    CHECK(store.import_choices(9, Color::white, choices).error() == ProfileError::no_such_profile);
+}
+
+TEST_CASE("Syncing the cards repairs them to the nodes, and a second sync changes nothing",
+          "[profiles][repertoire]") {
+    const DataDir dir("sync");
+    TestClock clock{.now = 5000};
+    auto store = open_store(dir, clock);
+    const RepertoireChoice bb5 = choice_after({"e2e4", "e7e5", "g1f3", "b8c6"}, "f1b5");
+    for (const auto& choice : {white_start(), white_after_e5(), bb5}) {
+        REQUIRE(store.set_choice(1, Color::white, choice) == ChoiceChange::added);
+    }
+    const Card nf3 = card_at(store, 1, Color::white, white_after_e5().key);
+    REQUIRE(store.record_review(nf3.id, Grade::good, 5500).has_value());
+    CHECK(store.sync_cards(1, Color::white) == CardSync{});
+
+    // Broken behind the store's back: e4's card missing, Nf3's card on another move, and a card
+    // with a review whose node does not exist.
+    {
+        SQLite::Database db(dir.file(), SQLite::OPEN_READWRITE);
+        db.exec("PRAGMA foreign_keys = ON");
+        SQLite::Statement missing(db, "DELETE FROM cards WHERE key = ?1");
+        missing.bind(1, std::bit_cast<std::int64_t>(white_start().key));
+        REQUIRE(missing.exec() == 1);
+        SQLite::Statement stale(db, "UPDATE cards SET move = 'b1c3' WHERE id = ?1");
+        stale.bind(1, nf3.id);
+        REQUIRE(stale.exec() == 1);
+        db.exec("INSERT INTO cards (profile_id, colour, key, move, repetitions, interval_days, "
+                "ease_milli, due_at, created_at) VALUES (1, 0, 12345, 'a2a3', 0, 0, 2500, 0, 0)");
+        db.exec("INSERT INTO reviews (card_id, grade, reviewed_at) "
+                "VALUES (last_insert_rowid(), 4, 10)");
+    }
+
+    clock.now = 8000;
+    CHECK(store.sync_cards(1, Color::white) == CardSync{.created = 1, .reset = 1, .deleted = 1});
+    const Card e4 = card_at(store, 1, Color::white, white_start().key);
+    CHECK(e4 == new_card_for(e4.id, 1, Color::white, white_start(), 8000));
+    CHECK(card_at(store, 1, Color::white, white_after_e5().key) ==
+          new_card_for(nf3.id, 1, Color::white, white_after_e5(), 8000));
+    CHECK(store.card_history(nf3.id).empty());
+    const Card kept = card_at(store, 1, Color::white, bb5.key);
+    CHECK(kept.created_at == 5000);
+    CHECK(store.cards(1, Color::white).size() == 3);
+    {
+        SQLite::Database db(dir.file());
+        CHECK(db.execAndGet("SELECT COUNT(*) FROM reviews").getInt() == 0);
+    }
+    CHECK(store.sync_cards(1, Color::white) == CardSync{});
+    CHECK(store.sync_cards(1, Color::black) == CardSync{});
+}
+
+TEST_CASE("Due cards come by due time and then key, and a review is the scheduler's",
+          "[profiles][repertoire]") {
+    const DataDir dir("due");
+    TestClock clock{.now = 5000};
+    auto store = open_store(dir, clock);
+    const RepertoireChoice bb5 = choice_after({"e2e4", "e7e5", "g1f3", "b8c6"}, "f1b5");
+    for (const auto& choice : {white_start(), white_after_e5(), bb5}) {
+        REQUIRE(store.set_choice(1, Color::white, choice) == ChoiceChange::added);
+    }
+    CHECK(store.due_cards(1, Color::white, 4999).empty());
+    const auto due = store.due_cards(1, Color::white, 5000);
+    REQUIRE(due.size() == 3);
+    CHECK(std::ranges::is_sorted(due, {}, &Card::key));
+    CHECK(due == store.cards(1, Color::white));
+
+    // Good on the first, again on the second a little later: both leave the due list, and
+    // come back in the order of their new due times.
+    const auto first = store.record_review(due.at(0).id, Grade::good, 6000);
+    REQUIRE(first.has_value());
+    CHECK(first->state == chesscoach::review(chesscoach::new_card(5000), Grade::good, 6000));
+    CHECK(card_at(store, 1, Color::white, due.at(0).key) == *first);
+    const auto second = store.record_review(due.at(1).id, Grade::again, 6100);
+    REQUIRE(second.has_value());
+    CHECK(second->state == chesscoach::review(chesscoach::new_card(5000), Grade::again, 6100));
+    CHECK(store.card_history(due.at(0).id) ==
+          std::vector{Review{.grade = Grade::good, .reviewed_at = 6000}});
+    CHECK(store.card_history(due.at(1).id) ==
+          std::vector{Review{.grade = Grade::again, .reviewed_at = 6100}});
+
+    CHECK(store.due_cards(1, Color::white, 6100) == std::vector{due.at(2)});
+    REQUIRE(first->state.due_at < second->state.due_at);
+    const auto later = store.due_cards(1, Color::white, second->state.due_at);
+    REQUIRE(later.size() == 3);
+    CHECK(later.at(0).id == due.at(2).id);
+    CHECK(later.at(1).id == due.at(0).id);
+    CHECK(later.at(2).id == due.at(1).id);
+
+    // A second review applies to the stored state, which stays the replay of the history.
+    const auto again = store.record_review(due.at(0).id, Grade::hard, first->state.due_at);
+    REQUIRE(again.has_value());
+    CHECK(again->state == chesscoach::replay(5000, store.card_history(due.at(0).id)));
+    CHECK(store.record_review(999, Grade::good, 1).error() == ProfileError::no_such_card);
+    CHECK(store.card_history(999).empty());
+}
+
+TEST_CASE("Removing a profile removes its repertoires, cards and reviews", "[profiles]") {
+    const DataDir dir("remove-repertoire");
+    TestClock clock;
+    auto store = open_store(dir, clock);
+    const auto club = store.create_profile("Club", Tier::r1800_1999);
+    REQUIRE(club.has_value());
+    REQUIRE(store.set_choice(club->id, Color::white, white_start()) == ChoiceChange::added);
+    REQUIRE(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
+    const Card card = card_at(store, club->id, Color::white, white_start().key);
+    REQUIRE(store.record_review(card.id, Grade::good, 2000).has_value());
+
+    REQUIRE(store.remove_profile(club->id).has_value());
+    CHECK(store.repertoire_nodes(club->id, Color::white).empty());
+    CHECK(store.cards(club->id, Color::white).empty());
+    CHECK(store.card_history(card.id).empty());
+    CHECK(store.repertoire_nodes(1, Color::white).size() == 1);
+    CHECK(store.cards(1, Color::white).size() == 1);
+}
+
 // Writes the committed fixtures: run by hand with `core_profile_store_test "[.fixture]"` when a
 // version's fixture is made; ctest never runs a hidden test. Each writer opens the file with the
 // migrations up to its version only, so it writes the same file whatever version this build is.
@@ -599,5 +932,34 @@ TEST_CASE("Write the version 2 fixture", "[.fixture]") {
     }
     std::filesystem::copy_file(dir.file(),
                                std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v2.db",
+                               std::filesystem::copy_options::overwrite_existing);
+}
+
+TEST_CASE("Write the version 3 fixture", "[.fixture]") {
+    const DataDir dir("fixture-writer-v3");
+    TestClock clock;
+    const SparFixture fixture("profiles_fixture_v3");
+    const OpeningStore openings = open_openings(fixture);
+    {
+        auto opened = ProfileStore::open(dir.path(), clock.clock(),
+                                         chesscoach::profile_migrations().first(3));
+        REQUIRE(opened.has_value());
+        auto& store = *opened;
+        clock.now = 2000;
+        REQUIRE(store.create_profile("Club", Tier::r1800_1999).has_value());
+        clock.now = 3000;
+        REQUIRE(store.cache_store(start_key, 3, fixture_search()).has_value());
+        REQUIRE(store.save_spar_session(1, mated_session(openings, 7), 4000, 4100).has_value());
+        clock.now = 5000;
+        REQUIRE(store.set_choice(1, Color::white, white_start()) == ChoiceChange::added);
+        REQUIRE(store.set_choice(1, Color::white, white_after_e5()) == ChoiceChange::added);
+        REQUIRE(store.set_choice(2, Color::black, black_after_e4()) == ChoiceChange::added);
+        const Card e4 = card_at(store, 1, Color::white, white_start().key);
+        for (const Review& review : fixture_reviews()) {
+            REQUIRE(store.record_review(e4.id, review.grade, review.reviewed_at).has_value());
+        }
+    }
+    std::filesystem::copy_file(dir.file(),
+                               std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v3.db",
                                std::filesystem::copy_options::overwrite_existing);
 }

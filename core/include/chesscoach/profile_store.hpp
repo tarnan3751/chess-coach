@@ -1,15 +1,19 @@
 // ProfileStore: profiles.db in the data directory (docs/database.md §12), the one way anything
-// reads or writes the profiles, the engine cache and the spar sessions (docs/reference/core.md,
-// **The profile store**). Opened read-write; created at version 1 when absent or zero-length;
-// migrated when older, each migration's script in its own transaction that sets schema_version
-// last; refused, unmodified, when newer or when it is a non-empty file without meta. Timestamps are
-// Unix seconds UTC from an injected clock, so tests are deterministic. Used from one thread at a
-// time. Writes return errors as values; a read that fails after a successful open (an I/O error, a
-// file corrupted on disk) throws std::runtime_error, as OpeningStore's do.
+// reads or writes the profiles, the engine cache, the spar sessions, the repertoires and their
+// cards and reviews (docs/reference/core.md, **The profile store**). Opened read-write; created at
+// version 1 when absent or zero-length; migrated when older, each migration's script in its own
+// transaction that sets schema_version last; refused, unmodified, when newer or when it is a
+// non-empty file without meta. Timestamps are Unix seconds UTC from an injected clock, so tests are
+// deterministic. Used from one thread at a time. Writes return errors as values; a read that fails
+// after a successful open (an I/O error, a file corrupted on disk) throws std::runtime_error, as
+// OpeningStore's do.
 #pragma once
 
 #include <chesscoach/engine.hpp>
 #include <chesscoach/key.hpp>
+#include <chesscoach/position.hpp>
+#include <chesscoach/repertoire.hpp>
+#include <chesscoach/scheduler.hpp>
 #include <chesscoach/spar.hpp>
 #include <chesscoach/tier.hpp>
 
@@ -41,11 +45,12 @@ struct Migration {
 };
 
 // The real migrations, version 1 first. Version 1 creates meta, profiles and engine_cache, and
-// the profile Default at tier 2; version 2 creates spar_sessions (§12.3).
+// the profile Default at tier 2; version 2 creates spar_sessions (§12.3); version 3 creates
+// repertoire_nodes, cards and reviews (§12.4).
 [[nodiscard]] std::span<const Migration> profile_migrations() noexcept;
 
 // The version this build writes: the last of profile_migrations().
-inline constexpr int profile_schema_version = 2;
+inline constexpr int profile_schema_version = 3;
 
 enum class ProfileError : std::uint8_t {
     unwritable,       // the data directory or profiles.db cannot be created or opened
@@ -57,6 +62,9 @@ enum class ProfileError : std::uint8_t {
     no_such_profile,  // no profile has the id
     last_profile,     // remove_profile of the only profile
     storage,          // a write failed (disk full, read-only file)
+    invalid_choice,   // a choice whose FEN is not its key's, not its colour's to move, or whose
+                      // move is not legal there
+    no_such_card,     // no card has the id
 };
 
 struct Profile {
@@ -95,6 +103,51 @@ struct SparSessionRow {
     std::int64_t data_version = 0; // the openings.db data_version it played against
 
     friend bool operator==(const SparSessionRow&, const SparSessionRow&) = default;
+};
+
+// §12.4: a position a repertoire answers, and when its choice was made or last changed.
+struct RepertoireNode {
+    RepertoireChoice choice;
+    std::int64_t created_at = 0;
+
+    friend bool operator==(const RepertoireNode&, const RepertoireNode&) = default;
+};
+
+// §12.4: the card of a repertoire node; its state is the scheduler's replay of its reviews from
+// created_at.
+struct Card {
+    std::int64_t id = 0;
+    std::int64_t profile_id = 0;
+    Color colour = Color::white;
+    Key key = 0;
+    std::string move; // UCI: the answer the card asks for
+    CardState state;
+    std::int64_t created_at = 0;
+
+    friend bool operator==(const Card&, const Card&) = default;
+};
+
+// What set_choice did to the node.
+enum class ChoiceChange : std::uint8_t { added, changed, unchanged };
+
+// What import_choices did: choices added, choices already in the repertoire, and choices the
+// repertoire answers differently, which it keeps.
+struct ChoiceImport {
+    int added = 0;
+    int unchanged = 0;
+    int conflicts = 0;
+
+    friend bool operator==(const ChoiceImport&, const ChoiceImport&) = default;
+};
+
+// What sync_cards did: cards made for nodes without one, cards reset to their node's new move,
+// and cards deleted, with their reviews, for nodes that are gone.
+struct CardSync {
+    int created = 0;
+    int reset = 0;
+    int deleted = 0;
+
+    friend bool operator==(const CardSync&, const CardSync&) = default;
 };
 
 // Replays a saved session (SparSession::replay) with the end move and min_games it was played
@@ -156,6 +209,46 @@ class ProfileStore {
 
     // The saved session with the id, or nullopt.
     [[nodiscard]] std::optional<SparSessionRow> spar_session(std::int64_t id) const;
+
+    // §12.4: sets the profile's choice for the colour at a position, keeping its card in step in
+    // the same transaction: a new node gets a new card, due now; a changed move resets the card
+    // (its reviews deleted, its state and created_at restarted, its id kept). The choice must be
+    // valid (invalid_choice: its FEN parses to its key, the colour is to move there and the move
+    // is legal); the FEN is stored normalized.
+    [[nodiscard]] tl::expected<ChoiceChange, ProfileError>
+    set_choice(std::int64_t profile_id, Color colour, const RepertoireChoice& choice);
+
+    // Removes the choice at the position with its card and the card's reviews; false when there
+    // was none.
+    [[nodiscard]] tl::expected<bool, ProfileError> remove_choice(std::int64_t profile_id,
+                                                                 Color colour, Key key);
+
+    // The colour's repertoire nodes, by key; and the same as the map coverage reads.
+    [[nodiscard]] std::vector<RepertoireNode> repertoire_nodes(std::int64_t profile_id,
+                                                               Color colour) const;
+    [[nodiscard]] Repertoire repertoire(std::int64_t profile_id, Color colour) const;
+
+    // Adds the choices whose positions the repertoire does not answer yet, with their cards, in one
+    // transaction; a position it answers is kept, as unchanged or as a conflict.
+    [[nodiscard]] tl::expected<ChoiceImport, ProfileError>
+    import_choices(std::int64_t profile_id, Color colour,
+                   const std::vector<RepertoireChoice>& choices);
+
+    // The idempotent repair that brings the colour's cards in step with its nodes (§12.4).
+    [[nodiscard]] tl::expected<CardSync, ProfileError> sync_cards(std::int64_t profile_id,
+                                                                  Color colour);
+
+    // The colour's cards, by key; and those due at now, by due_at and then key.
+    [[nodiscard]] std::vector<Card> cards(std::int64_t profile_id, Color colour) const;
+    [[nodiscard]] std::vector<Card> due_cards(std::int64_t profile_id, Color colour,
+                                              std::int64_t now) const;
+
+    // Applies the scheduler's review to the card and records the review, in one transaction.
+    [[nodiscard]] tl::expected<Card, ProfileError> record_review(std::int64_t card_id, Grade grade,
+                                                                 std::int64_t reviewed_at);
+
+    // The card's reviews in the order they were applied.
+    [[nodiscard]] std::vector<Review> card_history(std::int64_t card_id) const;
 
   private:
     struct Impl;

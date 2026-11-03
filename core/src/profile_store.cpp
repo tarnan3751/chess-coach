@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -71,10 +72,45 @@ constexpr std::string_view version_2 =
     "    data_version INTEGER NOT NULL\n"
     ");\n";
 
-constexpr std::array<Migration, 2> migrations{
+// §12.4. A colour is 0 for white and 1 for black; a card's state columns are the scheduler's
+// replay of its reviews; nodes, cards and reviews go with their profile, reviews with their card.
+constexpr std::string_view version_3 =
+    "CREATE TABLE repertoire_nodes (\n"
+    "    profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,\n"
+    "    colour INTEGER NOT NULL,\n"
+    "    key INTEGER NOT NULL,\n"
+    "    fen TEXT NOT NULL,\n"
+    "    move TEXT NOT NULL,\n"
+    "    created_at INTEGER NOT NULL,\n"
+    "    PRIMARY KEY (profile_id, colour, key)\n"
+    ") WITHOUT ROWID;\n"
+    "CREATE TABLE cards (\n"
+    "    id INTEGER PRIMARY KEY,\n"
+    "    profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,\n"
+    "    colour INTEGER NOT NULL,\n"
+    "    key INTEGER NOT NULL,\n"
+    "    move TEXT NOT NULL,\n"
+    "    repetitions INTEGER NOT NULL,\n"
+    "    interval_days INTEGER NOT NULL,\n"
+    "    ease_milli INTEGER NOT NULL,\n"
+    "    due_at INTEGER NOT NULL,\n"
+    "    created_at INTEGER NOT NULL,\n"
+    "    UNIQUE (profile_id, colour, key)\n"
+    ");\n"
+    "CREATE TABLE reviews (\n"
+    "    id INTEGER PRIMARY KEY,\n"
+    "    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,\n"
+    "    grade INTEGER NOT NULL,\n"
+    "    reviewed_at INTEGER NOT NULL\n"
+    ");\n"
+    "CREATE INDEX cards_due ON cards (profile_id, colour, due_at, key);\n"
+    "CREATE INDEX reviews_card ON reviews (card_id, id);\n";
+
+constexpr std::array<Migration, 3> migrations{
     {
         {.version = 1, .sql = version_1},
         {.version = 2, .sql = version_2},
+        {.version = 3, .sql = version_3},
     },
 };
 
@@ -180,6 +216,140 @@ SparSessionRow spar_row(const SQLite::Statement& query) {
 bool is_unique_violation(const SQLite::Exception& error) {
     return error.getExtendedErrorCode() == SQLITE_CONSTRAINT_UNIQUE;
 }
+
+// §12.4's colour column.
+int colour_index(Color colour) { return colour == Color::white ? 0 : 1; }
+
+Color colour_of_row(std::int64_t index) {
+    if (index != 0 && index != 1) {
+        throw std::runtime_error("profiles.db: a colour " + std::to_string(index));
+    }
+    return index == 0 ? Color::white : Color::black;
+}
+
+Grade grade_of_row(std::int64_t value) {
+    switch (value) {
+    case 1:
+        return Grade::again;
+    case 3:
+        return Grade::hard;
+    case 4:
+        return Grade::good;
+    case 5:
+        return Grade::easy;
+    default:
+        throw std::runtime_error("profiles.db: a grade " + std::to_string(value));
+    }
+}
+
+// The choice with its FEN normalized, or nullopt when its FEN is not its key's position, the
+// colour is not to move there or its move is not legal there.
+std::optional<RepertoireChoice> validated(Color colour, const RepertoireChoice& choice) {
+    const auto position = Position::from_fen(choice.fen);
+    if (!position || position->key() != choice.key || position->side_to_move() != colour) {
+        return std::nullopt;
+    }
+    auto child = *position;
+    const auto played = child.play_uci(choice.move);
+    if (!played) {
+        return std::nullopt;
+    }
+    return RepertoireChoice{.key = choice.key, .fen = position->fen(), .move = played->uci};
+}
+
+constexpr const char* card_columns =
+    "id, profile_id, colour, key, move, repetitions, interval_days, ease_milli, due_at, created_at";
+
+Card card_of_row(const SQLite::Statement& row) {
+    return Card{
+        .id = row.getColumn(0).getInt64(),
+        .profile_id = row.getColumn(1).getInt64(),
+        .colour = colour_of_row(row.getColumn(2).getInt64()),
+        .key = key_from_sql(row.getColumn(3).getInt64()),
+        .move = row.getColumn(4).getString(),
+        .state =
+            CardState{
+                .repetitions = row.getColumn(5).getInt(),
+                .interval_days = row.getColumn(6).getInt(),
+                .ease_milli = row.getColumn(7).getInt(),
+                .due_at = row.getColumn(8).getInt64(),
+            },
+        .created_at = row.getColumn(9).getInt64(),
+    };
+}
+
+// The card of a node, as a new card made now for the move: a card already there for the node
+// keeps its id and loses its reviews. Inside the caller's transaction.
+void make_card(const SQLite::Database& db, std::int64_t profile_id, Color colour, Key key,
+               const std::string& move, std::int64_t now) {
+    const CardState state = new_card(now);
+    SQLite::Statement find(db, "SELECT id FROM cards WHERE profile_id = ?1 AND colour = ?2 AND "
+                               "key = ?3");
+    find.bind(1, profile_id);
+    find.bind(2, colour_index(colour));
+    find.bind(3, key_to_sql(key));
+    if (find.executeStep()) {
+        const std::int64_t id = find.getColumn(0).getInt64();
+        find.reset();
+        SQLite::Statement forget(db, "DELETE FROM reviews WHERE card_id = ?1");
+        forget.bind(1, id);
+        forget.exec();
+        SQLite::Statement reset(db, "UPDATE cards SET move = ?1, repetitions = ?2, "
+                                    "interval_days = ?3, ease_milli = ?4, due_at = ?5, "
+                                    "created_at = ?6 WHERE id = ?7");
+        reset.bind(1, move);
+        reset.bind(2, state.repetitions);
+        reset.bind(3, state.interval_days);
+        reset.bind(4, state.ease_milli);
+        reset.bind(5, state.due_at);
+        reset.bind(6, now);
+        reset.bind(7, id);
+        reset.exec();
+        return;
+    }
+    SQLite::Statement insert(db, "INSERT INTO cards (profile_id, colour, key, move, repetitions, "
+                                 "interval_days, ease_milli, due_at, created_at) "
+                                 "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)");
+    insert.bind(1, profile_id);
+    insert.bind(2, colour_index(colour));
+    insert.bind(3, key_to_sql(key));
+    insert.bind(4, move);
+    insert.bind(5, state.repetitions);
+    insert.bind(6, state.interval_days);
+    insert.bind(7, state.ease_milli);
+    insert.bind(8, state.due_at);
+    insert.bind(9, now);
+    insert.exec();
+}
+
+// The move a node chose, or nullopt when the repertoire does not answer the position.
+std::optional<std::string> node_move(const SQLite::Database& db, std::int64_t profile_id,
+                                     Color colour, Key key) {
+    SQLite::Statement find(db, "SELECT move FROM repertoire_nodes WHERE profile_id = ?1 AND "
+                               "colour = ?2 AND key = ?3");
+    find.bind(1, profile_id);
+    find.bind(2, colour_index(colour));
+    find.bind(3, key_to_sql(key));
+    if (!find.executeStep()) {
+        return std::nullopt;
+    }
+    return find.getColumn(0).getString();
+}
+
+void insert_node(const SQLite::Database& db, std::int64_t profile_id, Color colour,
+                 const RepertoireChoice& choice, std::int64_t now) {
+    SQLite::Statement insert(db, "INSERT INTO repertoire_nodes (profile_id, colour, key, fen, "
+                                 "move, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)");
+    insert.bind(1, profile_id);
+    insert.bind(2, colour_index(colour));
+    insert.bind(3, key_to_sql(choice.key));
+    insert.bind(4, choice.fen);
+    insert.bind(5, choice.move);
+    insert.bind(6, now);
+    insert.exec();
+}
+
+bool unsigned_key_before(const Card& a, const Card& b) { return a.key < b.key; }
 
 } // namespace
 
@@ -547,6 +717,245 @@ tl::expected<Summary, SparError> replay_spar_session(const OpeningStore& store,
                                    .end_move = row.end_move,
                                    .sampler = {.min_games = row.min_games},
                                });
+}
+
+tl::expected<ChoiceChange, ProfileError>
+ProfileStore::set_choice(std::int64_t profile_id, Color colour, const RepertoireChoice& choice) {
+    const auto valid = validated(colour, choice);
+    if (!valid) {
+        return tl::unexpected(ProfileError::invalid_choice);
+    }
+    try {
+        SQLite::Transaction transaction(impl_->db);
+        if (!impl_->profile(profile_id)) {
+            return tl::unexpected(ProfileError::no_such_profile);
+        }
+        const std::int64_t now = (*impl_->clock)();
+        const auto stored = node_move(impl_->db, profile_id, colour, valid->key);
+        if (stored && *stored == valid->move) {
+            return ChoiceChange::unchanged;
+        }
+        if (stored) {
+            SQLite::Statement update(impl_->db, "UPDATE repertoire_nodes SET fen = ?1, move = ?2, "
+                                                "created_at = ?3 WHERE profile_id = ?4 AND "
+                                                "colour = ?5 AND key = ?6");
+            update.bind(1, valid->fen);
+            update.bind(2, valid->move);
+            update.bind(3, now);
+            update.bind(4, profile_id);
+            update.bind(5, colour_index(colour));
+            update.bind(6, key_to_sql(valid->key));
+            update.exec();
+        } else {
+            insert_node(impl_->db, profile_id, colour, *valid, now);
+        }
+        make_card(impl_->db, profile_id, colour, valid->key, valid->move, now);
+        transaction.commit();
+        return stored ? ChoiceChange::changed : ChoiceChange::added;
+    } catch (const SQLite::Exception&) {
+        return tl::unexpected(ProfileError::storage);
+    }
+}
+
+tl::expected<bool, ProfileError> ProfileStore::remove_choice(std::int64_t profile_id, Color colour,
+                                                             Key key) {
+    try {
+        SQLite::Transaction transaction(impl_->db);
+        SQLite::Statement node(impl_->db, "DELETE FROM repertoire_nodes WHERE profile_id = ?1 AND "
+                                          "colour = ?2 AND key = ?3");
+        node.bind(1, profile_id);
+        node.bind(2, colour_index(colour));
+        node.bind(3, key_to_sql(key));
+        const bool removed = node.exec() > 0;
+        // The card's reviews go with it (ON DELETE CASCADE).
+        SQLite::Statement card(impl_->db, "DELETE FROM cards WHERE profile_id = ?1 AND "
+                                          "colour = ?2 AND key = ?3");
+        card.bind(1, profile_id);
+        card.bind(2, colour_index(colour));
+        card.bind(3, key_to_sql(key));
+        card.exec();
+        transaction.commit();
+        return removed;
+    } catch (const SQLite::Exception&) {
+        return tl::unexpected(ProfileError::storage);
+    }
+}
+
+std::vector<RepertoireNode> ProfileStore::repertoire_nodes(std::int64_t profile_id,
+                                                           Color colour) const {
+    SQLite::Statement query(impl_->db, "SELECT key, fen, move, created_at FROM repertoire_nodes "
+                                       "WHERE profile_id = ?1 AND colour = ?2");
+    query.bind(1, profile_id);
+    query.bind(2, colour_index(colour));
+    std::vector<RepertoireNode> nodes;
+    while (query.executeStep()) {
+        nodes.push_back(RepertoireNode{
+            .choice =
+                RepertoireChoice{
+                    .key = key_from_sql(query.getColumn(0).getInt64()),
+                    .fen = query.getColumn(1).getString(),
+                    .move = query.getColumn(2).getString(),
+                },
+            .created_at = query.getColumn(3).getInt64(),
+        });
+    }
+    std::ranges::sort(nodes, [](const RepertoireNode& a, const RepertoireNode& b) {
+        return a.choice.key < b.choice.key;
+    });
+    return nodes;
+}
+
+Repertoire ProfileStore::repertoire(std::int64_t profile_id, Color colour) const {
+    Repertoire chosen;
+    for (auto& node : repertoire_nodes(profile_id, colour)) {
+        chosen.emplace(node.choice.key, std::move(node.choice.move));
+    }
+    return chosen;
+}
+
+tl::expected<ChoiceImport, ProfileError>
+ProfileStore::import_choices(std::int64_t profile_id, Color colour,
+                             const std::vector<RepertoireChoice>& choices) {
+    try {
+        SQLite::Transaction transaction(impl_->db);
+        if (!impl_->profile(profile_id)) {
+            return tl::unexpected(ProfileError::no_such_profile);
+        }
+        const std::int64_t now = (*impl_->clock)();
+        ChoiceImport counts;
+        for (const auto& choice : choices) {
+            const auto valid = validated(colour, choice);
+            if (!valid) {
+                return tl::unexpected(ProfileError::invalid_choice);
+            }
+            const auto stored = node_move(impl_->db, profile_id, colour, valid->key);
+            if (stored) {
+                ++(*stored == valid->move ? counts.unchanged : counts.conflicts);
+                continue;
+            }
+            insert_node(impl_->db, profile_id, colour, *valid, now);
+            make_card(impl_->db, profile_id, colour, valid->key, valid->move, now);
+            ++counts.added;
+        }
+        transaction.commit();
+        return counts;
+    } catch (const SQLite::Exception&) {
+        return tl::unexpected(ProfileError::storage);
+    }
+}
+
+tl::expected<CardSync, ProfileError> ProfileStore::sync_cards(std::int64_t profile_id,
+                                                              Color colour) {
+    try {
+        SQLite::Transaction transaction(impl_->db);
+        const std::int64_t now = (*impl_->clock)();
+        std::unordered_map<Key, std::string> card_moves;
+        for (const Card& card : cards(profile_id, colour)) {
+            card_moves.emplace(card.key, card.move);
+        }
+        CardSync counts;
+        for (const auto& node : repertoire_nodes(profile_id, colour)) {
+            const auto card = card_moves.find(node.choice.key);
+            if (card != card_moves.end() && card->second == node.choice.move) {
+                continue;
+            }
+            ++(card == card_moves.end() ? counts.created : counts.reset);
+            make_card(impl_->db, profile_id, colour, node.choice.key, node.choice.move, now);
+        }
+        // Cards whose node is gone, with their reviews (ON DELETE CASCADE).
+        SQLite::Statement orphans(impl_->db,
+                                  "DELETE FROM cards WHERE profile_id = ?1 AND colour = ?2 AND "
+                                  "NOT EXISTS (SELECT 1 FROM repertoire_nodes AS node WHERE "
+                                  "node.profile_id = cards.profile_id AND "
+                                  "node.colour = cards.colour AND node.key = cards.key)");
+        orphans.bind(1, profile_id);
+        orphans.bind(2, colour_index(colour));
+        counts.deleted = orphans.exec();
+        transaction.commit();
+        return counts;
+    } catch (const SQLite::Exception&) {
+        return tl::unexpected(ProfileError::storage);
+    }
+}
+
+std::vector<Card> ProfileStore::cards(std::int64_t profile_id, Color colour) const {
+    SQLite::Statement query(impl_->db, std::string("SELECT ") + card_columns +
+                                           " FROM cards WHERE profile_id = ?1 AND colour = ?2");
+    query.bind(1, profile_id);
+    query.bind(2, colour_index(colour));
+    std::vector<Card> found;
+    while (query.executeStep()) {
+        found.push_back(card_of_row(query));
+    }
+    std::ranges::sort(found, unsigned_key_before);
+    return found;
+}
+
+std::vector<Card> ProfileStore::due_cards(std::int64_t profile_id, Color colour,
+                                          std::int64_t now) const {
+    SQLite::Statement query(impl_->db, std::string("SELECT ") + card_columns +
+                                           " FROM cards WHERE profile_id = ?1 AND colour = ?2 "
+                                           "AND due_at <= ?3");
+    query.bind(1, profile_id);
+    query.bind(2, colour_index(colour));
+    query.bind(3, now);
+    std::vector<Card> found;
+    while (query.executeStep()) {
+        found.push_back(card_of_row(query));
+    }
+    std::ranges::sort(found, [](const Card& a, const Card& b) {
+        return a.state.due_at != b.state.due_at ? a.state.due_at < b.state.due_at : a.key < b.key;
+    });
+    return found;
+}
+
+tl::expected<Card, ProfileError> ProfileStore::record_review(std::int64_t card_id, Grade grade,
+                                                             std::int64_t reviewed_at) {
+    try {
+        SQLite::Transaction transaction(impl_->db);
+        SQLite::Statement find(impl_->db,
+                               std::string("SELECT ") + card_columns + " FROM cards WHERE id = ?1");
+        find.bind(1, card_id);
+        if (!find.executeStep()) {
+            return tl::unexpected(ProfileError::no_such_card);
+        }
+        Card card = card_of_row(find);
+        find.reset();
+        card.state = review(card.state, grade, reviewed_at);
+        SQLite::Statement insert(impl_->db, "INSERT INTO reviews (card_id, grade, reviewed_at) "
+                                            "VALUES (?1, ?2, ?3)");
+        insert.bind(1, card_id);
+        insert.bind(2, static_cast<int>(grade));
+        insert.bind(3, reviewed_at);
+        insert.exec();
+        SQLite::Statement update(impl_->db,
+                                 "UPDATE cards SET repetitions = ?1, interval_days = ?2, "
+                                 "ease_milli = ?3, due_at = ?4 WHERE id = ?5");
+        update.bind(1, card.state.repetitions);
+        update.bind(2, card.state.interval_days);
+        update.bind(3, card.state.ease_milli);
+        update.bind(4, card.state.due_at);
+        update.bind(5, card_id);
+        update.exec();
+        transaction.commit();
+        return card;
+    } catch (const SQLite::Exception&) {
+        return tl::unexpected(ProfileError::storage);
+    }
+}
+
+std::vector<Review> ProfileStore::card_history(std::int64_t card_id) const {
+    SQLite::Statement query(impl_->db, "SELECT grade, reviewed_at FROM reviews WHERE card_id = ?1 "
+                                       "ORDER BY id");
+    query.bind(1, card_id);
+    std::vector<Review> history;
+    while (query.executeStep()) {
+        history.push_back(Review{
+            .grade = grade_of_row(query.getColumn(0).getInt64()),
+            .reviewed_at = query.getColumn(1).getInt64(),
+        });
+    }
+    return history;
 }
 
 } // namespace chesscoach

@@ -465,16 +465,53 @@ and to replay it from its seed and moves:
 A saved session is replayed with its own `end_move` and `min_games`, and only against an
 `openings.db` with its `data_version`, since another build may answer with other book moves.
 
-### 12.4 Version 3 (Phase 5): `repertoire_nodes`, `cards`, `reviews`, provisional
+### 12.4 Version 3 (Phase 5): `repertoire_nodes`, `cards`, `reviews`
 
-Columns as provisional until Phase 5 lands and specifies them here:
+A colour is `0` for white and `1` for black. Version 3's script creates:
 
-- `repertoire_nodes`: `profile_id`, `colour`, `key`, `fen`, `move` (the chosen move), primary key
-  `(profile_id, colour, key)`; the FEN beside the key is what a re-keying migration reads (§14).
-- `cards`: `id INTEGER PRIMARY KEY`, `profile_id`, `colour`, `key`, `move`, and the SM-2 state
-  (ease, interval, repetitions, due); a card carries no FEN and is re-keyed through its repertoire
-  node `(profile_id, colour, key)`.
-- `reviews`: `card_id`, `reviewed_at`, `grade`, enough to replay a card's history to its state.
+`repertoire_nodes(...) WITHOUT ROWID`, one row per position a profile's repertoire for a colour
+answers:
+
+| Column | Type | Null | Meaning |
+|---|---|---|---|
+| `profile_id` | `INTEGER` | no | `REFERENCES profiles(id) ON DELETE CASCADE` |
+| `colour` | `INTEGER` | no | The repertoire's colour, which is to move in the position |
+| `key` | `INTEGER` | no | The position's key (§5.2) |
+| `fen` | `TEXT` | no | Its normalized FEN (§5.1), which a re-keying migration reads (§14) |
+| `move` | `TEXT` | no | The chosen move, UCI (§5.3), legal in the position |
+| `created_at` | `INTEGER` | no | When the choice was made or last changed |
+
+`PRIMARY KEY (profile_id, colour, key)`.
+
+`cards`, one row per repertoire node, which the store keeps in step with the nodes:
+
+| Column | Type | Null | Meaning |
+|---|---|---|---|
+| `id` | `INTEGER PRIMARY KEY` | no | The card |
+| `profile_id` | `INTEGER` | no | `REFERENCES profiles(id) ON DELETE CASCADE` |
+| `colour`, `key` | `INTEGER` | no | Its node's; a card carries no FEN and is re-keyed through its node |
+| `move` | `TEXT` | no | Its node's move, the answer the card asks for |
+| `repetitions`, `interval_days`, `ease_milli`, `due_at` | `INTEGER` | no | The scheduler's state (`docs/reference/core.md`, **The scheduler**) |
+| `created_at` | `INTEGER` | no | When the card was made or last reset |
+
+`UNIQUE (profile_id, colour, key)`, and the index `cards_due (profile_id, colour, due_at, key)`.
+
+`reviews`, one row per grading:
+
+| Column | Type | Null | Meaning |
+|---|---|---|---|
+| `id` | `INTEGER PRIMARY KEY` | no | The order the reviews were applied in |
+| `card_id` | `INTEGER` | no | `REFERENCES cards(id) ON DELETE CASCADE` |
+| `grade` | `INTEGER` | no | `1` again, `3` hard, `4` good, `5` easy |
+| `reviewed_at` | `INTEGER` | no | When |
+
+The index `reviews_card (card_id, id)`.
+
+**The rules.** A card's state columns are always the scheduler's replay of its reviews, in `id`
+order, from its `created_at`. A new node gets a card due at once (a new card at `created_at`); a
+node whose move changes keeps its card's `id` but the card's move changes, its reviews are
+deleted and its state and `created_at` restart; a removed node's card is deleted with its
+reviews. A review applies the scheduler to the card and inserts the review in one transaction.
 
 ## 13. Sampler and score inputs
 

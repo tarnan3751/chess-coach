@@ -44,6 +44,8 @@ std::string_view describe(ProfileError error) {
     case ProfileError::duplicate_name:
     case ProfileError::no_such_profile:
     case ProfileError::last_profile:
+    case ProfileError::invalid_choice:
+    case ProfileError::no_such_card:
         return "refused a profile change";
     case ProfileError::storage:
         return "could not be written";
