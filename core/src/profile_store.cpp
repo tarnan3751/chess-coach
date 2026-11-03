@@ -551,8 +551,9 @@ ProfileStore::open_file(const std::filesystem::path& path, Clock clock,
                 return tl::unexpected(ProfileError::not_profiles);
             }
             version = *stored;
-        } catch (const SQLite::Exception& error) {
-            return tl::unexpected(is_busy(error) ? ProfileError::busy : ProfileError::not_profiles);
+        } catch (const SQLite::Exception& exception) {
+            return tl::unexpected(is_busy(exception) ? ProfileError::busy
+                                                     : ProfileError::not_profiles);
         }
         if (version > scripts.back().version) {
             return tl::unexpected(ProfileError::newer_version);
@@ -565,9 +566,9 @@ ProfileStore::open_file(const std::filesystem::path& path, Clock clock,
         assert(migration.version == version + 1);
         try {
             migrate(*db, migration);
-        } catch (const SQLite::Exception& error) {
-            return tl::unexpected(is_busy(error) ? ProfileError::busy
-                                                 : ProfileError::migration_failed);
+        } catch (const SQLite::Exception& exception) {
+            return tl::unexpected(is_busy(exception) ? ProfileError::busy
+                                                     : ProfileError::migration_failed);
         }
         version = migration.version;
     }
