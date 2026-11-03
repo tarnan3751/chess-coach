@@ -50,7 +50,8 @@ git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.
 On Ubuntu 24.04:
 
 ```
-sudo apt-get install ninja-build clang-format clang-tidy qt6-base-dev qt6-svg-dev libgl1-mesa-dev stockfish
+sudo apt-get install build-essential cmake git curl zip unzip tar pkg-config ninja-build \
+  clang-format clang-tidy qt6-base-dev qt6-svg-dev libgl1-mesa-dev stockfish
 git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 ```
 
