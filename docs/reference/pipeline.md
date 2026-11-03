@@ -160,8 +160,9 @@ unreadable; malformed JSON in a non-surviving line is never parsed, so it is not
 
 `compute_badges` walks the survivors grouped by key: per node, the sum of its moves' totals; per
 move, the integer share tests of §7.2, the tier-6 node of the same key for Book, and the loss
-from the parent's and the child's evaluations (`evaluation_loss`); the thresholds are the
-constants of `badges.hpp`, §7.1's values.
+from the parent's and the child's evaluations through core's `evaluation_value` and
+`evaluation_loss` (`score.hpp`), the rule the recommendation score reads; the thresholds are
+§7.1's values, the constants of `badges.hpp` and core's `book_margin_cp`.
 
 `write_database` opens the new file, sets `journal_mode=OFF` and `synchronous=OFF`, runs core's
 `openings_schema_sql()`, and inserts meta, then positions, nodes and moves in the key order the

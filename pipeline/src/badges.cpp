@@ -2,6 +2,8 @@
 #include "badges.hpp"
 
 #include <chesscoach/badges.hpp>
+#include <chesscoach/position.hpp>
+#include <chesscoach/score.hpp>
 #include <chesscoach/tier.hpp>
 
 #include <numeric>
@@ -10,8 +12,6 @@
 namespace chesscoach::pipeline {
 
 namespace {
-
-constexpr std::int64_t mate_value = 100000;
 
 std::uint64_t move_sum(const SurvivingNode& node) {
     return std::accumulate(
@@ -31,28 +31,16 @@ bool white_to_move(const PositionRecord& position) {
 
 } // namespace
 
-std::int64_t evaluation_value(const Evaluation& evaluation) {
-    if (evaluation.cp) {
-        return *evaluation.cp;
-    }
-    // sign(m) * (100000 - |m|): a mate of 0, whose sign is 0, is worth 0.
-    const std::int64_t m = evaluation.mate.value_or(0);
-    if (m == 0) {
-        return 0;
-    }
-    const std::int64_t magnitude = mate_value - (m < 0 ? -m : m);
-    return m < 0 ? -magnitude : magnitude;
-}
-
 std::optional<std::int64_t> evaluation_loss(const PositionRecord& parent,
                                             const PositionRecord* child) {
     if (!parent.evaluation || child == nullptr || !child->evaluation) {
         return std::nullopt;
     }
-    const std::int64_t side = white_to_move(parent) ? 1 : -1;
-    const std::int64_t loss = (side * evaluation_value(*parent.evaluation)) -
-                              (side * evaluation_value(*child->evaluation));
-    return loss > 0 ? loss : 0;
+    const auto value = [](const Evaluation& evaluation) {
+        return chesscoach::evaluation_value(evaluation.cp, evaluation.mate);
+    };
+    return chesscoach::evaluation_loss(white_to_move(parent) ? Color::white : Color::black,
+                                       value(*parent.evaluation), value(*child->evaluation));
 }
 
 void compute_badges(Tree& tree) {

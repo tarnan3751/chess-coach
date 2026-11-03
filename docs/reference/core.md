@@ -19,7 +19,7 @@ sampler, the spar session, the scheduler and repertoire coverage are described b
 | `names.hpp` | `load_names`, `NameTable`, `Opening`, `NameError` |
 | `opening_schema.hpp` | `openings_schema_sql()`, `opening_schema_version` |
 | `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
-| `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_loss`, the score's numbers |
+| `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_value`, `evaluation_loss`, `book_margin_cp`, the score's numbers |
 | `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
 | `spar.hpp` | `SparSession`, `SparConfig`, `Interruption`, `Summary`, `ReplyProvider`, `SparError` |
 | `scheduler.hpp` | `CardState`, `Grade`, `Review`, `new_card`, `review`, `replay`, `is_due`, SM-2's numbers |
@@ -233,8 +233,10 @@ coverage test is `100 × covered >= 80 × sum`), and every floating-point value 
 a statement of its own, so no compiler fuses two into a multiply-add and the values and the order
 are the same on every platform.
 
-`evaluation_loss` repeats the rule the pipeline applies for the badges (`pipeline/src/badges.cpp`)
-with the same 50 cp margin; moving the pipeline onto `core`'s function is a later refactor.
+`evaluation_value` (a mate m as sign(m) × (100000 − \|m\|), else the centipawns) and
+`evaluation_loss` (from the mover's side, at least 0) are the one rule for §7.2's loss: the
+pipeline's badges (`pipeline/src/badges.cpp`) call them over their own evaluation records, and
+Book's margin and the score's soundness margin are both `book_margin_cp`, 50 cp.
 
 ## The engine
 

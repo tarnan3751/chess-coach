@@ -12,6 +12,7 @@
 
 #include <chesscoach/key.hpp>
 #include <chesscoach/opening_store.hpp>
+#include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 
 #include <cstdint>
@@ -22,11 +23,15 @@
 
 namespace chesscoach {
 
+// §7.1's Book margin, the largest loss of a Book move: the pipeline's badges and the score's
+// soundness gate both read it here.
+inline constexpr std::int64_t book_margin_cp = 50;
+
 // The numbers of the score; tier A to change (docs/reference/core.md).
-inline constexpr std::int64_t soundness_margin_cp = 50; // §13: the Book margin of §7.1
-inline constexpr std::int64_t shrink_games = 30;        // the games at which a move weighs half
-inline constexpr std::int64_t coverage_percent = 80;    // the replies a move leaves to prepare
-inline constexpr double penalty_per_reply = 0.02;       // per reply beyond the first
+inline constexpr std::int64_t soundness_margin_cp = book_margin_cp; // §13: the Book margin
+inline constexpr std::int64_t shrink_games = 30;     // the games at which a move weighs half
+inline constexpr std::int64_t coverage_percent = 80; // the replies a move leaves to prepare
+inline constexpr double penalty_per_reply = 0.02;    // per reply beyond the first
 inline constexpr double penalty_cap = 0.3;
 
 // One candidate's components and its score.
@@ -58,6 +63,17 @@ struct ChildRows {
 
 // The rows of a child position, at the tier of the moves score_moves is given.
 using ChildLookup = std::function<ChildRows(Key child)>;
+
+// §7.2's value of an evaluation, in centipawns from white's side: for a mate m,
+// sign(m) * (100000 - |m|), so a mate of 0 is worth 0; else the centipawns, 0 when neither is
+// given. The pipeline's badges and the score both read evaluations through it.
+[[nodiscard]] std::int64_t evaluation_value(std::optional<std::int64_t> cp,
+                                            std::optional<std::int64_t> mate) noexcept;
+
+// §7.2's loss of a move by mover, from the values (evaluation_value) of the position it is played
+// in and of its child: max(0, s * before - s * after), s being +1 for white and -1 for black.
+[[nodiscard]] std::int64_t evaluation_loss(Color mover, std::int64_t before,
+                                           std::int64_t after) noexcept;
 
 // The §7.2 loss of a move from parent to child, in centipawns from the mover's side (the side to
 // move in parent's FEN); nullopt unless both are evaluated.

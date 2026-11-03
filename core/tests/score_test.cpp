@@ -2,7 +2,8 @@
 // worked out by hand in the comments: the shrink toward one half from either side, the 80%
 // coverage count at its boundary, the soundness gate with a defined, an undefined and a mate
 // loss, the penalty and its cap, off-book and move-less children, the floor at zero, the shares
-// and the sort.
+// and the sort; and §7.2's value and loss, which the pipeline's badges share.
+#include <chesscoach/position.hpp>
 #include <chesscoach/score.hpp>
 
 #include <catch2/catch_approx.hpp>
@@ -16,6 +17,7 @@
 
 using Catch::Approx;
 using chesscoach::ChildRows;
+using chesscoach::Color;
 using chesscoach::evaluation_loss;
 using chesscoach::Key;
 using chesscoach::MoveRow;
@@ -179,6 +181,18 @@ TEST_CASE("An unsound move scores zero and lists its loss", "[score]") {
     const auto undefined = only(score(parent, {move("e2e4", 10, 30, 0, 0)}, {{10, in_book({1})}}));
     CHECK(undefined.sound);
     CHECK_FALSE(undefined.loss.has_value());
+}
+
+TEST_CASE("evaluation_value maps a mate to 100000 less its distance, signed", "[score]") {
+    CHECK(chesscoach::evaluation_value(35, std::nullopt) == 35);
+    CHECK(chesscoach::evaluation_value(std::nullopt, 3) == 99997);
+    CHECK(chesscoach::evaluation_value(std::nullopt, -2) == -99998);
+    CHECK(chesscoach::evaluation_value(std::nullopt, 0) == 0); // sign(0) is 0
+    CHECK(chesscoach::evaluation_value(std::nullopt, std::nullopt) == 0);
+    // From the mover's side, never below 0.
+    CHECK(evaluation_loss(Color::white, 40, -20) == 60);
+    CHECK(evaluation_loss(Color::black, 40, 150) == 110);
+    CHECK(evaluation_loss(Color::white, 40, 90) == 0);
 }
 
 TEST_CASE("evaluation_loss reads both evaluations from the mover's side, mates included",

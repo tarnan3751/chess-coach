@@ -10,24 +10,8 @@ namespace chesscoach {
 
 namespace {
 
-constexpr std::int64_t mate_value = 100000;
-
 bool evaluated(const PositionRow& row) {
     return row.eval_depth.has_value() && (row.eval_cp.has_value() || row.eval_mate.has_value());
-}
-
-// §7.2's value of an evaluated position, in centipawns from white's side.
-std::int64_t value_of(const PositionRow& row) {
-    if (row.eval_mate) {
-        // sign(m) * (100000 - |m|): a mate of 0, whose sign is 0, is worth 0.
-        const std::int64_t mate = *row.eval_mate;
-        if (mate == 0) {
-            return 0;
-        }
-        const std::int64_t magnitude = mate_value - (mate < 0 ? -mate : mate);
-        return mate < 0 ? -magnitude : magnitude;
-    }
-    return row.eval_cp.value_or(0);
 }
 
 // The side to move in the row's FEN, from its second field: black for "b", white otherwise.
@@ -66,15 +50,33 @@ int count_replies(const ChildRows& child) {
 
 } // namespace
 
+std::int64_t evaluation_value(std::optional<std::int64_t> cp,
+                              std::optional<std::int64_t> mate) noexcept {
+    constexpr std::int64_t mate_value = 100000;
+    if (mate) {
+        // sign(m) * (100000 - |m|): a mate of 0, whose sign is 0, is worth 0.
+        if (*mate == 0) {
+            return 0;
+        }
+        const std::int64_t magnitude = mate_value - (*mate < 0 ? -*mate : *mate);
+        return *mate < 0 ? -magnitude : magnitude;
+    }
+    return cp.value_or(0);
+}
+
+std::int64_t evaluation_loss(Color mover, std::int64_t before, std::int64_t after) noexcept {
+    const std::int64_t side = mover == Color::white ? 1 : -1;
+    return std::max<std::int64_t>(0, (side * before) - (side * after));
+}
+
 std::optional<std::int64_t> evaluation_loss(const PositionRow& parent,
                                             const std::optional<PositionRow>& child) {
     if (!evaluated(parent) || !child || !evaluated(*child)) {
         return std::nullopt;
     }
-    const std::int64_t side = white_to_move(parent) ? 1 : -1;
-    const std::int64_t before = side * value_of(parent);
-    const std::int64_t after = side * value_of(*child);
-    return std::max<std::int64_t>(0, before - after);
+    return evaluation_loss(white_to_move(parent) ? Color::white : Color::black,
+                           evaluation_value(parent.eval_cp, parent.eval_mate),
+                           evaluation_value(child->eval_cp, child->eval_mate));
 }
 
 std::vector<ScoreComponents> score_moves(const PositionRow& position,

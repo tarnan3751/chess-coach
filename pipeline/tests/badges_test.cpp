@@ -16,7 +16,6 @@ using chesscoach::Key;
 using chesscoach::pipeline::compute_badges;
 using chesscoach::pipeline::Evaluation;
 using chesscoach::pipeline::evaluation_loss;
-using chesscoach::pipeline::evaluation_value;
 using chesscoach::pipeline::MoveCounts;
 using chesscoach::pipeline::NodeId;
 using chesscoach::pipeline::PositionRecord;
@@ -85,13 +84,6 @@ SurvivingNode node(std::uint8_t tier, std::vector<MoveCounts> moves) {
 }
 
 } // namespace
-
-TEST_CASE("evaluation_value maps a mate to 100000 less its distance, signed", "[badges]") {
-    CHECK(evaluation_value(cp(35)) == 35);
-    CHECK(evaluation_value(mate(3)) == 99997);
-    CHECK(evaluation_value(mate(-2)) == -99998);
-    CHECK(evaluation_value(mate(0)) == 0); // sign(0) is 0
-}
 
 TEST_CASE("evaluation_loss reads both evaluations from the mover's side", "[badges]") {
     auto white = tree_with(cp(40), {cp(-20)}, {});
