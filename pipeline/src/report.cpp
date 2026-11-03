@@ -32,7 +32,10 @@ std::uint64_t peak_rss_bytes() {
     if (getrusage(RUSAGE_SELF, &usage) != 0) {
         return 0;
     }
-    const auto peak = static_cast<std::uint64_t>(usage.ru_maxrss);
+    // glibc declares struct rusage's fields inside anonymous unions, which clang-tidy's
+    // union-access check flags on Linux; the field is a plain integer on every platform.
+    const auto peak = static_cast<std::uint64_t>(
+        usage.ru_maxrss); // NOLINT(cppcoreguidelines-pro-type-union-access)
 #ifdef __APPLE__
     return peak; // bytes on macOS
 #else

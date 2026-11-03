@@ -90,14 +90,17 @@ void compute_badges(Tree& tree) {
                 const auto loss = parent != nullptr
                                       ? evaluation_loss(*parent, tree.find(move.child))
                                       : std::nullopt;
+                // GCC's -Wmaybe-uninitialized misreads *loss at -O3, so the optional is read once.
+                const bool loss_defined = loss.has_value();
+                const std::int64_t loss_cp = loss.value_or(0);
                 if (top_node != nullptr && share_at_least(top_total, top_sum, book_share_percent) &&
-                    loss && *loss <= book_margin_cp) {
+                    loss_defined && loss_cp <= book_margin_cp) {
                     badges.set(Badge::book);
                 }
                 if (popular) {
                     badges.set(Badge::popular);
                 }
-                if (popular && loss && *loss >= dubious_margin_cp) {
+                if (popular && loss_defined && loss_cp >= dubious_margin_cp) {
                     badges.set(Badge::dubious);
                 }
                 move.badges = static_cast<std::uint8_t>(badges.raw());
