@@ -516,13 +516,23 @@ reviews. A review applies the scheduler to the card and inserts the review in on
 ### 12.5 Export and import
 
 A profile export is a `profiles.db` file, at the exporting build's schema version, written with
-SQLite's backup API so that it is consistent even while the store is open; an export never
+SQLite's backup API so that it is consistent even while the store is open. An export never
 overwrites an existing file, and a data directory without a `profiles.db` has nothing to export
-and is refused without anything being created. Importing a file refuses one that is not SQLite with a `meta` table
-and a decimal `schema_version` (§12.1) and one newer than the importing build, all without
-modifying anything; it copies the file into the data directory as `profiles.db.importing`, opens
-that copy, which migrates it, then renames the current `profiles.db` to `profiles.db.previous`,
-replacing any earlier one, and the copy to `profiles.db`. The previous file is the one-step undo.
+and is refused without anything being created.
+
+Importing a file refuses, without modifying anything, one that is not SQLite with a `meta` table
+and a decimal `schema_version` (§12.1), one newer than the importing build, and the data
+directory's own `profiles.db.importing`. It copies the file into the data directory as
+`profiles.db.importing` and opens that copy, which migrates it. Then it opens the current
+`profiles.db` read-write and reads it, so that a rollback journal a stopped writer left beside it
+is rolled back into it rather than played onto the imported file, and refuses if a `-journal` or
+`-wal` file still remains. Last, it renames the current `profiles.db` to `profiles.db.previous`,
+replacing any earlier one, and the copy to `profiles.db`; when that second rename fails, the first
+is undone, so a `profiles.db` always remains. The previous file is the one-step undo.
+
+Both copies must complete: a file that another connection keeps locked past the store's two
+second busy timeout is reported busy, and a copy without the source's `meta` is removed, never
+opened as a new file.
 
 ## 13. Sampler and score inputs
 

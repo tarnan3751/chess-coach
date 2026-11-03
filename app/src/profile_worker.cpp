@@ -53,6 +53,8 @@ QString ProfileWorker::describe(ProfileError error) {
         return translate("the move is not a choice for this colour here");
     case ProfileError::no_such_card:
         return translate("the card is not there");
+    case ProfileError::busy:
+        return translate("another program has the file open; nothing was changed");
     }
     return {};
 }

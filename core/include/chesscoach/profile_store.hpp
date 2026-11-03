@@ -65,6 +65,8 @@ enum class ProfileError : std::uint8_t {
     invalid_choice,   // a choice whose FEN is not its key's, not its colour's to move, or whose
                       // move is not legal there
     no_such_card,     // no card has the id
+    busy,             // another connection holds the file locked, or a journal beside it stays
+                      // after a rollback; nothing was changed
 };
 
 struct Profile {
@@ -256,16 +258,20 @@ class ProfileStore {
 
     // §12.5: writes a consistent copy of data_dir's profiles.db, opened (migrated) as open does,
     // to destination with SQLite's backup API; not_profiles, creating nothing, when data_dir has
-    // no profiles.db or an empty one; unwritable when destination exists or cannot be written.
+    // no profiles.db or an empty one; unwritable when destination exists or cannot be created;
+    // busy when a file stays locked past the busy timeout, storage when the copy fails otherwise,
+    // and then no destination is left.
     [[nodiscard]] static tl::expected<void, ProfileError>
     export_profiles(const std::filesystem::path& data_dir,
                     const std::filesystem::path& destination);
 
     // §12.5: replaces data_dir's profiles.db with source, migrated: refused unmodified unless the
     // source is SQLite with meta and a decimal schema_version (not_profiles) at most this build's
-    // (newer_version); the copy is migrated as profiles.db.importing first, then the current file
-    // becomes profiles.db.previous and the copy profiles.db. No store may hold data_dir's file
-    // open.
+    // (newer_version) and is not data_dir's profiles.db.importing (unwritable); the copy is
+    // migrated as profiles.db.importing first; the current file is opened read-write so that a
+    // journal beside it is rolled back into it (busy if one remains, or if a file stays locked);
+    // then the current file becomes profiles.db.previous and the copy profiles.db, the first
+    // rename undone if the second fails. No store may hold data_dir's file open.
     [[nodiscard]] static tl::expected<void, ProfileError>
     import_profiles(const std::filesystem::path& data_dir, const std::filesystem::path& source,
                     Clock clock = system_clock_seconds);

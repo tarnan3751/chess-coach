@@ -4,9 +4,10 @@
 // refused unmodified), the files refused without being touched, the engine cache's hit, miss and
 // replace rules, the spar sessions saved, read and removed with their profile, the repertoire's
 // choices and the cards they keep in step (§12.4: validation, the card rules, the import, the
-// repair, the due order, the reviews), the export and the import (§12.5) with their refusals, the
-// committed version 1 and 2 fixtures migrated to version 3, and the committed version 3 fixture
-// opened unchanged. The clock is injected.
+// repair, the due order, the reviews), the export and the import (§12.5) with their refusals, a
+// journal a stopped writer left rolled back before an import, files locked by another connection,
+// the committed version 1 and 2 fixtures migrated to version 3, and the committed version 3
+// fixture opened unchanged. The clock is injected.
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -1021,6 +1023,124 @@ TEST_CASE("An import that cannot be used is refused and changes nothing", "[prof
     CHECK(read_bytes(dir.file()) == before);
     CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.importing"));
     CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.previous"));
+}
+
+TEST_CASE("An import rolls back a journal left beside the current file before replacing it",
+          "[profiles][export]") {
+    const DataDir crashed("import-hot-journal");
+    const DataDir writer_dir("import-hot-journal-writer");
+    const DataDir from("import-hot-journal-source");
+    TestClock clock{.now = 5000};
+    const auto source = from.path() / "export.db";
+    {
+        auto store = open_store(from, clock);
+        REQUIRE(store.create_profile("Mine", Tier::under_1200).has_value());
+    }
+    REQUIRE(ProfileStore::export_profiles(from.path(), source).has_value());
+    {
+        auto store = open_store(writer_dir, clock);
+        REQUIRE(store.create_profile("Club", Tier::r1800_1999).has_value());
+    }
+    // A writer stopped mid-transaction: its file, with pages of the transaction already written
+    // through a small cache, and the journal holding those pages as they were, copied while the
+    // transaction is open, which is what a killed writer leaves.
+    auto crashed_journal = crashed.file();
+    crashed_journal += "-journal";
+    {
+        SQLite::Database writer(writer_dir.file(), SQLite::OPEN_READWRITE);
+        writer.exec("PRAGMA cache_size = 10");
+        writer.exec("BEGIN");
+        writer.exec("INSERT INTO profiles (name, tier, created_at) VALUES ('Uncommitted', 1, 1)");
+        writer.exec(
+            "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000) "
+            "INSERT INTO engine_cache (key, lines, line, depth, score_cp, score_mate, pv, "
+            "engine, created_at) "
+            "SELECT i, 1, 1, 1, 0, NULL, hex(randomblob(200)), 'x', 0 FROM n");
+        auto journal = writer_dir.file();
+        journal += "-journal";
+        REQUIRE(std::filesystem::file_size(journal) > 0);
+        std::filesystem::create_directories(crashed.path());
+        std::filesystem::copy_file(writer_dir.file(), crashed.file());
+        std::filesystem::copy_file(journal, crashed_journal);
+        writer.exec("ROLLBACK");
+    }
+
+    REQUIRE(ProfileStore::import_profiles(crashed.path(), source, clock.clock()).has_value());
+    CHECK_FALSE(std::filesystem::exists(crashed_journal));
+    {
+        SQLite::Database imported(crashed.file(), SQLite::OPEN_READONLY);
+        CHECK(imported.execAndGet("PRAGMA integrity_check").getString() == "ok");
+    }
+    {
+        const auto store = open_store(crashed, clock);
+        const auto profiles = store.profiles();
+        REQUIRE(profiles.size() == 2);
+        CHECK(profiles.at(0).name == "Default");
+        CHECK(profiles.at(1).name == "Mine");
+    }
+    // The previous file is the current one rolled back: the transaction never happened.
+    SQLite::Database previous(crashed.path() / "profiles.db.previous", SQLite::OPEN_READONLY);
+    CHECK(previous.execAndGet("PRAGMA integrity_check").getString() == "ok");
+    CHECK(previous
+              .execAndGet("SELECT group_concat(name, ',') FROM "
+                          "(SELECT name FROM profiles ORDER BY id)")
+              .getString() == "Default,Club");
+    CHECK(previous.execAndGet("SELECT COUNT(*) FROM engine_cache").getInt() == 0);
+}
+
+TEST_CASE("A file locked by another connection makes an export or an import busy, changing nothing",
+          "[profiles][export]") {
+    const DataDir dir("busy-data");
+    const DataDir from("busy-source");
+    TestClock clock;
+    {
+        static_cast<void>(open_store(dir, clock));
+    }
+    {
+        static_cast<void>(open_store(from, clock));
+    }
+    const auto source = from.path() / "export.db";
+    REQUIRE(ProfileStore::export_profiles(from.path(), source).has_value());
+    const auto before = read_bytes(dir.file());
+    const auto exclusive = [](const std::filesystem::path& file) {
+        auto holder = std::make_unique<SQLite::Database>(file, SQLite::OPEN_READWRITE);
+        holder->exec("BEGIN EXCLUSIVE");
+        return holder;
+    };
+    SECTION("an export of a locked profiles.db") {
+        const auto holder = exclusive(dir.file());
+        const auto copy = from.path() / "copy.db";
+        CHECK(ProfileStore::export_profiles(dir.path(), copy).error() == ProfileError::busy);
+        CHECK_FALSE(std::filesystem::exists(copy));
+    }
+    SECTION("an import of a locked source") {
+        const auto holder = exclusive(source);
+        CHECK(ProfileStore::import_profiles(dir.path(), source, clock.clock()).error() ==
+              ProfileError::busy);
+    }
+    SECTION("an import over a locked profiles.db") {
+        const auto holder = exclusive(dir.file());
+        CHECK(ProfileStore::import_profiles(dir.path(), source, clock.clock()).error() ==
+              ProfileError::busy);
+    }
+    CHECK(read_bytes(dir.file()) == before);
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.importing"));
+    CHECK_FALSE(std::filesystem::exists(dir.path() / "profiles.db.previous"));
+}
+
+TEST_CASE("An import never takes the data directory's staging file as its source",
+          "[profiles][export]") {
+    const DataDir dir("import-staging");
+    std::filesystem::create_directories(dir.path());
+    const auto staging = dir.path() / "profiles.db.importing";
+    std::filesystem::copy_file(std::filesystem::path(CHESSCOACH_FIXTURE_DIR) / "profiles-v3.db",
+                               staging);
+    const auto before = read_bytes(staging);
+    TestClock clock;
+    CHECK(ProfileStore::import_profiles(dir.path(), staging, clock.clock()).error() ==
+          ProfileError::unwritable);
+    CHECK(read_bytes(staging) == before);
+    CHECK_FALSE(std::filesystem::exists(dir.file()));
 }
 
 // Writes the committed fixtures: run by hand with `core_profile_store_test "[.fixture]"` when a

@@ -55,10 +55,16 @@ Result<void> run_profile(const ProfileOptions& options, std::ostream& out, const
     if (options.action == "import") {
         const auto imported = ProfileStore::import_profiles(options.data_dir, options.path, clock);
         if (!imported) {
-            if (imported.error() == ProfileError::unwritable) {
-                return fail(fmt::format("profiles.db in {} cannot be replaced", options.data_dir));
+            const ProfileError reason = imported.error();
+            if (reason == ProfileError::unwritable || reason == ProfileError::storage) {
+                return fail(fmt::format("profiles.db in {} cannot be replaced; nothing was changed",
+                                        options.data_dir));
             }
-            return fail(fmt::format("{} {}", options.path, describe(imported.error())));
+            if (reason == ProfileError::busy) {
+                return fail(fmt::format("{} or profiles.db in {} {}", options.path,
+                                        options.data_dir, describe(reason)));
+            }
+            return fail(fmt::format("{} {}", options.path, describe(reason)));
         }
         out << "imported: " << options.path << '\n';
         return {};

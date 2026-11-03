@@ -21,6 +21,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -133,6 +134,61 @@ std::optional<int> read_version(const SQLite::Database& db) {
         return std::nullopt;
     }
     return std::stoi(text);
+}
+
+// How long a connection waits for another's lock before it reports the file busy.
+constexpr std::chrono::milliseconds busy_timeout{2000};
+
+// A failure because another connection holds the file locked.
+bool is_busy(const SQLite::Exception& error) {
+    return error.getErrorCode() == SQLITE_BUSY || error.getErrorCode() == SQLITE_LOCKED;
+}
+
+// The schema_version of the profiles.db at path, read through a read-only connection: busy when
+// another connection keeps it locked past the busy timeout, not_profiles when it is not SQLite or
+// has no meta or no decimal schema_version.
+tl::expected<int, ProfileError> stored_version(const std::filesystem::path& path) {
+    try {
+        SQLite::Database db(path, SQLite::OPEN_READONLY);
+        db.setBusyTimeout(static_cast<int>(busy_timeout.count()));
+        if (!db.tableExists("meta")) {
+            return tl::unexpected(ProfileError::not_profiles);
+        }
+        const auto version = read_version(db);
+        if (!version) {
+            return tl::unexpected(ProfileError::not_profiles);
+        }
+        return *version;
+    } catch (const SQLite::Exception& error) {
+        return tl::unexpected(is_busy(error) ? ProfileError::busy : ProfileError::not_profiles);
+    }
+}
+
+// Copies from into to with SQLite's backup API, which must report the copy done: a step that
+// finds either file locked is retried until the busy timeout, then busy; any other failure is
+// storage.
+tl::expected<void, ProfileError> back_up(SQLite::Database& to, SQLite::Database& from) {
+    try {
+        to.setBusyTimeout(static_cast<int>(busy_timeout.count()));
+        from.setBusyTimeout(static_cast<int>(busy_timeout.count()));
+        SQLite::Backup backup(to, from);
+        const auto until = std::chrono::steady_clock::now() + busy_timeout;
+        while (true) {
+            const int step = backup.executeStep();
+            if (step == SQLITE_DONE) {
+                return {};
+            }
+            if (step != SQLITE_BUSY && step != SQLITE_LOCKED) {
+                return tl::unexpected(ProfileError::storage);
+            }
+            if (std::chrono::steady_clock::now() >= until) {
+                return tl::unexpected(ProfileError::busy);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    } catch (const SQLite::Exception& error) {
+        return tl::unexpected(is_busy(error) ? ProfileError::busy : ProfileError::storage);
+    }
 }
 
 // Runs one migration's script and records its version, in one transaction: either both happen
@@ -477,7 +533,7 @@ ProfileStore::open_file(const std::filesystem::path& path, Clock clock,
     try {
         db.emplace(path,
                    SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE); // NOLINT(bugprone-signed-bitwise)
-        db->setBusyTimeout(2000);
+        db->setBusyTimeout(static_cast<int>(busy_timeout.count()));
         db->exec("PRAGMA foreign_keys = ON");
         db->createFunction("chesscoach_now", 0, false, time.get(), &sql_now);
     } catch (const SQLite::Exception&) {
@@ -495,8 +551,8 @@ ProfileStore::open_file(const std::filesystem::path& path, Clock clock,
                 return tl::unexpected(ProfileError::not_profiles);
             }
             version = *stored;
-        } catch (const SQLite::Exception&) {
-            return tl::unexpected(ProfileError::not_profiles);
+        } catch (const SQLite::Exception& error) {
+            return tl::unexpected(is_busy(error) ? ProfileError::busy : ProfileError::not_profiles);
         }
         if (version > scripts.back().version) {
             return tl::unexpected(ProfileError::newer_version);
@@ -509,8 +565,9 @@ ProfileStore::open_file(const std::filesystem::path& path, Clock clock,
         assert(migration.version == version + 1);
         try {
             migrate(*db, migration);
-        } catch (const SQLite::Exception&) {
-            return tl::unexpected(ProfileError::migration_failed);
+        } catch (const SQLite::Exception& error) {
+            return tl::unexpected(is_busy(error) ? ProfileError::busy
+                                                 : ProfileError::migration_failed);
         }
         version = migration.version;
     }
@@ -992,15 +1049,24 @@ ProfileStore::export_profiles(const std::filesystem::path& data_dir,
     if (!store) {
         return tl::unexpected(store.error());
     }
+    std::optional<SQLite::Database> copy;
     try {
-        SQLite::Database copy(destination, read_write_create());
-        SQLite::Backup backup(copy, store->impl_->db);
-        backup.executeStep();
-        return {};
+        copy.emplace(destination, read_write_create());
     } catch (const SQLite::Exception&) {
         std::filesystem::remove(destination, error);
         return tl::unexpected(ProfileError::unwritable);
     }
+    auto copied = back_up(*copy, store->impl_->db);
+    copy.reset();
+    // The copy holds what the store holds, meta and all, or it is not left behind.
+    if (copied && !stored_version(destination)) {
+        copied = tl::unexpected(ProfileError::storage);
+    }
+    if (!copied) {
+        std::filesystem::remove(destination, error);
+        return tl::unexpected(copied.error());
+    }
+    return {};
 }
 
 tl::expected<void, ProfileError>
@@ -1010,55 +1076,91 @@ ProfileStore::import_profiles(const std::filesystem::path& data_dir,
     if (!std::filesystem::is_regular_file(source, error)) {
         return tl::unexpected(ProfileError::not_profiles);
     }
-    try {
-        const SQLite::Database file(source, SQLite::OPEN_READONLY);
-        if (!file.tableExists("meta")) {
-            return tl::unexpected(ProfileError::not_profiles);
-        }
-        const auto version = read_version(file);
-        if (!version) {
-            return tl::unexpected(ProfileError::not_profiles);
-        }
-        if (*version > profile_schema_version) {
-            return tl::unexpected(ProfileError::newer_version);
-        }
-    } catch (const SQLite::Exception&) {
-        return tl::unexpected(ProfileError::not_profiles);
+    const auto source_version = stored_version(source);
+    if (!source_version) {
+        return tl::unexpected(source_version.error());
+    }
+    if (*source_version > profile_schema_version) {
+        return tl::unexpected(ProfileError::newer_version);
+    }
+    const auto current = data_dir / "profiles.db";
+    const auto importing = data_dir / "profiles.db.importing";
+    const auto previous = data_dir / "profiles.db.previous";
+    // The staging file is removed before it is written, so it is never the source.
+    if (std::filesystem::equivalent(source, importing, error)) {
+        return tl::unexpected(ProfileError::unwritable);
     }
 
     std::filesystem::create_directories(data_dir, error);
     if (error) {
         return tl::unexpected(ProfileError::unwritable);
     }
-    const auto importing = data_dir / "profiles.db.importing";
     std::filesystem::remove(importing, error);
-    try {
-        SQLite::Database from(source, SQLite::OPEN_READONLY);
-        SQLite::Database copy(importing, read_write_create());
-        SQLite::Backup backup(copy, from);
-        backup.executeStep();
-    } catch (const SQLite::Exception&) {
-        std::filesystem::remove(importing, error);
-        return tl::unexpected(ProfileError::unwritable);
+    const auto refuse = [&](ProfileError reason) -> tl::expected<void, ProfileError> {
+        std::error_code ignored;
+        std::filesystem::remove(importing, ignored);
+        return tl::unexpected(reason);
+    };
+    {
+        std::optional<SQLite::Database> from;
+        std::optional<SQLite::Database> copy;
+        try {
+            from.emplace(source, SQLite::OPEN_READONLY);
+            copy.emplace(importing, read_write_create());
+        } catch (const SQLite::Exception& failure) {
+            return refuse(is_busy(failure) ? ProfileError::busy : ProfileError::unwritable);
+        }
+        if (const auto copied = back_up(*copy, *from); !copied) {
+            return refuse(copied.error());
+        }
+    }
+    // A copy without the source's meta is never opened as a new file.
+    if (stored_version(importing) != source_version) {
+        return refuse(ProfileError::storage);
     }
     {
         auto migrated = open_file(importing, std::move(clock), profile_migrations());
         if (!migrated) {
-            std::filesystem::remove(importing, error);
-            return tl::unexpected(migrated.error());
+            return refuse(migrated.error());
         }
     }
-    const auto current = data_dir / "profiles.db";
-    if (std::filesystem::exists(current, error)) {
-        std::filesystem::rename(current, data_dir / "profiles.db.previous", error);
+
+    const bool replacing = std::filesystem::exists(current, error);
+    if (replacing) {
+        // A rollback journal left beside the current file by a writer that stopped mid-write
+        // would be played onto the imported file once that takes the name; opening the current
+        // file read-write and reading it rolls the journal back into it first.
+        try {
+            SQLite::Database db(current, SQLite::OPEN_READWRITE);
+            db.setBusyTimeout(static_cast<int>(busy_timeout.count()));
+            static_cast<void>(db.execAndGet("SELECT count(*) FROM sqlite_master"));
+        } catch (const SQLite::Exception& failure) {
+            if (is_busy(failure)) {
+                return refuse(ProfileError::busy);
+            }
+            // A current file that is not a database has no journal of its own to roll back; it
+            // is replaced, unless a journal beside it remains (below).
+        }
+        for (const char* suffix : {"-journal", "-wal"}) {
+            auto beside = current;
+            beside += suffix;
+            if (std::filesystem::exists(beside, error)) {
+                return refuse(ProfileError::busy);
+            }
+        }
+        std::filesystem::rename(current, previous, error);
         if (error) {
-            std::filesystem::remove(importing, error);
-            return tl::unexpected(ProfileError::unwritable);
+            return refuse(ProfileError::unwritable);
         }
     }
     std::filesystem::rename(importing, current, error);
     if (error) {
-        return tl::unexpected(ProfileError::unwritable);
+        // A profiles.db always remains: the one this import was to replace goes back.
+        std::error_code ignored;
+        if (replacing) {
+            std::filesystem::rename(previous, current, ignored);
+        }
+        return refuse(ProfileError::unwritable);
     }
     return {};
 }

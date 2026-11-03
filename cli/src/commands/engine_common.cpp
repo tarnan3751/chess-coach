@@ -90,6 +90,8 @@ std::string_view describe(ProfileError error) {
         return "refused a choice whose position or move is not valid";
     case ProfileError::no_such_card:
         return "has no such card";
+    case ProfileError::busy:
+        return "is in use by another program; nothing was changed";
     }
     return "failed";
 }
