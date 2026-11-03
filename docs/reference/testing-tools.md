@@ -131,10 +131,11 @@ leak shows only in the Linux job.
 includes are regrouped into blocks: the file's own header (for a test, the header it tests),
 `<chesscoach/...>`, the app's own quoted headers, third-party headers (any `<...>` with a slash,
 a dot or a capital, Qt's included), then the standard library (`<lowercase_name>`). Namespace
-closing comments are added. The two CI jobs format with different clang-format versions
-(Homebrew's current one on macOS, apt's on Ubuntu); if they ever format differently, the Ubuntu
-job's apt clang-format is the authority, and pinning one version on both through the PyPI
-clang-format wheels is the fix.
+closing comments are added. Both CI jobs and the dev machine run clang-format and clang-tidy
+of the same major version: Homebrew's `llvm` and `clang-format` on macOS, and on Ubuntu the
+`clang-format-23` and `clang-tidy-23` packages from apt.llvm.org (Ubuntu's own packages are a
+major behind), symlinked to the unversioned names; when Homebrew moves to a new major, the CI
+workflow's apt.llvm.org suite moves with it.
 
 `.clang-tidy` enables `bugprone-*`, `cert-*`, `clang-analyzer-*`, `concurrency-*`,
 `cppcoreguidelines-*`, `misc-*`, `modernize-*`, `performance-*`, `portability-*` and
