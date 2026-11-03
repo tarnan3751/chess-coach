@@ -20,8 +20,11 @@ double EvalBar::white_share_of_cp(qint64 cp) {
     return 1.0 / (1.0 + std::exp(-0.00368208 * static_cast<double>(cp)));
 }
 
-void EvalBar::set_evaluation(std::optional<qint64> cp, std::optional<qint64> mate) {
-    if (mate) {
+void EvalBar::set_evaluation(std::optional<qint64> cp, std::optional<qint64> mate,
+                             std::optional<Color> mated) {
+    if (mated) {
+        white_share_ = *mated == Color::white ? 0.0 : 1.0;
+    } else if (mate) {
         white_share_ = *mate > 0 ? 1.0 : 0.0;
     } else if (cp) {
         white_share_ = white_share_of_cp(*cp);

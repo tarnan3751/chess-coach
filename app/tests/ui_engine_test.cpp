@@ -158,6 +158,34 @@ class EngineTest : public QObject {
         QVERIFY(std::abs(bar.white_share().value_or(-1) - EvalBar::white_share_of_cp(29)) < 1e-9);
     }
 
+    void a_checkmated_side_to_move_is_the_engines_mate_0() {
+        // The legal script answers a position without a legal move with mate 0.
+        qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "legal");
+        const Session session(*db_, fake(0.1, 1));
+        MainWindow& window = *session.window;
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        const auto& bar = child<EvalBar>(window, QStringLiteral("eval_bar"));
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(line_count(window), 1, first_wait_ms);
+        // 1. f3 e5 2. g4 Qh4#: white, to move, is mated; the bar is black's.
+        for (const auto* square : {"f2", "f3", "e7", "e5", "g2", "g4", "d8", "h4"}) {
+            click(board, square);
+        }
+        QTRY_VERIFY(line_count(window) == 1 &&
+                    line_text(window, 0) == QStringLiteral("1: depth 0 -M0"));
+        QCOMPARE(bar.white_share(), std::optional(0.0));
+        // 1. e4 g5 2. d4 f6 3. Qh5#: black, to move, is mated; the bar is white's.
+        child<QAction>(window, QStringLiteral("new_game_action")).trigger();
+        for (const auto* square : {"e2", "e4", "g7", "g5", "d2", "d4", "f7", "f6", "d1", "h5"}) {
+            click(board, square);
+        }
+        QTRY_VERIFY(line_count(window) == 1 &&
+                    line_text(window, 0) == QStringLiteral("1: depth 0 M0"));
+        QCOMPARE(bar.white_share(), std::optional(1.0));
+        qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "normal");
+    }
+
     void a_cached_search_is_served_without_the_engine() {
         const QTemporaryDir root;
         const QString data_dir = root.filePath(QStringLiteral("data"));

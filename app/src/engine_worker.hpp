@@ -37,12 +37,14 @@ struct EngineSettings {
 };
 
 // One line of a search: scores from white's side (negated from UCI's side-to-move scores when
-// black is to move), the principal variation in SAN.
+// black is to move), the principal variation in SAN. UCI's mate 0 says the side to move is
+// checkmated, which has no sign to turn: it comes as mated, the side that has lost, and no mate.
 struct EngineLine {
     int multipv = 1;
     int depth = 0;
     std::optional<int> cp;
-    std::optional<int> mate;
+    std::optional<int> mate; // never 0
+    std::optional<Color> mated;
     QString pv_san;
     friend bool operator==(const EngineLine&, const EngineLine&) = default;
 };

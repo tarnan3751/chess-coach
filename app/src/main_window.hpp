@@ -203,6 +203,7 @@ class MainWindow : public QMainWindow {
     struct Score {
         std::optional<qint64> cp;
         std::optional<qint64> mate;
+        std::optional<Color> mated; // the engine's: the side to move is checkmated
     };
     std::optional<Score> stored_score_;
     std::optional<Score> engine_score_;

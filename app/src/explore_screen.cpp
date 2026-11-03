@@ -58,8 +58,13 @@ QString evaluation_text(const std::optional<PositionRow>& position) {
 }
 
 QString engine_line_text(const EngineLine& line) {
-    const QString score = score_text(line.cp ? std::optional<qint64>(*line.cp) : std::nullopt,
-                                     line.mate ? std::optional<qint64>(*line.mate) : std::nullopt);
+    // A checkmated side to move reads as a mate in 0 for the other side: "M0" when black is
+    // mated, "-M0" when white is.
+    QString score = score_text(line.cp ? std::optional<qint64>(*line.cp) : std::nullopt,
+                               line.mate ? std::optional<qint64>(*line.mate) : std::nullopt);
+    if (line.mated) {
+        score = *line.mated == Color::white ? QStringLiteral("-M0") : QStringLiteral("M0");
+    }
     QString text =
         ExploreScreen::tr("%1: depth %2 %3").arg(line.multipv).arg(line.depth).arg(score);
     if (!line.pv_san.isEmpty()) {

@@ -492,7 +492,11 @@ void MainWindow::position_ready(const ExploreData& explore) {
     explore_->show_data(explore, tier_text(explore.tier));
     stored_score_.reset();
     if (explore.position && explore.position->eval_depth) {
-        stored_score_ = Score{.cp = explore.position->eval_cp, .mate = explore.position->eval_mate};
+        stored_score_ = Score{
+            .cp = explore.position->eval_cp,
+            .mate = explore.position->eval_mate,
+            .mated = std::nullopt,
+        };
     }
     update_eval_bar();
 }
@@ -533,6 +537,7 @@ void MainWindow::lines_ready(quint64 key, int request_id, const QVector<EngineLi
         engine_score_ = Score{
             .cp = first.cp ? std::optional<qint64>(*first.cp) : std::nullopt,
             .mate = first.mate ? std::optional<qint64>(*first.mate) : std::nullopt,
+            .mated = first.mated,
         };
     }
     update_eval_bar();
@@ -546,7 +551,11 @@ void MainWindow::update_eval_bar() {
         return;
     }
     const std::optional<Score>& score = stored_score_ ? stored_score_ : engine_score_;
-    eval_bar_->set_evaluation(score ? score->cp : std::nullopt, score ? score->mate : std::nullopt);
+    if (!score) {
+        eval_bar_->set_evaluation(std::nullopt, std::nullopt);
+        return;
+    }
+    eval_bar_->set_evaluation(score->cp, score->mate, score->mated);
 }
 
 void MainWindow::show_settings() {

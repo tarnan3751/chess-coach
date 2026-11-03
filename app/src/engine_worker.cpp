@@ -76,7 +76,9 @@ QVector<EngineLine> white_side_lines(const Position& position,
         if (line.score_cp) {
             out.cp = sign * *line.score_cp;
         }
-        if (line.score_mate) {
+        if (line.score_mate && *line.score_mate == 0) {
+            out.mated = position.side_to_move();
+        } else if (line.score_mate) {
             out.mate = sign * *line.score_mate;
         }
         out.pv_san = pv_san(position, line.pv);
