@@ -5,17 +5,18 @@ covers the main window, the board, the database worker, the engine worker, the E
 the Spar screen and its worker, the profile worker, the Repertoire and Drill screens, export and
 import, the settings, the themes, the About dialog, and the UI harness.
 
-Every widget lives on the GUI thread. The opening database (`--db`) is opened read-only and read
-only by the database worker on its own thread (**Database worker**); the engine and the engine
-cache belong to the engine worker on another (**Engine worker**); a sparring session, with its
-own connection to `--db` and its own engine, belongs to the spar worker on a third (**Spar**);
-the repertoires and cards, with another connection to `--db` for coverage and the score, belong
-to the profile worker on a fourth (**Profile worker**). The app writes in `--data-dir` and
-nowhere else: `settings.ini`, only when a setting changes (**Settings**); `profiles.db`, only when
-the engine worker stores a search (**Engine worker**), the spar worker saves a session
-(**Spar**), the profile worker changes a repertoire or a card (**Profile worker**), or a profile
-is imported (**Export and import**), which also leaves `profiles.db.previous`. Files are chosen
-with a chooser of the app's own, which writes nothing (**Files**).
+Every widget lives on the GUI thread. The opening database, the file the window found at start or an
+import put in place (**The database**), is opened read-only and read only by the database worker on
+its own thread (**Database worker**); the engine and the engine cache belong to the engine worker on
+another (**Engine worker**); a sparring session, with its own connection to the opening database and
+its own engine, belongs to the spar worker on a third (**Spar**); the repertoires and cards, with
+another connection to the opening database for coverage and the score, belong to the profile worker
+on a fourth (**Profile worker**). The app writes in `--data-dir` and nowhere else: `settings.ini`,
+only when a setting changes (**Settings**); `profiles.db`, only when the engine worker stores a
+search (**Engine worker**), the spar worker saves a session (**Spar**), the profile worker changes a
+repertoire or a card (**Profile worker**), or a profile is imported (**Export and import**), which
+also leaves `profiles.db.previous`. Files are chosen with a chooser of the app's own, which writes
+nothing (**Files**).
 
 ## Code
 
@@ -40,6 +41,7 @@ with a chooser of the app's own, which writes nothing (**Files**).
 | `default_profile.{hpp,cpp}` | The profile the app works on: Default, else the first |
 | `tables.{hpp,cpp}` | The read-only tables of Spar and Repertoire |
 | `file_chooser.{hpp,cpp}` | `FileChooser`, the app's own file chooser, and the functions that run it (**Files**) |
+| `locations.{hpp,cpp}` | The app bundle's resources, the opening database the window opens, the message when there is none (**The database**) |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
 | `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
 | `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings (**Settings**) |
@@ -65,9 +67,10 @@ which the executable and the UI tests link. The piece set and the two stylesheet
   (`tier_selector`), a `QComboBox` of the seven `tier_label` strings with the tier index as each
   item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`).
 - **The menus**: *File* with *Export profile…* and *Import profile…* (`export_action`,
-  `import_action`, **Export and import**), *Edit > Settings…* (`settings_action`, **Settings**),
-  *View > Theme* with *Light* and *Dark* (`theme_light`, `theme_dark`), and *Help* with *About
-  chess-coach* (`about_action`) and *About Qt* (`about_qt_action`).
+  `import_action`, **Export and import**) and *Import database…* (`import_database_action`, **The
+  database**), *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with *Light* and
+  *Dark* (`theme_light`, `theme_dark`), and *Help* with *About chess-coach* (`about_action`) and
+  *About Qt* (`about_qt_action`).
 - **The evaluation bar** (`eval_bar`) and **the board** (`board`, a `BoardView`) on the left, and
   below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
   `1. e4 e5`.
@@ -75,11 +78,12 @@ which the executable and the UI tests link. The piece set and the two stylesheet
   (`screens`) with Explore (**Explore**), Spar (**Spar**), Repertoire (**Repertoire**) and Drill
   (**Drill**). The board belongs to the current screen: a move on it goes to that screen's line,
   session or card, and the evaluation bar and Explore's engine are idle on the other three.
-- **The status bar**: `database_status`, "No database" or the `--db` file's name (its tooltip the
-  full path); `data_version_status`, "Data version <v>" once the database is open; and
-  `engine_status`, "Engine: <state>" as the engine worker reports it ("not started" until then,
-  "not found", "failed to start" for a binary that does not answer the handshake, the engine's
-  name when idle, "searching").
+- **The status bar**: `database_status`, the opening database's file name and where it was found,
+  "openings.db (data directory)", "(--db)" or "(app bundle)", or "No database" (its tooltip the full
+  path); `data_version_status`, "Data version <v>" once the database is open; and `engine_status`,
+  "Engine: <state>" as the engine worker reports it ("not started" until then, "not found", "failed
+  to start" for a binary that does not answer the handshake, the engine's name when idle,
+  "searching").
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
 every position along them. On Explore, a move on the board (`move_played`) appends to it (on the
@@ -90,27 +94,59 @@ change, and when the tier changes, the window asks the database worker for the p
 of the line at the selected tier; after every change of position (not of tier), and once at start,
 it asks the engine worker to evaluate it.
 
-**The database.** With `--db`, the window asks the worker to open it at start; the status bar
-names it and, once open, shows its data version. When it does not open, a non-blocking message
-box (`database_error`) says why, the status bar says "No database", and Explore shows its empty
-state; the board still plays. Without `--db` the window starts in that empty state.
+**The database.** At start the window takes the file `--db` names, whether or not it is there, so
+that a missing one is reported rather than passed over; without `--db` it takes the first file that
+exists of `<data-dir>/openings.db` and the app bundle's `Contents/Resources/openings.db` (core's
+`locate_opening_database`, through `find_opening_database` in `locations.cpp`), asks the database
+worker to open it, and hands its path to the spar and profile workers, which open it when they first
+need it. The status bar names it and where it was found, "openings.db (data directory)", "(--db)" or
+"(app bundle)", with the full path as its tooltip, and once it is open shows its data version. When
+it does not open, a non-blocking message box (`database_error`) says why, the status bar says "No
+database", and Explore's empty state names the file: "There is no opening database at …, the file
+--db names" for a missing `--db`, or that it did not open; the board still plays. When there is
+none, Explore's empty state names the three places and File > Import database….
+
+**The bundle.** The bundle's resources are `<the executable's folder>/../Resources` when the
+executable runs inside a `.app`, else there are none (`bundle_resources`). The window works them out
+once, on the GUI thread at start, and hands them to the engine and spar workers and the Settings
+dialog, which look for the bundled engine there. The environment variable
+`CHESS_COACH_BUNDLE_RESOURCES`, read only when it is set, names another folder in their place: the
+UI tests' hook, which a scratch folder stands in for the bundle through.
+
+**Importing a database.** *File > Import database…* (`import_database_action`) asks for a file with
+the file chooser (`*.db`, **Files**), then sends it to the database worker
+(`DbWorker::import_database`), which closes its store and runs core's `import_opening_database` on
+its own thread: the copy of a release database takes seconds and has no progress to show, so the
+window shows a window-modal busy dialog (`database_import_progress`), which keeps repainting and
+which neither Escape nor a close dismisses, and disables both of the File menu's imports until the
+worker answers. The import checks the file through `OpeningStore`, copies it to
+`openings.db.importing` and renames it into place as `<data-dir>/openings.db`, keeping the file it
+replaces as `openings.db.previous`; it refuses a file that is not an opening database this build
+reads, a newer schema, the data directory's own `openings.db` and any other file inside the data
+directory. On success the worker answers `database_imported` and opens the new file, which refreshes
+Explore, the status bar and About; the spar and profile workers read it from then on (a session
+running keeps reading the file it started on until it ends), and a message box (`database_imported`)
+gives its data version and the months it holds. On failure it answers `database_import_failed`, a
+message box (`database_error`) says why, and the worker opens the old file again, when there was
+one: after a `--db` that named no file it stays without a store, and the failure is the one box.
 
 The names in parentheses are the widgets' object names, which the UI tests find them by. Every
 user-facing string goes through `tr()`.
 
 ## Database worker
 
-`DbWorker` is a `QObject` moved to its own `QThread`, which the window starts at construction
-and, in its destructor, quits and waits for; the worker is deleted on its thread when the thread
-finishes (`deleteLater` on `finished`). It owns the `OpeningStore`, opened read-only from `--db`,
-for the window's life, so the store is only ever used from that thread, and the GUI thread never
-touches it. The window reaches it through two signals connected to its slots, every crossing
-queued:
+`DbWorker` is a `QObject` moved to its own `QThread`, which the window starts at construction and,
+in its destructor, quits and waits for; the worker is deleted on its thread when the thread finishes
+(`deleteLater` on `finished`). It owns the `OpeningStore`, opened read-only from the file the window
+found (**The database**) and replaced by an import's (**Importing a database**), so the store is
+only ever used from that thread, and the GUI thread never touches it. The window reaches it through
+two signals connected to its slots, every crossing queued:
 
 | Slot | Answer |
 |---|---|
 | `open_database(path)` | `database_opened(data_version)`, the file's `data_version` from `meta`, or `database_failed(message)` |
 | `query(line_keys, tier)` | `position_ready(ExploreData)`: the position at the end of the line at the tier. Without an open database, nothing |
+| `import_database(data_dir, source, current)` | `database_imported(path, data_version, months)` and the new file opened, or `database_import_failed(message)` and `current` opened again (**Importing a database**) |
 
 A store query that throws (the file failing after a successful open) closes the store and answers
 `database_failed`. `ExploreData` carries the key and the tier, the FEN, the `positions` row and the
@@ -139,14 +175,15 @@ the window, deleted on its thread when the thread finishes. It owns one core `En
 **An evaluation.** First the cache: `cache_lookup(key, lines, 12)`, a hit needing every line at
 depth 12 or more, as the CLI's `eval`; a hit is answered with `cached` set and the engine is not
 touched. On a miss the worker finds the engine: the settings' binary, else `CHESS_COACH_STOCKFISH`,
-else `stockfish` on the `PATH`, else `stockfish` beside the app (the bundle's, from Phase 6), and
-reports "not found" when there is none (`find_engine_binary`, which the spar worker shares), and
-"failed to start" when the binary does not answer the UCI handshake. The engine starts at the first
-search (Threads and Hash from the settings) and again after it dies or times out. The worker reports
-"searching", runs `search` for the settings' line count and seconds, reports the engine's name, and
-stores a full result with `cache_store`, answering with what the cache then holds. `profiles.db` is
-opened only when it exists, for a lookup, or when a search is to be stored, so it is created by the
-first stored search and a run that searches nothing writes nothing.
+else `stockfish` on the `PATH`, else the app bundle's `Contents/Resources/engine/stockfish`, where
+the packaging puts it (**The bundle**), and reports "not found" when there is none
+(`find_engine_binary`, which the spar worker shares), and "failed to start" when the binary does not
+answer the UCI handshake. The engine starts at the first search (Threads and Hash from the settings)
+and again after it dies or times out. The worker reports "searching", runs `search` for the
+settings' line count and seconds, reports the engine's name, and stores a full result with
+`cache_store`, answering with what the cache then holds. `profiles.db` is opened only when it
+exists, for a lookup, or when a search is to be stored, so it is created by the first stored search
+and a run that searches nothing writes nothing.
 
 **One search at a time, cancelled by moving on.** The worker's slots run one at a time on its
 thread, and `Engine::search` blocks there, so two searches are never in flight. Each request the
@@ -379,14 +416,15 @@ each session's seed is the clock's seconds; set, every session uses it), and Rep
 `repertoire/depth` (20, 2 to 40: the coverage depth in plies), and `files/last_dir`, the folder the
 file chooser last chose in (**Files**), each at its default when unset or out of range. *Edit >
 Settings…* (`SettingsDialog`, `settings_dialog`) edits the engine's (the binary with a Browse
-button, which opens the file chooser, the threads, the hash, the seconds and the lines), Spar's move
-limit and seconds per reply (`spar_end_move`, `spar_seconds`) and the coverage depth
-(`repertoire_depth`); accepting saves them, sends them to the engine worker and the spar worker,
-which restart their engines with them at the next search, evaluates the position again and, on
-Repertoire, computes the coverage again. A new move limit applies from the next session. Reading
-does not create anything; the first write, when the theme or the tier changes, creates the data
-directory and the file. This is the first thing the app writes: a run that changes no setting leaves
-the data directory as it found it, or absent.
+button, which opens the file chooser, and, while it is empty, the default binary's path as its
+placeholder, "Default: /opt/homebrew/bin/stockfish", or that none is found; the threads, the hash,
+the seconds and the lines), Spar's move limit and seconds per reply (`spar_end_move`,
+`spar_seconds`) and the coverage depth (`repertoire_depth`); accepting saves them, sends them to the
+engine worker and the spar worker, which restart their engines with them at the next search,
+evaluates the position again and, on Repertoire, computes the coverage again. A new move limit
+applies from the next session. Reading does not create anything; the first write, when the theme or
+the tier changes, creates the data directory and the file. This is the first thing the app writes: a
+run that changes no setting leaves the data directory as it found it, or absent.
 
 ## Files
 
@@ -549,6 +587,15 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   among them; the black repertoire, the board turned and white's move only followed; and an export,
   refused a second time over the same file, imported back after the choice was removed. Screenshots:
   `repertoire-gaps`, `repertoire-tree`.
+- `ui_lookup_test`, with a scratch folder as the bundle's resources
+  (`CHESS_COACH_BUNDLE_RESOURCES`): the database `--db` names, a `--db` that names no file reported
+  in the error box, the bundle's when the data directory has none, and the empty state naming the
+  three places; File > Import database… through the file chooser, the data version going from 0 to
+  7, the months in the message, `openings.db.previous` left behind and Explore reading the new file
+  at the same position; a file that is not a database refused with the old one opened again; and the
+  fake engine found as the bundle's `engine/stockfish` with no setting, no `CHESS_COACH_STOCKFISH`
+  and no `stockfish` on the `PATH`, named in the Settings dialog's placeholder. Screenshots:
+  `lookup-no-database`, `lookup-imported`.
 - `ui_file_chooser_test`: open mode picking a file through the model, the name filter hiding the
   others and a folder refused; save mode refusing a taken name and taking a new one; Browse in the
   Settings dialog starting in `files/last_dir` and keeping the new folder; and the platform's

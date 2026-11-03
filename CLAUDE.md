@@ -36,8 +36,10 @@ the CLI (`dump`, `stats`, `explore` with `--score` and `--engine`, `name`, `eval
 `repertoire`, `drill`, `profile`, `database`, with `--db` optional beside `--data-dir`;
 `docs/reference/cli.md`); the app (the board, the shell, Explore on a database worker with the
 engine worker's lines and cancellation, the Spar screen on a spar worker, the Repertoire and
-Drill screens on a profile worker with profile export and import, themes, settings in
-`<data-dir>/settings.ini`, About, the UI harness with screenshots; `docs/reference/app.md`);
+Drill screens on a profile worker with profile export and import, the opening database found
+through `--db`, the data directory and the app bundle and imported with File > Import database…,
+the bundled Stockfish found by itself, themes, settings in `<data-dir>/settings.ini`, About, the
+UI harness with screenshots; `docs/reference/app.md`);
 and the macOS package with Qt and Stockfish inside, the licence texts in `legal/`,
 `tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`);
 and the release-database tooling, `tools/build_release_db.sh` and `tools/verify_db.sh`
