@@ -1,8 +1,9 @@
 // Integration tests of run_build on the sample corpus (pipeline/tests/sample/, docs/reference/
 // pipeline.md, **The sample corpus**): the golden dump reproduced byte for byte in-process
-// through core's OpeningStore::dump, two runs and one and four threads alike, a sketch too
-// small to matter, the §6.4 invariants at min_games 1 (inflow exact, the start position's
-// admitted games included) and at 2, and the refusals (pipeline; unit).
+// through core's OpeningStore::dump, the report's input lines, two runs and one and four
+// threads alike, a sketch too small to matter, the §6.4 invariants at min_games 1 (inflow
+// exact, the start position's admitted games included) and at 2, and the refusals (pipeline;
+// unit).
 #include "build.hpp"
 
 #include <chesscoach/key.hpp>
@@ -123,6 +124,20 @@ TEST_CASE("run_build reproduces the sample corpus's golden dump", "[build]") {
     const auto dir = testing::scratch_dir("build_golden");
     BuildOptions options = sample_options(dir / "openings.db");
     CHECK(build_and_dump(options) == read_file(sample_dir() / "golden.dump"));
+}
+
+TEST_CASE("run_build's report names its inputs, evaluation file and names directory", "[build]") {
+    const auto dir = testing::scratch_dir("build_report_inputs");
+    const BuildOptions options = sample_options(dir / "openings.db");
+    Report report;
+    std::ostringstream progress;
+    REQUIRE(run_build(options, report, progress).has_value());
+    std::ostringstream lines;
+    report.write(lines);
+    CHECK(lines.str().find("input\t" + options.inputs.front().string() + "\n") !=
+          std::string::npos);
+    CHECK(report.value("eval") == (sample_dir() / "eval" / "lichess_db_eval.jsonl.zst").string());
+    CHECK(report.value("names") == std::filesystem::path(CHESSCOACH_OPENINGS_DIR).string());
 }
 
 TEST_CASE("run_build gives the same dump on two runs, any thread count and a tiny sketch",

@@ -336,6 +336,11 @@ tl::expected<void, std::string> run_build(const BuildOptions& options, Report& r
 
     const double total_seconds = seconds_since(start);
     report.add("output", options.output.string());
+    for (const MonthInput& input : *inputs) {
+        report.add("input", input.path.string());
+    }
+    report.add("eval", options.eval ? options.eval->string() : "none");
+    report.add("names", options.names ? options.names->string() : "none");
     for (const auto& [key, value] : meta) {
         report.add(key, value);
     }

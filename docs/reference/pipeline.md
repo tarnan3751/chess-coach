@@ -170,13 +170,14 @@ file stores (signed), 50,000 rows per transaction.
 
 ## The report
 
-`name<TAB>value` lines: the output, every meta row, then `threads`, `sketch_bytes`,
-`sketch_width`, `candidates`, `nodes` and `nodes_tier_0` to `nodes_tier_6`, `moves`,
-`positions`, `eval_lines`, `eval_unreadable`, `eval_matched` and `eval_unusable` when an
-evaluation file was read, `positions_evaluated`, `positions_named`, `name_collisions`,
-`name_failures`, `games_read`, `pass_one_seconds`, `pass_two_seconds`, `total_seconds`,
-`games_per_second` (games read over the whole build's wall time) and `peak_rss_bytes`
-(`getrusage`).
+`name<TAB>value` lines: the output; one `input` line per month file in month order, then `eval` and
+`names`, the evaluation file and the names directory as given or `none`; every meta row, then
+`threads`, `sketch_bytes`, `sketch_width`, `candidates`, `nodes` and `nodes_tier_0` to
+`nodes_tier_6`, `moves`, `positions`, `eval_lines`, `eval_unreadable`, `eval_matched` and
+`eval_unusable` when an evaluation file was read, `positions_evaluated`, `positions_named`,
+`name_collisions`, `name_failures`, `games_read`, `pass_one_seconds`, `pass_two_seconds`,
+`total_seconds`, `games_per_second` (games read over the whole build's wall time) and
+`peak_rss_bytes` (`getrusage`).
 
 ## The sample corpus
 
