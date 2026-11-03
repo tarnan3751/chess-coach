@@ -1,30 +1,30 @@
-meta	admitted_tier_0	20
-meta	admitted_tier_1	0
-meta	admitted_tier_2	0
-meta	admitted_tier_3	1000
-meta	admitted_tier_4	0
-meta	admitted_tier_5	0
-meta	admitted_tier_6	100
+meta	admitted_tier_0	5
+meta	admitted_tier_1	157
+meta	admitted_tier_2	569
+meta	admitted_tier_3	478
+meta	admitted_tier_4	144
+meta	admitted_tier_5	11
+meta	admitted_tier_6	0
 meta	data_version	0
-meta	eval_db	none
-meta	games_admitted	1120
-meta	games_skipped	0
-meta	max_ply	8
-meta	min_games	10
+meta	eval_db	lichess_db_eval.jsonl.zst
+meta	games_admitted	1364
+meta	games_skipped	636
+meta	max_ply	20
+meta	min_games	2
 meta	months	2013-01
 meta	openings_tsv	a.tsv,b.tsv,c.tsv,d.tsv,e.tsv
 meta	schema_version	1
 meta	skipped_malformed	0
 meta	skipped_moves	0
-meta	skipped_rating	0
+meta	skipped_rating	2
 meta	skipped_result	0
-meta	skipped_speed	0
+meta	skipped_speed	634
 meta	skipped_unrated	0
 meta	skipped_variant	0
 meta	tiers	1200,1400,1600,1800,2000,2200
-position	2359393845585183869	rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq -	-	-	-	-1	99	d8h4
-position	4796638635495690917	rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq -	A04	Zukertort Opening	-	-	-	-
-position	6252488332901180994	rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -	A40	Queen's Pawn Game	20	-	35	d7d5
-position	7783912373576495621	rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -	D00	Queen's Pawn Game	18	-	33	c2c4
-position	8670092829528196834	rnbqkbnr/ppp1pppp/8/3p4/8/5N2/PPPPPPPP/RNBQKB1R w KQkq -	-	-	-	-	-	-
-position	10026961946044190907	rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -	-	-	19	-	40	e2e4
+position	28839537108764181	rnbqkbnr/ppp2ppp/4p3/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq -	-	-	28	-	38	d2d4
+position	30095381656774261	rnbqk1nr/ppppppbp/6p1/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -	B06	Modern Defense	48	-	57	b1c3
+position	59468418548310299	rnbqk1nr/ppp1bppp/4p3/8/2B5/2N2N2/PPPP1PPP/R1BQK2R w KQkq -	-	-	58	-	30	d2d4
+position	133226434509570741	r1bqk2r/ppp1bpp1/2np1n1p/4p3/4P3/3P1N1P/PPP1BPP1/RNBQ1RK1 w kq -	-	-	-	-	-	-
+position	157781141541396689	rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R b KQkq -	-	-	32	-	55	a7a6
+position	194934211888460790	rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -	B10	Caro-Kann Defense	31	-	58	d2d4

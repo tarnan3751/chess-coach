@@ -56,9 +56,12 @@ chesscoach_assert_no_qt(pipeline)
 
 if(BUILD_TESTING)
   set(pipeline_test_definitions
-      CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/test-scratch")
+      CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/test-scratch"
+      CHESSCOACH_SAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/sample"
+      CHESSCOACH_OPENINGS_DIR="${PROJECT_SOURCE_DIR}/data/chess-openings")
   chesscoach_add_test(pipeline_unit_test MODULE pipeline KIND unit
                       SOURCES tests/badges_test.cpp
+                              tests/build_test.cpp
                               tests/chunker_test.cpp
                               tests/eval_merge_test.cpp
                               tests/game_filter_test.cpp
@@ -70,12 +73,18 @@ if(BUILD_TESTING)
                               tests/test_files.hpp
                               tests/work_pool_test.cpp
                               tests/zstd_istream_test.cpp
-                      LIBS pipeline_lib)
+                      LIBS pipeline_lib SQLiteCpp)
   target_compile_definitions(pipeline_unit_test PRIVATE ${pipeline_test_definitions})
   chesscoach_add_test(pipeline_property_test MODULE pipeline KIND property
                       SOURCES tests/chunker_property_test.cpp
                               tests/sketch_property_test.cpp
                       LIBS pipeline_lib rapidcheck)
+  chesscoach_add_test(pipeline_bench_test MODULE pipeline KIND bench
+                      SOURCES tests/bench_test.cpp
+                              tests/test_files.hpp
+                      LIBS pipeline_lib)
+  target_compile_definitions(pipeline_bench_test PRIVATE ${pipeline_test_definitions})
   chesscoach_assert_no_qt(pipeline_unit_test)
   chesscoach_assert_no_qt(pipeline_property_test)
+  chesscoach_assert_no_qt(pipeline_bench_test)
 endif()

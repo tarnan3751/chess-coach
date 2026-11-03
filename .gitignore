@@ -18,6 +18,7 @@ vcpkg_installed/
 *.db-wal
 *.db-shm
 !pipeline/tests/sample/*.pgn.zst
+!pipeline/tests/sample/eval/*.jsonl.zst
 !**/tests/fixtures/*.db
 
 # Compiled objects and libraries
