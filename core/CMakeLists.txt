@@ -7,6 +7,7 @@ configure_file("${PROJECT_SOURCE_DIR}/cmake/version_info.hpp.in"
 add_library(core STATIC
   include/chesscoach/badges.hpp
   include/chesscoach/engine.hpp
+  include/chesscoach/engine_reply_provider.hpp
   include/chesscoach/key.hpp
   include/chesscoach/names.hpp
   include/chesscoach/opening_schema.hpp
@@ -24,6 +25,7 @@ add_library(core STATIC
   src/board_key.cpp
   src/board_key.hpp
   src/engine.cpp
+  src/engine_reply_provider.cpp
   src/names.cpp
   src/opening_schema.cpp
   src/opening_store.cpp
@@ -63,6 +65,13 @@ if(BUILD_TESTING)
                       LIBS chesscoach::core)
   add_dependencies(core_engine_test fake-uci)
   target_compile_definitions(core_engine_test PRIVATE
+                             CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_add_test(core_engine_reply_provider_test MODULE core KIND unit
+                      SOURCES tests/engine_reply_provider_test.cpp
+                      LIBS chesscoach::core)
+  add_dependencies(core_engine_reply_provider_test fake-uci)
+  target_compile_definitions(core_engine_reply_provider_test PRIVATE
                              CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_engine_stockfish_test MODULE core KIND engine
@@ -150,6 +159,7 @@ if(BUILD_TESTING)
                       LIBS chesscoach::core rapidcheck)
   chesscoach_assert_no_qt(core_badges_test)
   chesscoach_assert_no_qt(core_engine_test)
+  chesscoach_assert_no_qt(core_engine_reply_provider_test)
   chesscoach_assert_no_qt(core_engine_stockfish_test)
   chesscoach_assert_no_qt(core_key_test)
   chesscoach_assert_no_qt(core_key_property_test)

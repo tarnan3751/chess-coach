@@ -24,6 +24,7 @@ sampler, the spar session, the scheduler and repertoire coverage are described b
 | `scheduler.hpp` | `CardState`, `Grade`, `Review`, `new_card`, `review`, `replay`, `is_due`, SM-2's numbers |
 | `repertoire.hpp` | `Repertoire`, `compute_coverage`, `Coverage`, `Gap`, `CoverageConfig` |
 | `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
+| `engine_reply_provider.hpp` | `EngineReplyProvider`, `ProviderConfig`, `provider_elo` |
 | `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `SparSessionRow`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
 
@@ -341,6 +342,18 @@ stored end move and `min_games`, refusing a store of another `data_version` as
 phase is out of range throws, as a corrupted file does. Removing a profile removes its sessions
 (`ON DELETE CASCADE`, with foreign keys on).
 
+## The engine reply provider
+
+`EngineReplyProvider(engine, tier, config)` is the `ReplyProvider` a spar session uses once off
+book (Phase 4b's CLI, later the app). Each `reply(position)` is one search of one line for
+`config.seconds` (0.5 s by default) at limited strength: `UCI_LimitStrength` with `UCI_Elo` at
+`provider_elo(tier, config)`, the tier's lower bound (1000 for tier 0, which has none) plus
+`config.elo_offset` (100 by default), which the engine clamps to its range (Stockfish's floor is
+1320, so tiers 0 to 2 play at 1320 or a little above). It returns the best move; an engine error,
+or an engine with no move to give, is a `ProviderError` with a message. It searches the `Engine`
+directly: a limited search neither reads nor writes the engine cache (§12.2). The engine is the
+caller's and outlives the provider.
+
 ## The sampler
 
 `sampler_candidates(moves, config)` turns a position's `moves` rows at a tier into the
@@ -484,14 +497,15 @@ scripted session with a Dubious and an off-book interruption, the sampler's book
 provider off book, the end, the summary and its replay; a session off book from the start, a book
 position without candidates, a mate's result, the provider's failures, the replay's refusals, the
 calls out of turn) and `spar_property_test` (sessions from generated seeds, colours, end moves and
-user moves replay to the same summary); `scheduler_test` (a hand-computed sequence, also checked at
-compile time, `hard` and `easy`, the ease floor, the interval cap, when a card is due) and
-`scheduler_property_test` (over random histories: intervals grow on passes and reset on a failure,
-due never before creation or review, the bounds, replay equals the fold); `repertoire_test`
-(coverage worked out by hand on small stores: complete to a depth, a gap, a black repertoire, a
-transposition, truncation, the walk's ends, an illegal choice, the gaps' order, the store overload)
-and `repertoire_property_test` (on stores from random games and random repertoires: covered and the
-gaps add up to the whole, each gap is the colour's to move and reached by its line, the order, the
-same answer twice). The property tests' random games (`random_games.hpp`) start from the start
-position or from positions that soon castle, promote or meet en passant, and pick moves by index
-into the sorted legal moves.
+user moves replay to the same summary); `engine_reply_provider_test` (the Elo per tier, the limited
+one-line search the fake engine receives, the best move, an engine failure); `scheduler_test` (a
+hand-computed sequence, also checked at compile time, `hard` and `easy`, the ease floor, the
+interval cap, when a card is due) and `scheduler_property_test` (over random histories: intervals
+grow on passes and reset on a failure, due never before creation or review, the bounds, replay
+equals the fold); `repertoire_test` (coverage worked out by hand on small stores: complete to a
+depth, a gap, a black repertoire, a transposition, truncation, the walk's ends, an illegal choice,
+the gaps' order, the store overload) and `repertoire_property_test` (on stores from random games and
+random repertoires: covered and the gaps add up to the whole, each gap is the colour's to move and
+reached by its line, the order, the same answer twice). The property tests' random games
+(`random_games.hpp`) start from the start position or from positions that soon castle, promote or
+meet en passant, and pick moves by index into the sorted legal moves.
