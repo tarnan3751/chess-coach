@@ -1,27 +1,113 @@
-// chess-coach-pipeline: the entry point. Phase 0 parses the command line only: --version,
-// --help, and the help when run without arguments. An exception that reaches main is reported
-// on stderr, with exit status 1.
+// chess-coach-pipeline: the entry point. `build` runs run_build (build.hpp) with the options
+// docs/reference/pipeline.md, **Running it**, describes; --version and --help as in Phase 0, and
+// the help when run without arguments. Exit status 0 on success, 1 on a fatal error (an
+// unreadable input, a refused option, a write failure), never because of a bad game.
 #include <chesscoach/version.hpp>
+
+#include "build.hpp"
+#include "options.hpp"
+#include "report.hpp"
 
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
 
+#include <bit>
+#include <charconv>
 #include <cstdio>
 #include <exception>
+#include <fstream>
+#include <iostream>
+#include <optional>
 #include <string>
+#include <system_error>
+#include <thread>
 
 int main(int argc, char** argv) {
+    namespace pipeline = chesscoach::pipeline;
     try {
         CLI::App app{"Builds the tiered opening database from the Lichess monthly dumps.",
                      "chess-coach-pipeline"};
         app.set_version_flag("--version", "chess-coach-pipeline " +
                                               chesscoach::to_string(chesscoach::current_version()));
         argv = app.ensure_utf8(argv);
+
+        pipeline::BuildOptions options;
+        options.threads =
+            std::thread::hardware_concurrency() == 0 ? 1 : std::thread::hardware_concurrency();
+        std::string names = CHESSCOACH_OPENINGS_DIR;
+        std::optional<std::filesystem::path> report_path;
+        std::size_t sketch_mib = 0;
+
+        CLI::App* build = app.add_subcommand("build", "Build openings.db from monthly dumps");
+        build
+            ->add_option("--in", options.inputs,
+                         "Monthly dumps, lichess_db_standard_rated_YYYY-MM.pgn.zst")
+            ->required()
+            ->check(CLI::ExistingFile);
+        build->add_option("--out", options.output, "The database to write; must not exist")
+            ->required();
+        build->add_option("--eval", options.eval, "The evaluation database, .jsonl.zst")
+            ->check(CLI::ExistingFile);
+        build->add_option("--names", names, "The chess-openings TSV directory, or none")
+            ->capture_default_str();
+        build->add_option("--min-games", options.min_games, "Visits a node needs to survive")
+            ->check(CLI::Range(1U, 65535U))
+            ->capture_default_str();
+        build->add_option("--max-ply", options.max_ply, "The depth cap in plies")
+            ->check(CLI::Range(0U, 1000U))
+            ->capture_default_str();
+        build->add_option("--threads", options.threads, "Worker threads")
+            ->check(CLI::Range(std::size_t{1}, std::size_t{1024}))
+            ->capture_default_str();
+        build->add_option("--data-version", options.data_version, "meta's data_version")
+            ->capture_default_str();
+        build->add_option("--report", report_path, "Write the report here instead of stdout");
+        build
+            ->add_option("--sketch-mib", sketch_mib,
+                         "The sketch's size in MiB, a power of two (default: from the inputs)")
+            ->check(CLI::Validator(
+                [](const std::string& text) {
+                    std::size_t value = 0;
+                    const auto [end, parsed] =
+                        std::from_chars(text.data(), text.data() + text.size(), value);
+                    const bool whole = parsed == std::errc{} && end == text.data() + text.size();
+                    return whole && value != 0 && value <= 1024 && std::has_single_bit(value)
+                               ? std::string{}
+                               : std::string("must be a power of two from 1 to 1024");
+                },
+                "POWER OF TWO"));
+
         if (argc <= 1) {
             fmt::print("{}", app.help());
             return 0;
         }
         CLI11_PARSE(app, argc, argv);
+        if (!build->parsed()) {
+            fmt::print("{}", app.help());
+            return 0;
+        }
+        if (names != "none") {
+            options.names = names;
+        }
+        options.sketch_bytes = sketch_mib << 20U;
+
+        pipeline::Report report;
+        const auto built = pipeline::run_build(options, report, std::cerr);
+        if (!built) {
+            fmt::print(stderr, "chess-coach-pipeline: {}\n", built.error());
+            return 1;
+        }
+        if (report_path) {
+            std::ofstream out(*report_path);
+            report.write(out);
+            if (!out) {
+                fmt::print(stderr, "chess-coach-pipeline: cannot write {}\n",
+                           report_path->string());
+                return 1;
+            }
+        } else {
+            report.write(std::cout);
+        }
         return 0;
     } catch (const std::exception& error) {
         fmt::print(stderr, "chess-coach-pipeline: {}\n", error.what());
