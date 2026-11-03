@@ -141,8 +141,8 @@ when their path is under one of the four modules. The gate runs `run-clang-tidy`
 a newer push cancelling a running one. macOS installs `ninja llvm clang-format stockfish qt`
 from Homebrew; Ubuntu installs `ninja-build clang-format clang-tidy qt6-base-dev qt6-svg-dev
 libgl1-mesa-dev stockfish` from apt (Qt 6.4) and puts `/usr/games`, where apt installs
-Stockfish, on the `PATH`. vcpkg is cloned into `$RUNNER_TEMP/vcpkg` at the manifest's baseline
-and bootstrapped, and `VCPKG_ROOT` points at it; the vcpkg binary cache (`~/.cache/vcpkg/archives`)
+Stockfish, on the `PATH`. vcpkg is cloned into `$RUNNER_TEMP/vcpkg` at the baseline
+`vcpkg-configuration.json` pins (read with `jq`, so the hash lives in one file) and bootstrapped, and `VCPKG_ROOT` points at it; the vcpkg binary cache (`~/.cache/vcpkg/archives`)
 is kept in the Actions cache, keyed by the OS and the hash of `vcpkg.json`,
 `vcpkg-configuration.json` and `vcpkg/ports/`. On a failure the job uploads
 `build/gate-failures/`. `.github/dependabot.yml` updates the actions weekly. macOS minutes cost
