@@ -247,6 +247,20 @@ class EngineTest : public QObject {
                  QStringList{QStringLiteral("settings.ini")});
     }
 
+    void a_binary_that_is_not_an_engine_fails_to_start() {
+        EngineSettings broken = fake(0.1);
+        broken.binary = QStringLiteral("/usr/bin/true"); // exits without a handshake
+        const Session session(*db_, broken);
+        const MainWindow& window = *session.window;
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_status")),
+                                  QStringLiteral("Engine: failed to start"), first_wait_ms);
+        QVERIFY(
+            text_of(window, QStringLiteral("engine_label")).startsWith(QStringLiteral("Engine: ")));
+        QCOMPARE(line_count(window), 0);
+    }
+
     void the_settings_dialog_saves_and_applies_the_engine_settings() {
         const Session session(*db_, fake(0.1));
         MainWindow& window = *session.window;

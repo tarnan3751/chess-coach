@@ -187,7 +187,7 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
         options.hash_mb = settings_.hash_mb;
         auto started = Engine::start(*path, options);
         if (!started) {
-            emit engine_state(tr("not found"));
+            emit engine_state(tr("failed to start"));
             emit engine_failed(
                 tr("The engine %1 %2")
                     .arg(QString::fromStdString(path->string()), describe(started.error())));
