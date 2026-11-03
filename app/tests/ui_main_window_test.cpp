@@ -8,6 +8,7 @@
 #include "board_view.hpp"
 #include "explore_screen.hpp"
 #include "main_window.hpp"
+#include "spar_screen.hpp"
 #include "ui_harness.hpp"
 
 #include <QAction>
@@ -26,6 +27,7 @@
 using chesscoach::app::BoardView;
 using chesscoach::app::ExploreScreen;
 using chesscoach::app::MainWindow;
+using chesscoach::app::SparScreen;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
 using chesscoach::app::test::save_screenshot;
@@ -122,10 +124,11 @@ class MainWindowTest : public QObject {
             QStringLiteral("Drill"),
         };
         QVERIFY(qobject_cast<const ExploreScreen*>(screens.widget(0)) != nullptr);
+        QVERIFY(qobject_cast<const SparScreen*>(screens.widget(1)) != nullptr);
         for (int i = 0; i < 4; ++i) {
             QCOMPARE(tabs.tabText(i), names.at(i));
         }
-        for (int i = 1; i < 4; ++i) {
+        for (int i = 2; i < 4; ++i) {
             const auto* label = qobject_cast<const QLabel*>(screens.widget(i));
             QTEST_ASSERT(label != nullptr);
             QCOMPARE(label->text(), names.at(i));

@@ -1,6 +1,7 @@
 // The app tests' opening database: a handful of positions, nodes, moves, names and evaluations at
 // tiers 0, 3 and 6, written into core's schema (docs/database.md §6) with the real keys of the
-// moves, from core's Position; the rows are the CLI fixture's (cli/tests/fixture.hpp).
+// moves, from core's Position; the rows are the CLI fixture's (cli/tests/fixture.hpp), with a small
+// tree at tier 4 for Spar: a Dubious first move and an off-book continuation.
 #pragma once
 
 #include <chesscoach/key.hpp>

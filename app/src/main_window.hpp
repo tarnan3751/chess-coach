@@ -12,6 +12,7 @@
 #include "engine_worker.hpp"
 #include "explore_data.hpp"
 #include "settings.hpp"
+#include "spar_data.hpp"
 
 #include <QMainWindow>
 #include <QString>
@@ -25,6 +26,7 @@
 
 class QAction;
 class QActionGroup;
+class QTabBar;
 class QComboBox;
 class QLabel;
 class QListWidget;
@@ -35,6 +37,8 @@ class BoardView;
 class DbWorker;
 class EvalBar;
 class ExploreScreen;
+class SparScreen;
+class SparWorker;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -59,12 +63,33 @@ class MainWindow : public QMainWindow {
     void query_requested(const QVector<quint64>& line_keys, int tier);
     void configure_requested(const chesscoach::app::EngineSettings& settings);
     void evaluate_requested(quint64 key, const QString& fen, int request_id);
+    void spar_configure_requested(const chesscoach::app::EngineSettings& settings, double seconds);
+    void spar_start_requested(int tier, bool user_white, quint64 seed, int end_move);
+    void spar_move_requested(const QString& uci);
+    void spar_end_requested();
+    void spar_list_requested();
+    void spar_replay_requested(qint64 id);
 
   private:
     void build_toolbar();
     void build_menus();
     void build_status_bar();
     void move_played(const QString& uci, const QString& san);
+    void screen_changed(int index);
+    [[nodiscard]] Position explore_position() const;
+    void update_board_input();
+    void spar_start(bool user_white);
+    void spar_user_moved(const QString& uci, const QString& san);
+    void spar_session_started(quint64 seed, const QString& fen, const SparState& state);
+    void spar_move_accepted(const QString& san, const QString& uci,
+                            const std::optional<SparInterruption>& interruption,
+                            const SparState& state);
+    void spar_coach_moved(const QString& san, const QString& uci, const SparState& state);
+    void spar_session_ended(const SparSummary& summary);
+    void spar_failed(const QString& message);
+    void spar_replay_ready(const SparReplay& replay);
+    void spar_replay_step(int delta);
+    void face(bool white);
     void jump_to(qsizetype ply);
     void rebuild_move_list();
     void request_query();
@@ -89,10 +114,16 @@ class MainWindow : public QMainWindow {
     DbWorker* db_worker_; // lives on db_thread_, deleted when it finishes
     QThread engine_thread_;
     EngineWorker* engine_worker_; // lives on engine_thread_, deleted when it finishes
-    int request_id_ = 0;          // the evaluation the window waits for
+    QThread spar_thread_;
+    SparWorker* spar_worker_; // lives on spar_thread_, deleted when it finishes
+    int request_id_ = 0;      // the evaluation the window waits for
     BoardView* board_;
     EvalBar* eval_bar_;
     ExploreScreen* explore_;
+    SparScreen* spar_;
+    QTabBar* tabs_;
+    QAction* new_game_action_ = nullptr;
+    QAction* back_action_ = nullptr;
     QListWidget* move_list_;
     QComboBox* tier_selector_;
     QLabel* database_label_ = nullptr;
@@ -112,6 +143,18 @@ class MainWindow : public QMainWindow {
     };
     std::optional<Score> stored_score_;
     std::optional<Score> engine_score_;
+
+    // Spar: the board belongs to the Spar screen while it is the current one, and Explore's line
+    // is left as it was.
+    bool spar_active_ = false;
+    bool spar_running_ = false;   // a session runs on the worker
+    bool spar_started_ = false;   // the worker has answered session_started for it
+    bool spar_waiting_ = false;   // the coach is to move
+    bool applying_coach_ = false; // the board is playing the coach's move, not the user's
+    std::vector<std::string> spar_uci_;
+    QStringList spar_san_;
+    std::optional<SparReplay> replay_;
+    int replay_ply_ = 0;
 };
 
 } // namespace chesscoach::app

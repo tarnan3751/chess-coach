@@ -56,6 +56,27 @@ EngineSettings Settings::engine() const {
     return engine;
 }
 
+int Settings::spar_end_move() const {
+    bool ok = false;
+    const int end_move = read(QStringLiteral("spar/end_move")).toInt(&ok);
+    return ok && end_move >= 1 && end_move <= 200 ? end_move : 25;
+}
+
+double Settings::spar_seconds() const {
+    bool ok = false;
+    const double seconds = read(QStringLiteral("spar/seconds")).toDouble(&ok);
+    return ok && seconds >= 0.1 && seconds <= 60 ? seconds : 0.5;
+}
+
+std::optional<quint64> Settings::spar_seed() const {
+    bool ok = false;
+    const quint64 seed = read(QStringLiteral("spar/seed")).toULongLong(&ok);
+    if (!ok) {
+        return std::nullopt;
+    }
+    return seed;
+}
+
 void Settings::set_engine(const EngineSettings& engine) {
     write({
         {QStringLiteral("engine/binary"), engine.binary},

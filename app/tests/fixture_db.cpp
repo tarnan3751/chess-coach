@@ -1,7 +1,7 @@
-// The app tests' opening database (fixture_db.hpp), the same rows as the CLI's fixture
-// (cli/tests/fixture.cpp), which app/ cannot link. The counts are consistent with the counting
-// rule of docs/database.md §6.4 at tier 3; tiers 0 and 6 hold only a few rows. Badges are set by
-// hand and are not recomputed from §7.
+// The app tests' opening database (fixture_db.hpp): the CLI fixture's rows (cli/tests/fixture.cpp,
+// which app/ cannot link), and a small tree at tier 4 for the Spar tests. The counts are consistent
+// with the counting rule of docs/database.md §6.4 at tier 3; tiers 0 and 6 hold only a few rows.
+// Badges are set by hand and are not recomputed from §7.
 #include "fixture_db.hpp"
 
 #include <chesscoach/opening_schema.hpp>
@@ -131,6 +131,9 @@ const std::vector<PositionRow>& positions() {
         position("d4 d5 Nf3", "D02", "Queen's Pawn Game: Zukertort Variation", 15, none, 32,
                  "g8f6"),
         position("f3 e5 g4", none, none, none, -1, 99, "d8h4"),
+        // Spar's tier-4 tree: 1. a3 is Dubious, losing 109 cp from the start position's +19.
+        position("a3", none, none, -90, none, 30, "e7e5"),
+        unevaluated("a3 e5", none, none),
     };
     return rows;
 }
@@ -143,7 +146,9 @@ const std::vector<NodeRow>& nodes() {
         node("e4 e5", 3, 140, 30, 130), node("d4", 3, 150, 30, 120),
         node("d4 d5", 3, 100, 20, 80),  node("Nf3", 3, 40, 10, 30),
         node("Nf3 d5", 3, 30, 5, 25),   node("d4 d5 Nf3", 3, 80, 15, 65),
-        node("f3 e5 g4", 0, 0, 0, 10),
+        node("f3 e5 g4", 0, 0, 0, 10),  node("", 4, 45, 17, 38),
+        node("e4", 4, 30, 10, 20),      node("d4", 4, 5, 2, 3),
+        node("a3", 4, 10, 5, 15),       node("a3 e5", 4, 5, 3, 12),
     };
     return rows;
 }
@@ -172,6 +177,14 @@ const std::vector<MoveRow>& moves() {
         move("Nf3", 3, "g8f6", "Nf3 Nf6", 10, 5, 5, 2),
         move("Nf3 d5", 3, "d2d4", "Nf3 d5 d4", 30, 5, 25, 3),
         move("f3 e5 g4", 0, "d8h4", "f3 e5 g4 Qh4#", 0, 0, 8, 2),
+        // Tier 4, for Spar: Popular 1. e4, Dubious 1. a3, Book 1. d4; after 1. a3 black's one
+        // candidate is e5; after 1. a3 e5 only 2. Nf3 was played, so anything else leaves the
+        // book.
+        move("", 4, "e2e4", "e4", 30, 10, 20, 2),
+        move("", 4, "a2a3", "a3", 10, 5, 15, 6),
+        move("", 4, "d2d4", "d4", 5, 2, 3, 1),
+        move("a3", 4, "e7e5", "a3 e5", 5, 3, 12, 2),
+        move("a3 e5", 4, "g1f3", "a3 e5 Nf3", 3, 2, 5, 2),
     };
     return rows;
 }
@@ -189,12 +202,12 @@ const std::vector<std::pair<std::string_view, std::string_view>>& meta() {
         {"pipeline_version", "0.1.0"},
         {"eval_db", "none"},
         {"openings_tsv", "a.tsv,b.tsv,c.tsv,d.tsv,e.tsv"},
-        {"games_admitted", "1120"},
+        {"games_admitted", "1220"},
         {"admitted_tier_0", "20"},
         {"admitted_tier_1", "0"},
         {"admitted_tier_2", "0"},
         {"admitted_tier_3", "1000"},
-        {"admitted_tier_4", "0"},
+        {"admitted_tier_4", "100"},
         {"admitted_tier_5", "0"},
         {"admitted_tier_6", "100"},
         {"games_skipped", "0"},
