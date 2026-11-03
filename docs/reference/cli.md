@@ -229,7 +229,7 @@ profile store**). Every choice made also makes or resets its drill card.
 - `list` prints one line per choice, by key: the key in unsigned decimal, the move in UCI and in
   SAN, and the position's FEN.
 - `coverage --tier T` prints `compute_coverage` (`docs/reference/core.md`, **Repertoire
-  coverage**) on `--db` at the tier, to `--depth` plies (20): the share of the start position's
+  coverage**) on `--db` at the tier, to `--depth` plies (20, at most 40): the share of the start position's
   games the repertoire answers, the positions visited, the number of gaps, and the largest gaps,
   `--limit` of them (10), each as its share, its first line in SAN and its FEN:
 
@@ -251,7 +251,9 @@ gaps: 2
 ### drill
 
 The cards of a profile's repertoire for one colour, scheduled by SM-2 (`docs/reference/core.md`,
-**The scheduler**). `--at` is the time in Unix seconds, the clock's when absent.
+**The scheduler**). `--at` is the time in Unix seconds, from 0 to 253402300799 (the end of the
+year 9999, which keeps the scheduler's due dates far from its arithmetic's limits), the clock's
+when absent.
 
 - `list` prints the cards due at that time, by due time and then key: the card's id, the key, the
   move in UCI and in SAN, `due <seconds>` and the position's FEN.
@@ -278,7 +280,7 @@ The profiles of the data directory (§12.2, §12.5).
 | Status | When |
 |---|---|
 | 0 | The command ran, including an off-book or unnamed position; `--version`, `--help`, or no arguments (which print the help) |
-| 2 | The command line is rejected (an unknown command or option, a missing `--db`, `--tier` or `--data-dir`, `explore --engine` without `--data-dir`, a tier that is not a number, `--fen` with `--moves`), or a command fails: a database that does not open, a tier outside 0 to 6, a FEN that does not parse, a move that is neither UCI nor SAN or is not legal where it is played, `name` without a position, a `profiles.db` that does not open, `--lines` below 1 or `--seconds` not above 0 or above 3600, no engine to be found on a cache miss, an engine that does not start, dies or does not answer in time; for `spar`, a missing `--tier` or `--colour`, a colour other than `white` or `black`, `--list` with `--replay` or `--script`, no profile of that name, no saved session of that id, an illegal move in a script, a record that does not replay or a database of another `data_version` for `--replay`, a session that cannot be saved; for `repertoire`, `drill` and `profile`, no subcommand, a colour other than `white` or `black`, no profile of that name, a line that ends where the other colour is to move for `remove`, `coverage` or `gaps` without `--db`, a PGN file that cannot be read or has a broken header, a grade other than the four, a card that is not the repertoire's, a duplicate or empty profile name, the last profile removed, an export from a data directory without `profiles.db` or to a file that exists, an import of a file that is not a `profiles.db`, is newer or cannot be migrated, and an export or import whose files another program keeps locked. One line on stderr, `chess-coach-cli: <reason>`, and nothing on stdout |
+| 2 | The command line is rejected (an unknown command or option, a missing `--db`, `--tier` or `--data-dir`, `explore --engine` without `--data-dir`, a tier that is not a number, `--fen` with `--moves`), or a command fails: a database that does not open, a tier outside 0 to 6, a FEN that does not parse, a move that is neither UCI nor SAN or is not legal where it is played, `name` without a position, a `profiles.db` that does not open, `--lines` below 1 or `--seconds` not above 0 or above 3600, no engine to be found on a cache miss, an engine that does not start, dies or does not answer in time; for `spar`, a missing `--tier` or `--colour`, a colour other than `white` or `black`, `--list` with `--replay` or `--script`, no profile of that name, no saved session of that id, an illegal move in a script, a record that does not replay or a database of another `data_version` for `--replay`, a session that cannot be saved; for `repertoire`, `drill` and `profile`, no subcommand, a colour other than `white` or `black`, no profile of that name, a line that ends where the other colour is to move for `remove`, `coverage` or `gaps` without `--db`, a PGN file that cannot be read or has a broken header, a grade other than the four, a card that is not the repertoire's, `--at` outside 0 to 253402300799, `--depth` outside 0 to 40, a duplicate or empty profile name, the last profile removed, an export from a data directory without `profiles.db` or to a file that exists, an import of a file that is not a `profiles.db`, is newer or cannot be migrated, and an export or import whose files another program keeps locked. One line on stderr, `chess-coach-cli: <reason>`, and nothing on stdout |
 | 1 | An unexpected exception reached `main`; its message is printed on stderr |
 
 ## Code

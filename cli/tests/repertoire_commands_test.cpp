@@ -211,6 +211,13 @@ TEST_CASE("repertoire coverage and gaps print core's coverage at the tier", "[cl
     CHECK(fmt::format("{:.1f}%", coverage.gaps.at(0).mass / coverage.total * 100.0) == "50.0%");
     CHECK(coverage.gaps.at(1).fen == fen_after("e4 c5"));
 
+    RepertoireOptions deep = coverage_options;
+    deep.depth = 41;
+    CHECK(run(deep) == "error: --depth 41 is not from 0 to 40");
+    deep.depth = -1;
+    CHECK(run(deep) == "error: --depth -1 is not from 0 to 40");
+    deep.depth = 40;
+    CHECK(run(deep).starts_with("covered: "));
     RepertoireOptions no_db = coverage_options;
     no_db.db.clear();
     CHECK(run(no_db) == "error: repertoire coverage needs --db");
@@ -263,6 +270,13 @@ TEST_CASE("drill syncs, lists the cards due, and a good review moves the due dat
     list.at = 88400;
     CHECK(run(list) == nf3 + e4(88400));
 
+    list.at = 253402300800;
+    CHECK(run(list) == "error: --at 253402300800 is not a time from 0 to 253402300799 (the end of "
+                       "the year 9999)");
+    list.at = -1;
+    CHECK(run(list).starts_with("error: --at -1 is not a time"));
+    list.at = 253402300799;
+    CHECK(run(list) == nf3 + e4(88400));
     review.grade = "meh";
     CHECK(run(review) == "error: grade \"meh\" is not again, hard, good or easy");
     review.grade = "good";

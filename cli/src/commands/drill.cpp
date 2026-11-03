@@ -41,6 +41,10 @@ Result<void> run_drill(const DrillOptions& options, std::ostream& out, const Clo
     if (!colour) {
         return tl::unexpected(colour.error());
     }
+    if (options.at && (*options.at < 0 || *options.at > latest_time)) {
+        return fail(fmt::format("--at {} is not a time from 0 to {} (the end of the year 9999)",
+                                *options.at, latest_time));
+    }
     const auto grade = parse_grade(options.grade);
     if (options.action == "review" && !grade) {
         return fail(fmt::format("grade \"{}\" is not again, hard, good or easy", options.grade));

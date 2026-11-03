@@ -14,6 +14,10 @@
 
 namespace chesscoach::cli {
 
+// The latest --at accepted: 9999-12-31 23:59:59 UTC, so the scheduler's due dates stay far from
+// the limits of its 64-bit arithmetic.
+inline constexpr std::int64_t latest_time = 253402300799;
+
 struct DrillOptions {
     std::string data_dir;
     std::string profile = "Default";
@@ -21,7 +25,7 @@ struct DrillOptions {
     std::string action;             // list, review or sync
     std::int64_t card = 0;          // review
     std::string grade;              // review: again, hard, good or easy
-    std::optional<std::int64_t> at; // list, review: the time, in Unix seconds; the clock's without
+    std::optional<std::int64_t> at; // list, review: the time, 0 to latest_time; the clock's without
 };
 
 // The clock stamps the cards sync makes, and is the time without --at.

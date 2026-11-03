@@ -145,6 +145,9 @@ Result<void> report_coverage(const ProfileStore& store, std::int64_t profile, Co
     if (options.db.empty()) {
         return fail(fmt::format("repertoire {} needs --db", options.action));
     }
+    if (options.depth < 0 || options.depth > max_depth) {
+        return fail(fmt::format("--depth {} is not from 0 to {}", options.depth, max_depth));
+    }
     const auto tier = tier_from_index(options.tier);
     if (!tier) {
         return fail(fmt::format("tier {} is not one of 0 to 6", options.tier));

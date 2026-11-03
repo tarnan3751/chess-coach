@@ -13,6 +13,9 @@
 
 namespace chesscoach::cli {
 
+// The deepest --depth coverage and gaps walk, in plies.
+inline constexpr int max_depth = 40;
+
 struct RepertoireOptions {
     std::string data_dir;
     std::string profile = "Default";
@@ -22,7 +25,7 @@ struct RepertoireOptions {
     std::string moves;  // add, remove
     std::string pgn;    // import
     int tier = 0;       // coverage, gaps
-    int depth = 20;     // coverage, gaps: the plies walked
+    int depth = 20;     // coverage, gaps: the plies walked, 0 to max_depth
     int limit = 10;     // coverage, gaps: the gaps listed
 };
 
