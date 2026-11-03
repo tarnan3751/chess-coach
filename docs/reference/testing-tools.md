@@ -140,9 +140,10 @@ includes are regrouped into blocks: the file's own header (for a test, the heade
 a dot or a capital, Qt's included), then the standard library (`<lowercase_name>`). Namespace
 closing comments are added. Both CI jobs and the dev machine run clang-format and clang-tidy
 of the same major version: Homebrew's `llvm` and `clang-format` on macOS, and on Ubuntu the
-`clang-format-23` and `clang-tidy-23` packages from apt.llvm.org (Ubuntu's own packages are a
-major behind), symlinked to the unversioned names; when Homebrew moves to a new major, the CI
-workflow's apt.llvm.org suite moves with it.
+`clang-format` and `clang-tidy` wheels from PyPI pinned to the same major (Ubuntu's own
+packages are a major behind, and apt.llvm.org failed to resolve on the runners), with Ubuntu's
+`clang-tools` supplying only the `run-clang-tidy` driver script; when Homebrew moves to a new
+major, the pinned wheel versions move with it.
 
 `.clang-tidy` enables `bugprone-*`, `cert-*`, `clang-analyzer-*`, `concurrency-*`,
 `cppcoreguidelines-*`, `misc-*`, `modernize-*`, `performance-*`, `portability-*` and
