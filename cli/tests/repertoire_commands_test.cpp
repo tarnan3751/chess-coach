@@ -218,6 +218,13 @@ TEST_CASE("repertoire coverage and gaps print core's coverage at the tier", "[cl
     CHECK(run(deep) == "error: --depth -1 is not from 0 to 40");
     deep.depth = 40;
     CHECK(run(deep).starts_with("covered: "));
+    // A --depth refused before profiles.db is opened creates none.
+    const Scratch fresh("coverage-fresh");
+    RepertoireOptions refused = repertoire_on(fresh, "coverage");
+    refused.db = db.path();
+    refused.depth = 41;
+    CHECK(run(refused) == "error: --depth 41 is not from 0 to 40");
+    CHECK_FALSE(std::filesystem::exists(std::filesystem::path(fresh.data()) / "profiles.db"));
     RepertoireOptions no_db = coverage_options;
     no_db.db.clear();
     CHECK(run(no_db) ==

@@ -142,9 +142,6 @@ Result<void> import_pgn(ProfileStore& store, std::int64_t profile, Color colour,
 
 Result<void> report_coverage(const ProfileStore& store, std::int64_t profile, Color colour,
                              const RepertoireOptions& options, std::ostream& out) {
-    if (options.depth < 0 || options.depth > max_depth) {
-        return fail(fmt::format("--depth {} is not from 0 to {}", options.depth, max_depth));
-    }
     const auto tier = tier_from_index(options.tier);
     if (!tier) {
         return fail(fmt::format("tier {} is not one of 0 to 6", options.tier));
@@ -176,6 +173,11 @@ Result<void> run_repertoire(const RepertoireOptions& options, std::ostream& out,
     const auto colour = parse_colour(options.colour);
     if (!colour) {
         return tl::unexpected(colour.error());
+    }
+    // Checked before profiles.db is opened, so a rejected call creates nothing.
+    if ((options.action == "coverage" || options.action == "gaps") &&
+        (options.depth < 0 || options.depth > max_depth)) {
+        return fail(fmt::format("--depth {} is not from 0 to {}", options.depth, max_depth));
     }
     auto opened = open_profile(options.data_dir, options.profile, clock);
     if (!opened) {
