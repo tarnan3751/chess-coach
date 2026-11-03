@@ -3,9 +3,9 @@
 // meeting an interruption on a Dubious move and another on an off-book move, the hand-off to the
 // engine, the end at the move limit with the summary and the saved session listed, its replay with
 // the interruptions at their plies; a session as black, where the coach moves first; End session
-// saving a stopped session, and closing the window saving one too; and the Settings dialog's spar
-// entries. Screenshots of the interruption, the summary and the replay (ui_harness.hpp,
-// fixture_db.hpp).
+// saving a stopped session, and closing the window saving one too; the tier selector disabled
+// only on Spar while a session runs; and the Settings dialog's spar entries. Screenshots of the
+// interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
 
@@ -333,7 +333,10 @@ class SparTest : public QObject {
         click(board, "d4");
         QTRY_VERIFY(board.isEnabled());
         QCOMPARE(window.line().size(), std::size_t{1}); // Explore's line is untouched
+        const auto& tiers = child<QComboBox>(window, QStringLiteral("tier_selector"));
+        QVERIFY(!tiers.isEnabled()); // on Spar while the session runs
         tabs.setCurrentIndex(0);
+        QVERIFY(tiers.isEnabled()); // Explore's tier is its own
         QCOMPARE(window.line().size(), std::size_t{1});
         QTRY_COMPARE(move_row(window, 0), QStringLiteral("1. e4"));
         QVERIFY(board.isEnabled());

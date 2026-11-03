@@ -488,7 +488,7 @@ void MainWindow::screen_changed(int index) {
         request_query();
         request_evaluation();
     }
-    tier_selector_->setEnabled(!spar_running_);
+    tier_selector_->setEnabled(!(spar && spar_running_)); // Explore's tier is its own
     update_board_input();
 }
 

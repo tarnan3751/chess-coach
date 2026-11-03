@@ -215,15 +215,16 @@ in progress and keeps another from starting (the one call another thread makes, 
 mutex), then waits on `end_session` (a blocking queued call) before it joins the thread, so the wait
 is a save, not a search.
 
-**The window.** While Spar is the current screen, the board is the session's: a move on it goes
-to `user_move`, and the coach's replies are played on it with their animation. Explore's line,
-query and evaluation wait as they were: switching to Spar cancels Explore's engine search and
-hides the evaluation bar, which is Explore's position's, and switching back puts Explore's
-position, its table and its evaluation back. The tier selector is disabled while a session runs,
-which is played at the tier selected when it started. The board takes a move only when a session
-runs, it is the user's turn, and no interruption is open; the window turns the board to the
-user's side at the start. The move list shows the session's moves, or a replay's up to its ply,
-and clicking a row does nothing on Spar.
+**The window.** While Spar is the current screen, the board is the session's: a move on it goes to
+`user_move`, and the coach's replies are played on it with their animation. Explore's line, query
+and evaluation wait as they were: switching to Spar cancels Explore's engine search and hides the
+evaluation bar, which is Explore's position's, and switching back puts Explore's position, its table
+and its evaluation back. The tier selector is disabled while Spar is current and a session runs,
+which keeps the tier selected when it started; on Explore the selector is Explore's, and changing it
+there leaves the session's tier alone. The board takes a move only when a session runs, it is the
+user's turn, and no interruption is open; the window turns the board to the user's side at the
+start. The move list shows the session's moves, or a replay's up to its ply, and clicking a row does
+nothing on Spar.
 
 **The screen.** `SparScreen` holds:
 
