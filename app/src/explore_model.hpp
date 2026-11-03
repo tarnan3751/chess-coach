@@ -4,6 +4,7 @@
 #pragma once
 
 #include "explore_data.hpp"
+#include "result_delegate.hpp"
 
 #include <QAbstractTableModel>
 #include <QModelIndex>
@@ -28,8 +29,8 @@ class ExploreModel : public QAbstractTableModel {
     // The row's UCI move, under every column.
     static constexpr int uci_role = Qt::UserRole;
     // The Result column's shares of white wins, draws and black wins, a QList<double> of three
-    // fractions summing to 1.
-    static constexpr int shares_role = Qt::UserRole + 1;
+    // fractions summing to 1, as the result bar reads them.
+    static constexpr int shares_role = chesscoach::app::shares_role;
 
     explicit ExploreModel(QObject* parent = nullptr);
 

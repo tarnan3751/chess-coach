@@ -32,6 +32,8 @@ add_library(app_lib STATIC
   src/piece_set.hpp
   src/promotion_chooser.cpp
   src/promotion_chooser.hpp
+  src/result_delegate.cpp
+  src/result_delegate.hpp
   src/settings.cpp
   src/settings.hpp
   src/settings_dialog.cpp
