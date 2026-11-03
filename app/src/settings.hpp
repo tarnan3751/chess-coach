@@ -1,4 +1,5 @@
-// The app's settings: the theme, the last tier and the engine's, in <data-dir>/settings.ini through
+// The app's settings: the theme, the last tier, the engine's, Spar's and Repertoire's, in
+// <data-dir>/settings.ini through
 // QSettings in INI format, never the registry or the platform's own settings store
 // (docs/reference/app.md,
 // **Settings**). Reading never creates anything; the first write creates the data directory and
@@ -40,11 +41,14 @@ class Settings {
     // harness sets (nullopt: the clock's).
     [[nodiscard]] SparSettings spar() const;
     [[nodiscard]] std::optional<quint64> spar_seed() const;
+    // Repertoire's coverage depth in plies (20, 2 to 40).
+    [[nodiscard]] int repertoire_depth() const;
 
     void set_theme(const QString& theme);
     void set_last_tier(int tier);
     void set_engine(const EngineSettings& engine);
     void set_spar(const SparSettings& spar);
+    void set_repertoire_depth(int depth);
 
     [[nodiscard]] QString file() const { return file_; }
 

@@ -16,10 +16,11 @@
 namespace chesscoach::app {
 
 SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings& spar,
-                               QWidget* parent)
+                               int repertoire_depth, QWidget* parent)
     : QDialog(parent), binary_(new QLineEdit(engine.binary, this)), threads_(new QSpinBox(this)),
       hash_mb_(new QSpinBox(this)), seconds_(new QDoubleSpinBox(this)), lines_(new QSpinBox(this)),
-      spar_end_move_(new QSpinBox(this)), spar_seconds_(new QDoubleSpinBox(this)) {
+      spar_end_move_(new QSpinBox(this)), spar_seconds_(new QDoubleSpinBox(this)),
+      repertoire_depth_(new QSpinBox(this)) {
     setObjectName(QStringLiteral("settings_dialog"));
     setWindowTitle(tr("Settings"));
     binary_->setObjectName(QStringLiteral("engine_binary"));
@@ -64,6 +65,10 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     spar_seconds_->setSingleStep(0.1);
     spar_seconds_->setSuffix(tr(" s"));
     spar_seconds_->setValue(spar.seconds);
+    repertoire_depth_->setObjectName(QStringLiteral("repertoire_depth"));
+    repertoire_depth_->setRange(2, 40);
+    repertoire_depth_->setSuffix(tr(" plies"));
+    repertoire_depth_->setValue(repertoire_depth);
 
     auto* form = new QFormLayout();
     form->addRow(tr("Engine"), binary_row);
@@ -73,6 +78,7 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     form->addRow(tr("Lines"), lines_);
     form->addRow(tr("Spar ends at move"), spar_end_move_);
     form->addRow(tr("Seconds per spar reply"), spar_seconds_);
+    form->addRow(tr("Coverage depth"), repertoire_depth_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -94,5 +100,7 @@ EngineSettings SettingsDialog::engine() const {
 SparSettings SettingsDialog::spar() const {
     return SparSettings{.end_move = spar_end_move_->value(), .seconds = spar_seconds_->value()};
 }
+
+int SettingsDialog::repertoire_depth() const { return repertoire_depth_->value(); }
 
 } // namespace chesscoach::app

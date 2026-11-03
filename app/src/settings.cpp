@@ -89,6 +89,16 @@ void Settings::set_engine(const EngineSettings& engine) {
     });
 }
 
+int Settings::repertoire_depth() const {
+    bool ok = false;
+    const int depth = read(QStringLiteral("repertoire/depth")).toInt(&ok);
+    return ok && depth >= 2 && depth <= 40 ? depth : 20;
+}
+
+void Settings::set_repertoire_depth(int depth) {
+    write(QStringLiteral("repertoire/depth"), QString::number(depth));
+}
+
 void Settings::set_spar(const SparSettings& spar) {
     write({
         {QStringLiteral("spar/end_move"), QString::number(spar.end_move)},

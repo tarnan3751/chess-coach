@@ -9,9 +9,12 @@
 #include "board_theme.hpp"
 #include "board_view.hpp"
 #include "db_worker.hpp"
+#include "drill_screen.hpp"
 #include "engine_worker.hpp"
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
+#include "profile_worker.hpp"
+#include "repertoire_screen.hpp"
 #include "settings_dialog.hpp"
 #include "spar_screen.hpp"
 #include "spar_worker.hpp"
@@ -33,6 +36,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTabBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -45,25 +49,25 @@
 
 namespace chesscoach::app {
 
-namespace {
-
-QString tier_text(int tier) {
+QString MainWindow::tier_text(int tier) {
     // Tier's values are the indices 0 to tier_count - 1.
     const std::string_view label = tier_label(static_cast<Tier>(tier));
     return QString::fromUtf8(label.data(), static_cast<qsizetype>(label.size()));
 }
 
-} // namespace
-
 MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
-    : QMainWindow(parent), settings_(data_dir), db_path_(std::move(db)), db_worker_(new DbWorker()),
-      engine_worker_(new EngineWorker(data_dir)), spar_worker_(new SparWorker(data_dir, db_path_)),
-      board_(new BoardView()), eval_bar_(new EvalBar()), explore_(new ExploreScreen()),
-      spar_(new SparScreen()), tabs_(new QTabBar()), move_list_(new QListWidget()),
-      tier_selector_(new QComboBox()) {
+    : QMainWindow(parent), data_dir_(data_dir), settings_(data_dir), db_path_(std::move(db)),
+      db_worker_(new DbWorker()), engine_worker_(new EngineWorker(data_dir)),
+      spar_worker_(new SparWorker(data_dir, db_path_)),
+      profile_worker_(new ProfileWorker(data_dir, db_path_)), board_(new BoardView()),
+      eval_bar_(new EvalBar()), explore_(new ExploreScreen()), spar_(new SparScreen()),
+      repertoire_(new RepertoireScreen()), drill_(new DrillScreen()), tabs_(new QTabBar()),
+      move_list_(new QListWidget()), tier_selector_(new QComboBox()),
+      grade_timer_(new QTimer(this)) {
     register_explore_types();
     register_engine_types();
     register_spar_types();
+    register_profile_types();
     setWindowTitle(tr("chess-coach %1").arg(QString::fromStdString(to_string(current_version()))));
     resize(1100, 720);
     line_keys_.append(Position::start().key());
@@ -74,11 +78,15 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     move_list_->setObjectName(QStringLiteral("move_list"));
     connect(board_, &BoardView::move_played, this, &MainWindow::move_played);
     connect(move_list_, &QListWidget::itemClicked, this, [this](const QListWidgetItem* item) {
-        if (spar_active_) {
-            return; // the session's moves are not a line to go back along
-        }
+        // Explore's line and the repertoire's are lines to go back along; a session's moves and
+        // a card's are not.
         const auto row = static_cast<qsizetype>(move_list_->row(item));
-        jump_to(std::min<qsizetype>(2 * (row + 1), static_cast<qsizetype>(line_uci_.size())));
+        if (screen_ == Screen::explore) {
+            jump_to(std::min<qsizetype>(2 * (row + 1), static_cast<qsizetype>(line_uci_.size())));
+        } else if (screen_ == Screen::repertoire) {
+            repertoire_jump(
+                std::min<qsizetype>(2 * (row + 1), static_cast<qsizetype>(repertoire_uci_.size())));
+        }
     });
     connect(explore_, &ExploreScreen::move_requested, board_,
             [this](const QString& uci) { board_->play_move(uci); });
@@ -90,12 +98,10 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     screens->addWidget(explore_);
     tabs_->addTab(tr("Spar"));
     screens->addWidget(spar_);
-    for (const QString& name : {tr("Repertoire"), tr("Drill")}) {
-        tabs_->addTab(name);
-        auto* placeholder = new QLabel(name);
-        placeholder->setAlignment(Qt::AlignCenter);
-        screens->addWidget(placeholder);
-    }
+    tabs_->addTab(tr("Repertoire"));
+    screens->addWidget(repertoire_);
+    tabs_->addTab(tr("Drill"));
+    screens->addWidget(drill_);
     connect(tabs_, &QTabBar::currentChanged, screens, &QStackedWidget::setCurrentIndex);
     connect(tabs_, &QTabBar::currentChanged, this, &MainWindow::screen_changed);
     connect(spar_, &SparScreen::start_requested, this, &MainWindow::spar_start);
@@ -103,6 +109,21 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     connect(spar_, &SparScreen::continue_requested, this, &MainWindow::update_board_input);
     connect(spar_, &SparScreen::replay_requested, this, &MainWindow::spar_replay_requested);
     connect(spar_, &SparScreen::replay_step, this, &MainWindow::spar_replay_step);
+    connect(repertoire_, &RepertoireScreen::colour_changed, this,
+            &MainWindow::repertoire_colour_changed);
+    connect(repertoire_, &RepertoireScreen::import_requested, this,
+            [this](const QString& path) { emit pgn_import_requested(path, repertoire_white_); });
+    connect(repertoire_, &RepertoireScreen::navigate_requested, this, &MainWindow::repertoire_go);
+    connect(repertoire_, &RepertoireScreen::choose_requested, this, &MainWindow::repertoire_choose);
+    connect(repertoire_, &RepertoireScreen::remove_requested, this, &MainWindow::repertoire_remove);
+    connect(drill_, &DrillScreen::colour_changed, this, [this] { enter_drill(); });
+    connect(drill_, &DrillScreen::sync_requested, this, [this] { enter_drill(); });
+    connect(drill_, &DrillScreen::start_requested, this, &MainWindow::drill_start);
+    connect(drill_, &DrillScreen::next_requested, this, &MainWindow::drill_next);
+    connect(drill_, &DrillScreen::grade_chosen, this, &MainWindow::drill_grade);
+    grade_timer_->setSingleShot(true);
+    grade_timer_->setInterval(2000);
+    connect(grade_timer_, &QTimer::timeout, this, &MainWindow::drill_record);
 
     auto* board_row = new QHBoxLayout();
     board_row->addWidget(eval_bar_);
@@ -171,6 +192,35 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     spar_thread_.setObjectName(QStringLiteral("spar"));
     spar_thread_.start();
     emit spar_configure_requested(settings_.engine(), settings_.spar().seconds);
+
+    // The profile worker likewise, with the repertoires and cards and its own opening database
+    // connection for coverage and the score.
+    profile_worker_->moveToThread(&profile_thread_);
+    connect(&profile_thread_, &QThread::finished, profile_worker_, &QObject::deleteLater);
+    connect(this, &MainWindow::choice_requested, profile_worker_, &ProfileWorker::set_choice);
+    connect(this, &MainWindow::choice_removal_requested, profile_worker_,
+            &ProfileWorker::remove_choice);
+    connect(this, &MainWindow::repertoire_requested, profile_worker_,
+            &ProfileWorker::load_repertoire);
+    connect(this, &MainWindow::coverage_requested, profile_worker_,
+            &ProfileWorker::compute_coverage);
+    connect(this, &MainWindow::scores_requested, profile_worker_, &ProfileWorker::score_position);
+    connect(this, &MainWindow::pgn_import_requested, profile_worker_, &ProfileWorker::import_pgn);
+    connect(this, &MainWindow::sync_requested, profile_worker_, &ProfileWorker::sync_cards);
+    connect(this, &MainWindow::due_requested, profile_worker_, &ProfileWorker::due_cards);
+    connect(this, &MainWindow::review_requested, profile_worker_, &ProfileWorker::record_review);
+    connect(profile_worker_, &ProfileWorker::repertoire_changed, this,
+            &MainWindow::repertoire_changed);
+    connect(profile_worker_, &ProfileWorker::repertoire_ready, this, &MainWindow::repertoire_ready);
+    connect(profile_worker_, &ProfileWorker::coverage_ready, this, &MainWindow::coverage_ready);
+    connect(profile_worker_, &ProfileWorker::scores_ready, this, &MainWindow::scores_ready);
+    connect(profile_worker_, &ProfileWorker::pgn_imported, this, &MainWindow::pgn_imported);
+    connect(profile_worker_, &ProfileWorker::cards_synced, this, &MainWindow::cards_synced);
+    connect(profile_worker_, &ProfileWorker::cards_ready, this, &MainWindow::cards_ready);
+    connect(profile_worker_, &ProfileWorker::review_recorded, this, &MainWindow::review_recorded);
+    connect(profile_worker_, &ProfileWorker::profile_failed, this, &MainWindow::profile_failed);
+    profile_thread_.setObjectName(QStringLiteral("profiles"));
+    profile_thread_.start();
 }
 
 MainWindow::~MainWindow() {
@@ -188,6 +238,17 @@ MainWindow::~MainWindow() {
     }
     spar_thread_.quit();
     spar_thread_.wait();
+    // A correct answer's grade not yet recorded is recorded before the profile worker stops.
+    if (card_.has_value() && answered_ && !recorded_) {
+        recorded_ = true;
+        const qint64 card = card_->id;
+        const int grade = grade_;
+        QMetaObject::invokeMethod(
+            profile_worker_, [this, card, grade] { profile_worker_->record_review(card, grade); },
+            Qt::BlockingQueuedConnection);
+    }
+    profile_thread_.quit();
+    profile_thread_.wait();
     db_thread_.quit();
     db_thread_.wait();
 }
@@ -198,12 +259,20 @@ void MainWindow::build_toolbar() {
     toolbar->setMovable(false);
     new_game_action_ = toolbar->addAction(tr("New game"));
     new_game_action_->setObjectName(QStringLiteral("new_game_action"));
-    connect(new_game_action_, &QAction::triggered, this, [this] { jump_to(0); });
+    connect(new_game_action_, &QAction::triggered, this, [this] {
+        if (screen_ == Screen::repertoire) {
+            repertoire_jump(0);
+        } else {
+            jump_to(0);
+        }
+    });
     back_action_ = toolbar->addAction(tr("Back"));
     back_action_->setObjectName(QStringLiteral("back_action"));
     back_action_->setShortcut(QKeySequence::Back);
     connect(back_action_, &QAction::triggered, this, [this] {
-        if (!line_uci_.empty()) {
+        if (screen_ == Screen::repertoire && !repertoire_uci_.empty()) {
+            repertoire_jump(static_cast<qsizetype>(repertoire_uci_.size()) - 1);
+        } else if (screen_ == Screen::explore && !line_uci_.empty()) {
             jump_to(static_cast<qsizetype>(line_uci_.size()) - 1);
         }
     });
@@ -223,6 +292,9 @@ void MainWindow::build_toolbar() {
     connect(tier_selector_, &QComboBox::currentIndexChanged, this, [this](int index) {
         settings_.set_last_tier(index);
         request_query();
+        if (screen_ == Screen::repertoire) {
+            repertoire_refresh();
+        }
     });
     toolbar->addWidget(tier_selector_);
 }
@@ -279,8 +351,17 @@ void MainWindow::build_status_bar() {
 int MainWindow::tier() const { return tier_selector_->currentIndex(); }
 
 void MainWindow::move_played(const QString& uci, const QString& san) {
-    if (spar_active_) {
+    switch (screen_) {
+    case Screen::explore:
+        break;
+    case Screen::spar:
         spar_user_moved(uci, san);
+        return;
+    case Screen::repertoire:
+        repertoire_move_played(uci, san);
+        return;
+    case Screen::drill:
+        drill_move_played(uci, san);
         return;
     }
     line_uci_.push_back(uci.toStdString());
@@ -313,8 +394,9 @@ void MainWindow::jump_to(qsizetype ply) {
 }
 
 void MainWindow::rebuild_move_list() {
-    // One row per move pair, white's move starting it: "1. e4 e5"; Explore's line, or on the
-    // Spar screen the session's moves or the replay's up to its ply.
+    // One row per move pair, white's move starting it: "1. e4 e5"; Explore's line, on the Spar
+    // screen the session's moves or the replay's up to its ply, on Repertoire its line, and
+    // nothing on Drill, whose card has no line.
     QStringList sans = line_san_;
     if (spar_active_ && replay_) {
         sans.clear();
@@ -323,6 +405,10 @@ void MainWindow::rebuild_move_list() {
         }
     } else if (spar_active_) {
         sans = spar_san_;
+    } else if (screen_ == Screen::repertoire) {
+        sans = repertoire_san_;
+    } else if (screen_ == Screen::drill) {
+        sans.clear();
     }
     move_list_->clear();
     for (qsizetype ply = 0; ply < sans.size(); ply += 2) {
@@ -382,8 +468,8 @@ void MainWindow::request_evaluation() {
     // request are dropped by their id.
     ++request_id_;
     engine_worker_->cancel_before(request_id_);
-    if (spar_active_) {
-        return; // Explore's engine idles while the board is Spar's
+    if (screen_ != Screen::explore) {
+        return; // Explore's engine idles while the board is another screen's
     }
     stored_score_.reset();
     engine_score_.reset();
@@ -421,7 +507,7 @@ void MainWindow::lines_ready(quint64 key, int request_id, const QVector<EngineLi
 void MainWindow::engine_failed(const QString& message) { explore_->show_engine_state(message); }
 
 void MainWindow::update_eval_bar() {
-    if (spar_active_) {
+    if (screen_ != Screen::explore) {
         eval_bar_->set_evaluation(std::nullopt, std::nullopt); // the bar is Explore's position's
         return;
     }
@@ -430,7 +516,8 @@ void MainWindow::update_eval_bar() {
 }
 
 void MainWindow::show_settings() {
-    auto* dialog = new SettingsDialog(settings_.engine(), settings_.spar(), this);
+    auto* dialog = new SettingsDialog(settings_.engine(), settings_.spar(),
+                                      settings_.repertoire_depth(), this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, dialog] {
         // Applying saves the settings and restarts the engines with them at the next search; a
@@ -439,11 +526,23 @@ void MainWindow::show_settings() {
         const SparSettings spar = dialog->spar();
         settings_.set_engine(engine);
         settings_.set_spar(spar);
+        settings_.set_repertoire_depth(dialog->repertoire_depth());
         emit configure_requested(engine);
         emit spar_configure_requested(engine, spar.seconds);
         request_evaluation();
+        if (screen_ == Screen::repertoire) {
+            repertoire_refresh(); // the coverage to the new depth
+        }
     });
     dialog->open();
+}
+
+void MainWindow::show_profile_error(const QString& message) {
+    auto* box =
+        new QMessageBox(QMessageBox::Warning, tr("Profile"), message, QMessageBox::Ok, this);
+    box->setObjectName(QStringLiteral("profile_error"));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
 }
 
 Position MainWindow::explore_position() const {
@@ -455,19 +554,33 @@ Position MainWindow::explore_position() const {
 }
 
 void MainWindow::screen_changed(int index) {
-    const bool spar = index == 1;
-    if (spar == spar_active_) {
+    const auto next = static_cast<Screen>(index);
+    if (next == screen_) {
         return;
     }
-    spar_active_ = spar;
-    new_game_action_->setEnabled(!spar);
-    back_action_->setEnabled(!spar);
-    if (spar) {
-        // Explore's engine idles while the board is Spar's, and its evaluation bar, which is
-        // Explore's position's, hides; its line waits as it was.
+    const Screen previous = screen_;
+    screen_ = next;
+    spar_active_ = next == Screen::spar;
+    new_game_action_->setEnabled(next == Screen::explore || next == Screen::repertoire);
+    back_action_->setEnabled(next == Screen::explore || next == Screen::repertoire);
+    if (previous == Screen::drill) {
+        leave_drill();
+    }
+    if (previous == Screen::explore) {
+        // Explore's engine idles while the board is another screen's, and its evaluation bar,
+        // which is Explore's position's, hides; its line waits as it was.
         ++request_id_;
         engine_worker_->cancel_before(request_id_);
-        update_eval_bar();
+    }
+    update_eval_bar();
+    switch (next) {
+    case Screen::explore:
+        board_->set_position(explore_position());
+        rebuild_move_list();
+        request_query();
+        request_evaluation();
+        break;
+    case Screen::spar: {
         Position position = Position::start();
         const std::vector<std::string> moves =
             replay_ ? std::vector<std::string>() : spar_uci_; // a replay restarts at its ply 0
@@ -481,21 +594,33 @@ void MainWindow::screen_changed(int index) {
         }
         rebuild_move_list();
         emit spar_list_requested();
-    } else {
-        board_->set_position(explore_position());
-        rebuild_move_list();
-        update_eval_bar();
-        request_query();
-        request_evaluation();
+        break;
     }
-    tier_selector_->setEnabled(!(spar && spar_running_)); // Explore's tier is its own
+    case Screen::repertoire:
+        enter_repertoire();
+        break;
+    case Screen::drill:
+        enter_drill();
+        break;
+    }
+    tier_selector_->setEnabled(!(spar_active_ && spar_running_)); // Explore's tier is its own
     update_board_input();
 }
 
 void MainWindow::update_board_input() {
-    const bool spar_input = spar_running_ && spar_started_ && !spar_waiting_ &&
-                            !spar_->interruption_shown() && !replay_;
-    board_->setEnabled(!spar_active_ || spar_input);
+    switch (screen_) {
+    case Screen::explore:
+    case Screen::repertoire:
+        board_->setEnabled(true);
+        break;
+    case Screen::spar:
+        board_->setEnabled(spar_running_ && spar_started_ && !spar_waiting_ &&
+                           !spar_->interruption_shown() && !replay_);
+        break;
+    case Screen::drill:
+        board_->setEnabled(drilling_ && card_.has_value() && !answered_);
+        break;
+    }
 }
 
 void MainWindow::face(bool white) {

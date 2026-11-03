@@ -1,5 +1,6 @@
 // The Settings dialog (Edit > Settings...): the engine's binary, threads, hash, seconds per
-// search and line count, and Spar's move limit and seconds per reply, as Settings stores them
+// search and line count, Spar's move limit and seconds per reply, and Repertoire's coverage
+// depth, as Settings stores them
 // (docs/reference/app.md, **Settings**). It only edits the values; the window saves and applies
 // them when the dialog is accepted. GUI thread only.
 #pragma once
@@ -19,11 +20,12 @@ class SettingsDialog : public QDialog {
     Q_OBJECT
 
   public:
-    SettingsDialog(const EngineSettings& engine, const SparSettings& spar,
+    SettingsDialog(const EngineSettings& engine, const SparSettings& spar, int repertoire_depth,
                    QWidget* parent = nullptr);
 
     [[nodiscard]] EngineSettings engine() const;
     [[nodiscard]] SparSettings spar() const;
+    [[nodiscard]] int repertoire_depth() const;
 
   private:
     QLineEdit* binary_;
@@ -33,6 +35,7 @@ class SettingsDialog : public QDialog {
     QSpinBox* lines_;
     QSpinBox* spar_end_move_;
     QDoubleSpinBox* spar_seconds_;
+    QSpinBox* repertoire_depth_;
 };
 
 } // namespace chesscoach::app

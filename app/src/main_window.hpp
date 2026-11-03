@@ -1,25 +1,31 @@
 // The main window (docs/reference/app.md, **Shell**): a toolbar with New game, Back, Flip board
 // and the tier selector; the evaluation bar and the board on the left with the move list below
-// them; the screen switcher on the right over the four screens, Explore live and the others
-// placeholders; the Edit > Settings, View > Theme and Help menus; the database and the engine in
-// the status bar. It keeps the line played on the board, sends each position at the selected
-// tier to the database worker and each position to the engine worker, each on its own thread,
-// and shows their answers; it never touches the opening store, the profile store or the engine
-// itself. GUI thread only. It writes the settings file itself (settings.hpp); the engine worker
-// writes the engine cache, profiles.db.
+// them; the screen switcher on the right over Explore, Spar, Repertoire and Drill; the Edit >
+// Settings, View > Theme and Help menus; the database and the
+// engine in the status bar. The board belongs to the current screen: it keeps Explore's line and
+// sends each position at the selected tier to the database worker and each position to the
+// engine worker; it runs Spar's sessions through the spar worker; and it builds the repertoires
+// and drills their cards through the profile worker, each worker on its own thread, and shows
+// their answers. It never touches the opening store, the profile store or an engine itself. GUI
+// thread only. It writes the settings file itself (settings.hpp); the workers write profiles.db.
 #pragma once
+
+#include <chesscoach/position.hpp>
 
 #include "engine_worker.hpp"
 #include "explore_data.hpp"
+#include "profile_data.hpp"
 #include "settings.hpp"
 #include "spar_data.hpp"
 
+#include <QHash>
 #include <QMainWindow>
 #include <QString>
 #include <QStringList>
 #include <QThread>
 #include <QVector>
 #include <QtGlobal>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -30,13 +36,17 @@ class QTabBar;
 class QComboBox;
 class QLabel;
 class QListWidget;
+class QTimer;
 
 namespace chesscoach::app {
 
 class BoardView;
 class DbWorker;
+class DrillScreen;
 class EvalBar;
 class ExploreScreen;
+class ProfileWorker;
+class RepertoireScreen;
 class SparScreen;
 class SparWorker;
 
@@ -69,6 +79,15 @@ class MainWindow : public QMainWindow {
     void spar_end_requested();
     void spar_list_requested();
     void spar_replay_requested(qint64 id);
+    void choice_requested(bool white, quint64 key, const QString& fen, const QString& uci);
+    void choice_removal_requested(bool white, quint64 key);
+    void repertoire_requested(bool white);
+    void coverage_requested(bool white, int tier, int depth);
+    void scores_requested(quint64 key, int tier);
+    void pgn_import_requested(const QString& path, bool white);
+    void sync_requested(bool white);
+    void due_requested(bool white);
+    void review_requested(qint64 card_id, int grade);
 
   private:
     void build_toolbar();
@@ -90,6 +109,37 @@ class MainWindow : public QMainWindow {
     void spar_replay_ready(const SparReplay& replay);
     void spar_replay_step(int delta);
     void face(bool white);
+    [[nodiscard]] static QString tier_text(int tier);
+    // Repertoire (main_window_repertoire.cpp).
+    void enter_repertoire();
+    void repertoire_move_played(const QString& uci, const QString& san);
+    void repertoire_go(const QStringList& line);
+    void repertoire_jump(qsizetype ply);
+    void repertoire_refresh();
+    void repertoire_update_position();
+    void repertoire_show_choice();
+    void repertoire_colour_changed(bool white);
+    void repertoire_choose(const QString& uci);
+    void repertoire_remove();
+    void repertoire_changed(bool white, const QString& message);
+    void repertoire_ready(const RepertoireData& repertoire);
+    void coverage_ready(const CoverageData& coverage);
+    void scores_ready(const ScoreData& scores);
+    void pgn_imported(const PgnImportInfo& import);
+    [[nodiscard]] Position repertoire_position() const;
+    // Drill (main_window_drill.cpp).
+    void enter_drill();
+    void leave_drill();
+    void drill_start();
+    void drill_move_played(const QString& uci, const QString& san);
+    void drill_record();
+    void drill_next();
+    void drill_grade(int grade);
+    void cards_synced(bool white, int created, int reset, int deleted);
+    void cards_ready(const CardsData& cards);
+    void review_recorded(qint64 card_id, qint64 due_at);
+    void profile_failed(const QString& message);
+    void show_profile_error(const QString& message);
     void jump_to(qsizetype ply);
     void rebuild_move_list();
     void request_query();
@@ -106,6 +156,7 @@ class MainWindow : public QMainWindow {
     void apply_theme(const QString& theme);
     void show_about();
 
+    QString data_dir_;
     Settings settings_;
     QString db_path_;
     QString data_version_;
@@ -116,11 +167,15 @@ class MainWindow : public QMainWindow {
     EngineWorker* engine_worker_; // lives on engine_thread_, deleted when it finishes
     QThread spar_thread_;
     SparWorker* spar_worker_; // lives on spar_thread_, deleted when it finishes
-    int request_id_ = 0;      // the evaluation the window waits for
+    QThread profile_thread_;
+    ProfileWorker* profile_worker_; // lives on profile_thread_, deleted when it finishes
+    int request_id_ = 0;            // the evaluation the window waits for
     BoardView* board_;
     EvalBar* eval_bar_;
     ExploreScreen* explore_;
     SparScreen* spar_;
+    RepertoireScreen* repertoire_;
+    DrillScreen* drill_;
     QTabBar* tabs_;
     QAction* new_game_action_ = nullptr;
     QAction* back_action_ = nullptr;
@@ -155,6 +210,28 @@ class MainWindow : public QMainWindow {
     QStringList spar_san_;
     std::optional<SparReplay> replay_;
     int replay_ply_ = 0;
+
+    // The screen the board belongs to.
+    enum class Screen : std::uint8_t { explore, spar, repertoire, drill };
+    Screen screen_ = Screen::explore;
+
+    // Repertoire: the line the board is at, from the start, and the colour's choices by key.
+    bool repertoire_white_ = true;
+    std::vector<std::string> repertoire_uci_;
+    QStringList repertoire_san_;
+    QHash<quint64, QString> choices_;
+
+    // Drill: the card shown, its answer and its grade, which is recorded once.
+    bool drilling_ = false;
+    std::optional<DrillCard> card_;
+    bool answered_ = false;
+    bool recorded_ = false;
+    int grade_ = 0;
+    bool applying_answer_ = false; // the board is showing the card's move, not the user's
+    QTimer* grade_timer_;          // ends the time to change a correct answer's grade
+    int reviewed_ = 0;
+    int correct_ = 0;
+    int again_ = 0;
 };
 
 } // namespace chesscoach::app

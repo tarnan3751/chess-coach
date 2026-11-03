@@ -6,8 +6,10 @@
 #include <chesscoach/version.hpp>
 
 #include "board_view.hpp"
+#include "drill_screen.hpp"
 #include "explore_screen.hpp"
 #include "main_window.hpp"
+#include "repertoire_screen.hpp"
 #include "spar_screen.hpp"
 #include "ui_harness.hpp"
 
@@ -25,8 +27,10 @@
 #include <string_view>
 
 using chesscoach::app::BoardView;
+using chesscoach::app::DrillScreen;
 using chesscoach::app::ExploreScreen;
 using chesscoach::app::MainWindow;
+using chesscoach::app::RepertoireScreen;
 using chesscoach::app::SparScreen;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
@@ -125,13 +129,10 @@ class MainWindowTest : public QObject {
         };
         QVERIFY(qobject_cast<const ExploreScreen*>(screens.widget(0)) != nullptr);
         QVERIFY(qobject_cast<const SparScreen*>(screens.widget(1)) != nullptr);
+        QVERIFY(qobject_cast<const RepertoireScreen*>(screens.widget(2)) != nullptr);
+        QVERIFY(qobject_cast<const DrillScreen*>(screens.widget(3)) != nullptr);
         for (int i = 0; i < 4; ++i) {
             QCOMPARE(tabs.tabText(i), names.at(i));
-        }
-        for (int i = 2; i < 4; ++i) {
-            const auto* label = qobject_cast<const QLabel*>(screens.widget(i));
-            QTEST_ASSERT(label != nullptr);
-            QCOMPARE(label->text(), names.at(i));
         }
         tabs.setCurrentIndex(2);
         QCOMPARE(screens.currentIndex(), 2);

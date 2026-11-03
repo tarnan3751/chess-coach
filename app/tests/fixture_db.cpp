@@ -234,6 +234,11 @@ template <typename T> void bind_optional(SQLite::Statement& statement, int index
 
 Key key_after(std::string_view moves) { return position_after(moves).key(); }
 
+void drop_cards(const std::filesystem::path& profiles_db) {
+    SQLite::Database db(profiles_db.string(), SQLite::OPEN_READWRITE);
+    db.exec("DELETE FROM cards");
+}
+
 void write_fixture_db(const std::filesystem::path& path) {
     const int flags =
         SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE; // NOLINT(bugprone-signed-bitwise)

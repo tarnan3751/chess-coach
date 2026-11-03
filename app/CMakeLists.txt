@@ -17,6 +17,8 @@ add_library(app_lib STATIC
   src/board_view.hpp
   src/db_worker.cpp
   src/db_worker.hpp
+  src/drill_screen.cpp
+  src/drill_screen.hpp
   src/default_profile.cpp
   src/default_profile.hpp
   src/engine_worker.cpp
@@ -30,6 +32,8 @@ add_library(app_lib STATIC
   src/explore_screen.hpp
   src/main_window.cpp
   src/main_window.hpp
+  src/main_window_drill.cpp
+  src/main_window_repertoire.cpp
   src/piece_set.cpp
   src/piece_set.hpp
   src/profile_data.hpp
@@ -37,6 +41,8 @@ add_library(app_lib STATIC
   src/profile_worker.hpp
   src/promotion_chooser.cpp
   src/promotion_chooser.hpp
+  src/repertoire_screen.cpp
+  src/repertoire_screen.hpp
   src/result_delegate.cpp
   src/result_delegate.hpp
   src/settings.cpp
@@ -89,7 +95,7 @@ if(BUILD_TESTING)
   # Each UI test saves its screenshots here, as <test>-<state>.png (tools/ui_tests.sh).
   set(chesscoach_screenshots "${PROJECT_BINARY_DIR}/ui-screenshots")
   foreach(test IN ITEMS ui_board_test ui_main_window_test ui_explore_test ui_engine_test
-                       ui_spar_test)
+                       ui_spar_test ui_repertoire_test ui_drill_test)
     chesscoach_add_test(app_${test} MODULE app KIND ui
                         SOURCES tests/${test}.cpp tests/ui_harness.hpp
                         LIBS chesscoach::app_lib app_test_fixture)
