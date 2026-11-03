@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -56,20 +57,23 @@ std::optional<std::int64_t> optional_integer(const SQLite::Column& column) {
     return column.isNull() ? std::nullopt : std::optional(column.getInt64());
 }
 
-// The meta table's rows, or nullopt when the table is not one of key and value columns. The
-// statement is finalized on return, before the connection can move into the store, so a
-// connection closed by a failed open has no statement left on it.
+// The meta table's rows, or nullopt when the table is not one of key and value columns, which is
+// when its query does not prepare. Reading the rows can still fail, on a corrupt file, and that
+// throws, for open to report as unreadable. The statement is finalized on return, before the
+// connection can move into the store, so a connection closed by a failed open has no statement
+// left on it.
 std::optional<Meta> read_meta(const SQLite::Database& db) {
+    std::unique_ptr<SQLite::Statement> rows;
     try {
-        Meta meta;
-        SQLite::Statement rows(db, "SELECT key, value FROM meta");
-        while (rows.executeStep()) {
-            meta.entries.emplace(rows.getColumn(0).getString(), rows.getColumn(1).getString());
-        }
-        return meta;
+        rows = std::make_unique<SQLite::Statement>(db, "SELECT key, value FROM meta");
     } catch (const SQLite::Exception&) {
         return std::nullopt;
     }
+    Meta meta;
+    while (rows->executeStep()) {
+        meta.entries.emplace(rows->getColumn(0).getString(), rows->getColumn(1).getString());
+    }
+    return meta;
 }
 
 // Every row of one table in the dump's order: a line per row, the record's name first, then each

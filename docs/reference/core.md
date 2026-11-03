@@ -90,8 +90,8 @@ possible, which is that a pawn of the side not to move stands where the push wou
 with the target and the square it passed empty, and that the position before the push was legal:
 with the pawn back on its origin square and the pushing side to move, the side now to move's king
 is not attacked (chess-library answers, on a board of that position). chess-library then drops the
-target too unless a capture onto it is legal for the side to move, pins and checks included. The castling field's letters may come in any order; the library
-prints them `KQkq`.
+target too unless a capture onto it is legal for the side to move, pins and checks included. The
+castling field's letters may come in any order; the library prints them `KQkq`.
 
 **SAN.** Accepted: `O-O`, `O-O-O`, `0-0`, `0-0-0`; a piece move `[KQRBN][a-h]?[1-8]?x?[a-h][1-8]`;
 a pawn move `[a-h][1-8]` or `[a-h]x[a-h][1-8]`, either with `=[QRBN]` on the last rank; then an
@@ -178,8 +178,8 @@ reads `meta` and prepares the three lookups once:
 | Error | When |
 |---|---|
 | `missing_file` | no regular file at the path |
-| `unreadable` | SQLite cannot read it (not a database, corrupt) |
-| `no_meta` | no `meta` table, or no `schema_version` row |
+| `unreadable` | SQLite cannot read it (not a database, corrupt, the `meta` table's rows included) |
+| `no_meta` | no `meta` table, one without `key` and `value` columns, or no `schema_version` row |
 | `wrong_version` | `schema_version` is not exactly `opening_schema_version` (`1`) |
 | `schema_mismatch` | a lookup does not prepare: `positions`, `nodes` or `moves` missing or misshapen |
 

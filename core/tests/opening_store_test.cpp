@@ -456,6 +456,28 @@ TEST_CASE("The store refuses a file it does not understand", "[store]") {
     }
     CHECK(open_error(dir.file("misshapen-meta.db")) == StoreError::no_meta);
 
+    // A meta table whose page is corrupt on disk is unreadable, not missing: the first bytes of
+    // its b-tree page, the page type among them, are overwritten.
+    {
+        std::int64_t root_page = 0;
+        std::int64_t page_size = 0;
+        {
+            SQLite::Database db(dir.file("corrupt-meta.db"), create_flags());
+            db.exec(chesscoach::openings_schema_sql());
+            insert_meta(db, "schema_version", "1");
+            root_page =
+                db.execAndGet("SELECT rootpage FROM sqlite_master WHERE name = 'meta'").getInt64();
+            page_size = db.execAndGet("PRAGMA page_size").getInt64();
+        }
+        REQUIRE(root_page > 1);
+        std::fstream file(dir.file("corrupt-meta.db"),
+                          std::ios::binary | std::ios::in | std::ios::out);
+        file.seekp((root_page - 1) * page_size);
+        const std::string garbage(16, '\xff');
+        file.write(garbage.data(), static_cast<std::streamsize>(garbage.size()));
+    }
+    CHECK(open_error(dir.file("corrupt-meta.db")) == StoreError::unreadable);
+
     for (const std::string_view version : {"2", "0", "01", " 1", ""}) {
         CAPTURE(version);
         const auto path = dir.file("versioned.db");
