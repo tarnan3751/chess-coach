@@ -31,9 +31,12 @@ data, §9 the process, §11 the decisions, §12 the resolved questions and §14 
 
 ## Stack (pinned)
 
-- **C++20.** Apple clang on macOS (the dev machine's Command Line Tools ship clang 15.0.0, which
-  lacks `std::expected` and has `std::format` only by OS version: use **fmt** and **tl::expected**
-  instead, see **Gotchas**), GCC or Clang on Linux. Warnings as errors.
+- **C++20.** Apple clang on macOS for the `dev` and `release` presets (the dev machine's Command
+  Line Tools ship clang 15.0.0, which lacks `std::expected` and has `std::format` only by OS
+  version: use **fmt** and **tl::expected** instead, see **Gotchas**); the sanitized `gate`
+  preset compiles with Homebrew LLVM's clang on macOS, because Apple clang 15's ASan runtime
+  crashes on macOS 26 (`docs/reference/testing-tools.md`, **Presets**); GCC or Clang on Linux.
+  Warnings as errors.
 - **CMake 3.28 or newer with presets** (`dev`, `gate`, `release`: configure, build and test
   presets of the same names), **Ninja**, **vcpkg in manifest mode** with a pinned baseline in
   `vcpkg-configuration.json`; overlay ports under `vcpkg/ports/` for what the registry lacks.
@@ -139,8 +142,9 @@ laptop. Treat them as hard rules.
   `docs/database.md`; the app reads them. The recommendation score is computed in `core` from
   stored numbers, with its components exposed, never a black box.
 - **The engine is a process.** Stockfish over UCI through `core`'s client: time-based searches,
-  every result cached by key, depth and line count, the client owning the handshake with never
-  two searches in flight. No Stockfish source is linked, ever.
+  every full-strength result cached by key and line count with the depth reached (a hit needs
+  the caller's minimum depth; limited-strength searches bypass the cache), the client owning the
+  handshake with never two searches in flight. No Stockfish source is linked, ever.
 - **Deterministic.** The same inputs and seed give the same outputs; the sparring sampler takes
   an explicit generator; no clock and no I/O in the pure parts, file access only through the
   store types.
@@ -211,7 +215,8 @@ PLAN.md          the plan: gitignored, read from the main tree
   `<name>_test.cpp` under `<module>/tests/`. Every file opens with a comment saying what it
   holds and which rules it obeys.
 - **Headers.** `#pragma once`; includes grouped as `.clang-format` orders them: the file's own
-  header, then `<chesscoach/...>`, then third-party, then the standard library.
+  header, then `<chesscoach/...>`, then quoted headers of the same module (`app`'s own), then
+  third-party, then the standard library.
 - **Namespaces.** Everything under `namespace chesscoach`, with a nested namespace per
   executable module where one helps (`chesscoach::pipeline`); no `using namespace` in a header.
 - **Errors.** `tl::expected<T, E>` at every library boundary, `E` an `enum class` or a small
@@ -256,8 +261,10 @@ PLAN.md          the plan: gitignored, read from the main tree
 - **Apple clang 15**: `std::expected` is C++23 and absent; `std::format` depends on the deployment
   target; the project uses `tl::expected` and `fmt`. Check the real header before using a C++20
   library feature.
-- **Sanitizers**: ASan on macOS has no LeakSanitizer, so a leak shows only in the Linux job; UBSan
-  flags signed overflow, so the Zobrist arithmetic is `uint64_t` throughout.
+- **Sanitizers**: ASan on macOS has no LeakSanitizer, so a leak shows only in the Linux job; the
+  macOS `gate` build uses Homebrew LLVM's clang and its ASan runtime (Apple clang 15's crashes on
+  macOS 26), and a `build/gate/` configured before that switch needs `rm -rf build/gate` once;
+  UBSan flags signed overflow, so the Zobrist arithmetic is `uint64_t` throughout.
 - **Lifetimes**: a `std::string_view` into the streaming parser's buffer dangles once the next
   chunk is read; copy what outlives the chunk.
 - **Paths** in tests are built from `std::filesystem::path` segments, never string literals with
