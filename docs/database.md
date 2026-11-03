@@ -41,14 +41,16 @@ the first check it fails, so the counters partition the skipped games.
 | 4 | `variant` | `Variant` is present and is not `Standard`, or a `SetUp` or `FEN` header is present |
 | 5 | `rating` | `WhiteElo` or `BlackElo` is absent or is not a decimal integer (Lichess writes `?`) |
 | 6 | `result` | `Result` is not `1-0`, `0-1` or `1/2-1/2` (an unfinished game is `*`) |
-| 7 | `moves` | a move before the depth cap (§6.4) cannot be read as legal SAN in its position |
+| 7 | `moves` | any of the game's first `max_ply` moves (§8) cannot be read as legal SAN in its position |
 
 Check 3 admits tournament games (`Rated Blitz tournament https://lichess.org/tournament/...`) and
 excludes `Bullet`, `UltraBullet` and `Correspondence`. The speed is the one Lichess wrote into
 `Event` when the game was played; `TimeControl` is not read. A game skipped for `moves`
 contributes nothing, not even the positions before the bad move; moves past the cap are never
-parsed, so a bad move there does not skip the game. Both passes apply the same checks and admit
-the same games. The result of an admitted game is its `Result` header.
+parsed, so a bad move there does not skip the game. A SAN token may carry, after an optional `+`
+or `#`, one of the annotation glyphs `!`, `?`, `!?`, `?!`, `!!` and `??`, which the scanner strips
+before parsing. Both passes apply the same checks and admit the same games. The result of an
+admitted game is its `Result` header.
 
 ## 4. Tiers
 
@@ -64,7 +66,7 @@ A game's tier comes from the average of the two ratings, `r = floor((WhiteElo + 
 | 5 | 2000 ≤ r ≤ 2199 |
 | 6 | r ≥ 2200 |
 
-Columns named `tier` hold the index. Tier 6 is the top tier, the one the Book badge reads (§7).
+Columns named `tier` hold the index. Tier 6 is the top tier, the one the Book badge reads (§7.3).
 Blitz, rapid and classical games are merged within a tier. Every count is per tier: there is no
 all-tiers row, and no lookup falls back to another tier.
 
@@ -151,7 +153,7 @@ below. Keys are §5.2's, moves §5.3's, tiers §4's.
 |---|---|
 | `schema_version` | `1` |
 | `data_version` | A decimal integer: `0` for every development build, the sample corpus included; a published database carries a positive number, incremented per publication and shown in the About dialog |
-| `months` | The input months as `YYYY-MM`, ascending, comma-separated, read from the input file names (`lichess_db_standard_rated_YYYY-MM.pgn.zst`); the pipeline refuses an input not named so |
+| `months` | The input months as `YYYY-MM`, ascending, comma-separated, read from the input file names (`lichess_db_standard_rated_YYYY-MM.pgn.zst`); the pipeline refuses an input not named so and refuses two inputs of the same month, so the sample corpus and any hand-made corpus are named as a month file |
 | `min_games` | The knob (§8), decimal |
 | `max_ply` | The knob (§8), decimal |
 | `tiers` | The lower bounds of tiers 1 to 6 (§4), comma-separated |
@@ -159,7 +161,8 @@ below. Keys are §5.2's, moves §5.3's, tiers §4's.
 | `pipeline_version` | The version of `chess-coach-pipeline` that wrote the file |
 | `eval_db` | The base name of the evaluation file merged (§9), or `none` |
 | `openings_tsv` | The base names of the TSV files read (§10), comma-separated in reading order, or `none` |
-| `games_admitted` | The number of admitted games over every month and tier, decimal |
+| `games_admitted` | The number of admitted games over every month and tier, decimal; the sum of the `admitted_tier_` keys |
+| `admitted_tier_0` to `admitted_tier_6` | The number of admitted games of that tier (§4), decimal, one key per tier |
 | `games_skipped` | The number of skipped games, decimal; the sum of the `skipped_` keys |
 | `skipped_malformed`, `skipped_unrated`, `skipped_speed`, `skipped_variant`, `skipped_rating`, `skipped_result`, `skipped_moves` | §3's counter of the same name, decimal, one key each |
 
@@ -201,7 +204,7 @@ PRIMARY KEY (key, tier, move)) WITHOUT ROWID`.
 One row for every move played from a surviving `(key, tier)` at that tier, whether or not its
 child survives. `child` is the key of the position after the move; it may have no `nodes` row at
 the tier, or no `positions` row at all. `white`, `draws` and `black` count the plays of the move
-by the game's result; their sum is the move's **total**. `badges` is §7's bit set. A lookup of a
+by the game's result; their sum is the move's **total**. `badges` is §7.3's bit set. A lookup of a
 position's moves at a tier is a range of the primary key.
 
 **Counting.** An admitted game of tier t visits each of its positions at plies 0 to `max_ply` and
@@ -216,11 +219,12 @@ a position visits it once per occurrence.
    total of at least one and a `nodes` row for its `(key, tier)`.
 2. Outflow: for every node, the sums of its moves' `white`, `draws` and `black` are at most the
    node's; the difference is the visits at which the game ended or reached the cap.
-3. Inflow: a node's visits at t equal the admitted games of tier t that start there (all of them
-   for the start position, none elsewhere) plus the plays into it at t from every parent, column
-   by column. The database stores only the plays from surviving parents, so there the stored
-   inflow is at most the node's counts; with `min_games` = 1 every visited position survives and
-   inflow holds with equality in the database.
+3. Inflow: a node's visits at t, column by column, equal the admitted games of tier t that start
+   there (every one of them for the start position, whose number is `admitted_tier_t` in `meta`;
+   none elsewhere) plus the plays into it at t from every parent. The database stores only the
+   plays from surviving parents, so there the stored inflow is at most the node's counts; with
+   `min_games` = 1 every visited position survives and inflow holds with equality in the
+   database.
 
 ## 7. Badges and off book
 
@@ -240,8 +244,8 @@ The pipeline computes the badges once, after the evaluation merge; the app reads
 For a `moves` row of parent p, tier t and move m, with child c:
 
 - **Share** at t is the move's total divided by the sum of the totals of p's `moves` rows at t.
-  "Share ≥ x%" is evaluated in integers as `100 * total ≥ x * sum`. A move with no row at t has
-  share zero at t.
+  A share whose sum is zero is zero, as is the share at t of a move with no row at t. "Share ≥
+  x%" is evaluated in integers as `sum > 0 and 100 * total >= x * sum`.
 - **Value** of an evaluated position, in centipawns from white's side: `eval_cp`, or for
   `eval_mate` m, `sign(m) * (100000 − |m|)`.
 - **Loss** is `max(0, s * value(p) − s * value(c))`, where s is +1 when white is to move at p and
@@ -254,14 +258,15 @@ For a `moves` row of parent p, tier t and move m, with child c:
 
 | Bit | Badge | Applies when |
 |---|---|---|
-| 1 | Book | p has a `nodes` row at tier 6, the move's share at tier 6 is at least `book_share`, and the loss is defined and at most `book_margin` |
+| 1 | Book | p has a `nodes` row at tier 6, the totals of p's `moves` rows at tier 6 sum to more than zero, the move's share at tier 6 is at least `book_share`, and the loss is defined and at most `book_margin` |
 | 2 | Popular | the move's share at t is at least `popular_share` |
 | 4 | Dubious | Popular applies, and the loss is defined and at least `dubious_margin` |
 
 A move with a missing evaluation on either side is therefore neither Book nor Dubious; a
-checkmate or stalemate is never evaluated (§9), so a move into one is neither. Book reads only tier
-6, so a move carries the same Book bit at every tier it was played at. Dubious implies Popular,
-and Book and Dubious never apply together.
+position with no legal moves has no usable first move, so §9 rule 5 never evaluates it, and a move
+into a checkmate or stalemate is neither. Book reads only tier 6, so a move carries the same Book
+bit at every tier it was played at. Dubious implies Popular, and Book and Dubious never apply
+together.
 
 **Off book.** A position is off book at tier t when it has no `nodes` row at t; a move leads off
 book at t when its child does. This is the pipeline's survival threshold (§6.3), so the app and
@@ -303,8 +308,9 @@ format notes at database.lichess.org):
 
 The FEN has four fields. `evals` is ordered by its number of principal variations; each pv has
 exactly one of `cp` and `mate`. Scores are from white's side (the file's head shows it, below), so
-the merge stores them unchanged. `line` is in UCI_Chess960 notation, where castling is the king
-moving onto its own rook (`e1h1`).
+the merge stores them unchanged. Lichess documents `line` as UCI_Chess960 notation, where
+castling is the king moving onto its own rook (`e1h1`); the file also carries castling in the
+standard two-square form (`e1g1`), so rule 3 accepts both.
 
 **Rule.** After pass two, when the surviving keys are known, the pipeline streams the file once:
 
@@ -313,13 +319,16 @@ moving onto its own rook (`e1h1`).
    any tier is ignored.
 2. Of the line's evaluations, the one with the greatest `depth` is chosen; ties go to the greater
    `knodes`, then to the earlier in the list.
-3. Its first pv gives `eval_cp` or `eval_mate`; the first move of its `line`, with a king move
-   onto its own rook rewritten as §5.3's castling move, gives `best_move`; its `depth` gives
-   `eval_depth`.
-4. When two lines normalize to the same key, rule 2 chooses between their chosen evaluations, and
-   the earlier line wins a full tie.
-5. A line the pipeline cannot read (malformed JSON or FEN, no usable first pv, a first move that
-   is not legal) is skipped and counted in the pipeline's report, and the run continues.
+3. The chosen evaluation's first pv gives `eval_cp` or `eval_mate`; its `depth` gives
+   `eval_depth`; the first move of its `line` gives `best_move`, written as §5.3's castling move
+   when it is a king move onto its own rook and kept as it is when it is already in the
+   two-square form, and it must be legal in the position after that rewrite.
+4. When two lines that rule 5 did not skip normalize to the same key, rule 2 chooses between their
+   chosen evaluations, and the earlier line wins a full tie.
+5. A line is skipped whole and counted in the pipeline's report, and the run continues, when it
+   is malformed JSON, when its FEN cannot be read, or when the chosen evaluation's first pv is
+   unusable under rule 3 (no score, no `line`, or a first move that is not legal); the merge never
+   falls back to another evaluation of the line.
 
 **Score perspective, as verified.** Lichess's notes do not state the perspective. The file does:
 in `6k1/6p1/6N1/4K3/4N3/8/8/8 b - -`, where black has a king and a pawn against two knights and
@@ -349,15 +358,25 @@ a transposition into a named position shows its name whatever the move order.
 ## 11. The canonical dump
 
 `chess-coach-cli dump` writes the whole database as UTF-8 text, one record per line, every line
-ending in LF (the last included), fields separated by one tab, no header. The records come in four
-groups, in this order:
+ending in LF (the last included), fields separated by one tab, no header. Each line's first field
+is its record name, `meta`, `position`, `node` or `move`, and the record's fields follow it. The
+records come in four groups, in this order:
 
-| Record | Fields | Order |
+| Record | Fields after the name | Order |
 |---|---|---|
 | `meta` | `<key> <value>` | By key, bytewise; every key but `built_at` and `pipeline_version` |
 | `position` | `<key> <fen> <eco> <name> <eval_cp> <eval_mate> <eval_depth> <best_move>` | By key as unsigned |
 | `node` | `<key> <tier> <games> <white> <draws> <black>` | By key as unsigned, then tier |
 | `move` | `<key> <tier> <move> <child> <white> <draws> <black> <badges>` | By key as unsigned, then tier, then move bytewise |
+
+One line of each record, with `<TAB>` standing for the tab character and the values illustrative:
+
+```
+meta<TAB>schema_version<TAB>1
+position<TAB>10026961946044190907<TAB>rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -<TAB>-<TAB>-<TAB>19<TAB>-<TAB>75<TAB>e2e4
+node<TAB>10026961946044190907<TAB>2<TAB>48210<TAB>23190<TAB>1904<TAB>23116
+move<TAB>10026961946044190907<TAB>2<TAB>e2e4<TAB>11769534657094819628<TAB>13410<TAB>1102<TAB>12915<TAB>3
+```
 
 Keys, `key` and `child` alike, are unsigned decimal (§5.2); other integers are decimal with a
 leading `-` when negative; text is written as stored; an absent value is `-`. No field holds a tab
@@ -377,9 +396,10 @@ UTC.
 ### 12.1 Versioning
 
 `meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)` holds `schema_version`. Each version has one SQL
-migration script that takes a file from the previous version to it. At open the store reads
-`schema_version`; it creates a missing file by running every script from version 1, migrates an
-older file by running each later script in order, each in its own transaction that sets
+migration script that takes a file from the previous version to it. At open the store creates an
+absent or zero-length file at version 1, by version 1's script, and refuses, without modifying
+it, an existing non-empty file that has no `meta` table. It then reads `schema_version`, migrates
+an older file by running each later script in order, each in its own transaction that sets
 `schema_version` as its last statement, and refuses a file newer than itself without modifying
 it. A test opens a file from every earlier version.
 
@@ -394,7 +414,7 @@ INTEGER NOT NULL)`. Version 1's script creates the profile `Default` at tier 2.
 |---|---|---|---|
 | `key` | `INTEGER` | no | The searched position's key |
 | `lines` | `INTEGER` | no | The search's line count (`MultiPV`) |
-| `line` | `INTEGER` | no | This line's `multipv` index, 1 to `lines` |
+| `line` | `INTEGER` | no | This line's `multipv` index, from 1 to the number of lines the search returned |
 | `depth` | `INTEGER` | no | The depth of this line's last `info` |
 | `score_cp` | `INTEGER` | yes | Centipawns from the side to move, as UCI gives it |
 | `score_mate` | `INTEGER` | yes | Mate in moves from the side to move, as UCI gives it; exactly one of the two scores is not null |
@@ -403,10 +423,15 @@ INTEGER NOT NULL)`. Version 1's script creates the profile `Default` at tier 2.
 | `created_at` | `INTEGER` | no | When the search finished |
 
 `PRIMARY KEY (key, lines, line)`. The engine cache's scores are from the side to move, unlike
-`openings.db`'s, which are from white's side. A lookup for `(key, lines)` with a minimum depth
-hits when rows 1 to `lines` all exist and the least of their depths is at least the minimum;
-otherwise the search runs and its rows replace the old ones in one transaction. The cache, like
-the key, ignores the move counters and the history.
+`openings.db`'s, which are from white's side. Only full-strength searches are cached: a
+limited-strength search (`UCI_LimitStrength`, as Spar runs) neither reads nor writes the cache.
+A search stores exactly the lines it returned, which are fewer than `lines` when the position has
+fewer legal moves, so a complete result has between one and `lines` rows. A lookup for `(key,
+lines)` with a minimum depth hits when at least one row exists for the pair and the least depth
+among its rows is at least the minimum. Otherwise the search runs, and its rows replace the
+stored ones, in one transaction, only when nothing is stored or its least depth is at least the
+stored least depth; when it is not, the stored rows are kept and returned. The cache, like the
+key, ignores the move counters and the history.
 
 ### 12.3 Version 2 (Phase 4): `spar_sessions`, provisional
 
@@ -421,7 +446,8 @@ Columns as provisional until Phase 5 lands and specifies them here:
 - `repertoire_nodes`: `profile_id`, `colour`, `key`, `fen`, `move` (the chosen move), primary key
   `(profile_id, colour, key)`; the FEN beside the key is what a re-keying migration reads (§14).
 - `cards`: `id INTEGER PRIMARY KEY`, `profile_id`, `colour`, `key`, `move`, and the SM-2 state
-  (ease, interval, repetitions, due).
+  (ease, interval, repetitions, due); a card carries no FEN and is re-keyed through its repertoire
+  node `(profile_id, colour, key)`.
 - `reviews`: `card_id`, `reviewed_at`, `grade`, enough to replay a card's history to its state.
 
 ## 13. Sampler and score inputs
@@ -432,8 +458,9 @@ probability proportional to it. The only temperature this contract defines is T 
 the weight is the move's total; it is the one Phase 4 ships. The intent of a temperature is a
 weight of `total^(1/T)`, but floating-point powers differ between platforms and would break
 replay, so any other temperature is exposed only after this section first defines its weight by
-an integer-only rule. The random generator is explicit and seeded, so the same seed gives the
-same draws. With no candidate the sampler returns no move.
+an integer-only rule. The generator is §5.2's splitmix64 with `state` set to the session's seed,
+one output per draw, so the same seed gives the same draws. With no candidate the sampler returns
+no move.
 
 **The draw.** The candidates are ordered by move text, bytewise. One raw 64-bit output of the
 generator, taken modulo the sum of the weights, selects the first candidate whose cumulative
@@ -460,4 +487,6 @@ shows are in `docs/reference/core.md`.
   opens a file of the previous version.
 - A change to the key (the tables, the seed, the draw order or normalization) changes every key in
   both databases: it needs a new `openings.db` `schema_version` and a `profiles.db` migration that
-  re-keys every stored key from the FEN stored beside it; engine cache rows are dropped instead.
+  re-keys every stored key from the FEN stored beside it; a card, which carries no FEN, is
+  re-keyed through its repertoire node `(profile_id, colour, key)`, and engine cache rows are
+  dropped instead.
