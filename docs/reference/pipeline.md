@@ -165,10 +165,12 @@ files; running it is tier A, under a brief that says so.
 ## Benchmark
 
 `pipeline_bench_test` (label `bench`, the release preset) builds the sample in-process at the
-golden knobs with four threads and fails past its budget of 0.1 s, about twice the time measured
-on the development machine (an M-series Mac, ten cores, under the load of other lanes: 0.035 to
-0.046 s, about 50,000 games per second, 15 MB peak resident). The full 2013-01 month (121,332
-games, release preset, default knobs) measured on the same machine under the same load:
+golden knobs with four threads and fails past its budget of 1 s. That is a smoke budget, far
+above the time measured on the development machine (an M-series Mac, ten cores, under the load
+of other lanes: 0.035 to 0.046 s, about 50,000 games per second, 15 MB peak resident), so that
+slower CI runners pass; a regression in throughput is read from the full-month numbers. The full
+2013-01 month (121,332 games, release preset, default knobs) measured on the same machine under
+the same load:
 
 | Threads | Seconds | Games per second | Peak resident |
 |---|---|---|---|

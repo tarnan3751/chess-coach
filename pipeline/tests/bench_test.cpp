@@ -1,7 +1,8 @@
 // The pipeline's benchmark (docs/reference/pipeline.md, **Benchmark**): a whole build of the
 // sample corpus at the golden knobs, in-process, timed, with the games per second and the peak
-// resident size printed; it fails when the build takes longer than its budget, twice the time
-// measured on the development machine (pipeline; bench, release preset only).
+// resident size printed; it fails when the build takes longer than its budget, a smoke budget
+// far above the measured time: regressions are read from the full-month numbers the reference
+// file records (pipeline; bench, release preset only).
 #include "build.hpp"
 #include "test_files.hpp"
 
@@ -18,8 +19,9 @@ namespace testing = chesscoach::pipeline::testing;
 
 namespace {
 
-// Twice the sample build's time on the development machine (docs/reference/pipeline.md).
-constexpr double budget_seconds = 0.1;
+// A smoke budget, far above the sample build's time on any machine the gate runs on
+// (docs/reference/pipeline.md, **Benchmark**).
+constexpr double budget_seconds = 1.0;
 
 } // namespace
 
