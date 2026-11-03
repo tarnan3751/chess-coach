@@ -4,8 +4,8 @@
 #include <chesscoach/tier.hpp>
 
 #include "result_delegate.hpp"
+#include "tables.hpp"
 
-#include <QAbstractItemView>
 #include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -22,37 +22,16 @@
 
 namespace chesscoach::app {
 
-namespace {
-
-QTableWidget* table(const QStringList& headers, QWidget* parent) {
-    auto* widget = new QTableWidget(0, static_cast<int>(headers.size()), parent);
-    widget->setHorizontalHeaderLabels(headers);
-    widget->verticalHeader()->hide();
-    widget->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    widget->setSelectionBehavior(QAbstractItemView::SelectRows);
-    widget->setSelectionMode(QAbstractItemView::SingleSelection);
-    widget->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    return widget;
-}
-
-QTableWidgetItem* item(const QString& text) {
-    auto* cell = new QTableWidgetItem(text);
-    cell->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-    return cell;
-}
-
-} // namespace
-
 SparScreen::SparScreen(QWidget* parent)
     : QWidget(parent), white_(new QRadioButton(tr("White"), this)),
       black_(new QRadioButton(tr("Black"), this)), start_(new QPushButton(tr("Start"), this)),
       end_(new QPushButton(tr("End session"), this)), status_(new QLabel(this)),
       interruption_(new QFrame(this)), reason_(new QLabel(interruption_)),
       played_(new QLabel(interruption_)),
-      better_(table({tr("Move"), tr("Badges"), tr("Games"), tr("Result")}, interruption_)),
+      better_(make_table({tr("Move"), tr("Badges"), tr("Games"), tr("Result")}, interruption_)),
       continue_(new QPushButton(tr("Continue"), interruption_)), summary_(new QFrame(this)),
       summary_text_(new QLabel(summary_)),
-      sessions_(table(
+      sessions_(make_table(
           {tr("Date"), tr("Tier"), tr("Colour"), tr("Moves"), tr("Interruptions"), tr("Result")},
           this)),
       replay_(new QPushButton(tr("Replay"), this)),
@@ -172,10 +151,10 @@ void SparScreen::show_interruption(const SparInterruption& interruption, bool co
     for (const SparChoice& choice : interruption.better) {
         const int row = better_->rowCount();
         better_->insertRow(row);
-        better_->setItem(row, 0, item(choice.san));
-        better_->setItem(row, 1, item(choice.badges));
-        better_->setItem(row, 2, item(QString::number(choice.total)));
-        auto* result = item(QString());
+        better_->setItem(row, 0, table_item(choice.san));
+        better_->setItem(row, 1, table_item(choice.badges));
+        better_->setItem(row, 2, table_item(QString::number(choice.total)));
+        auto* result = table_item(QString());
         const auto total = static_cast<double>(choice.total > 0 ? choice.total : 1);
         result->setData(shares_role, QVariant::fromValue(QList<double>{
                                          static_cast<double>(choice.white) / total,
@@ -218,18 +197,19 @@ void SparScreen::show_sessions(const QVector<SparSessionInfo>& sessions) {
     for (const SparSessionInfo& session : sessions) {
         const int row = sessions_->rowCount();
         sessions_->insertRow(row);
-        auto* date = item(QDateTime::fromSecsSinceEpoch(session.started_at)
-                              .toString(QStringLiteral("yyyy-MM-dd HH:mm")));
+        auto* date = table_item(QDateTime::fromSecsSinceEpoch(session.started_at)
+                                    .toString(QStringLiteral("yyyy-MM-dd HH:mm")));
         date->setData(Qt::UserRole, QVariant::fromValue(session.id));
         sessions_->setItem(row, 0, date);
         const std::string_view tier = tier_label(static_cast<Tier>(session.tier));
         sessions_->setItem(
-            row, 1, item(QString::fromUtf8(tier.data(), static_cast<qsizetype>(tier.size()))));
-        sessions_->setItem(row, 2, item(session.user_white ? tr("White") : tr("Black")));
-        sessions_->setItem(row, 3, item(QString::number(session.moves)));
-        sessions_->setItem(row, 4, item(QString::number(session.interruptions)));
-        sessions_->setItem(row, 5,
-                           item(session.result.isEmpty() ? tr("move limit") : session.result));
+            row, 1,
+            table_item(QString::fromUtf8(tier.data(), static_cast<qsizetype>(tier.size()))));
+        sessions_->setItem(row, 2, table_item(session.user_white ? tr("White") : tr("Black")));
+        sessions_->setItem(row, 3, table_item(QString::number(session.moves)));
+        sessions_->setItem(row, 4, table_item(QString::number(session.interruptions)));
+        sessions_->setItem(
+            row, 5, table_item(session.result.isEmpty() ? tr("move limit") : session.result));
     }
     if (sessions_->rowCount() > 0) {
         sessions_->selectRow(0);

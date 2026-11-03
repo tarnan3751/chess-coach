@@ -46,7 +46,9 @@ add_library(app_lib STATIC
   src/spar_worker.cpp
   src/spar_worker.hpp
   src/squares.cpp
-  src/squares.hpp)
+  src/squares.hpp
+  src/tables.cpp
+  src/tables.hpp)
 add_library(chesscoach::app_lib ALIAS app_lib)
 target_include_directories(app_lib PUBLIC src)
 target_link_libraries(app_lib PUBLIC chesscoach::core Qt6::Widgets Qt6::Svg Qt6::SvgWidgets
