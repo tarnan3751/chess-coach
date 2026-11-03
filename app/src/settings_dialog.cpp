@@ -15,9 +15,11 @@
 
 namespace chesscoach::app {
 
-SettingsDialog::SettingsDialog(const EngineSettings& engine, QWidget* parent)
+SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings& spar,
+                               QWidget* parent)
     : QDialog(parent), binary_(new QLineEdit(engine.binary, this)), threads_(new QSpinBox(this)),
-      hash_mb_(new QSpinBox(this)), seconds_(new QDoubleSpinBox(this)), lines_(new QSpinBox(this)) {
+      hash_mb_(new QSpinBox(this)), seconds_(new QDoubleSpinBox(this)), lines_(new QSpinBox(this)),
+      spar_end_move_(new QSpinBox(this)), spar_seconds_(new QDoubleSpinBox(this)) {
     setObjectName(QStringLiteral("settings_dialog"));
     setWindowTitle(tr("Settings"));
     binary_->setObjectName(QStringLiteral("engine_binary"));
@@ -53,6 +55,15 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, QWidget* parent)
     lines_->setObjectName(QStringLiteral("engine_lines_setting"));
     lines_->setRange(1, 10);
     lines_->setValue(engine.lines);
+    spar_end_move_->setObjectName(QStringLiteral("spar_end_move"));
+    spar_end_move_->setRange(1, 200);
+    spar_end_move_->setValue(spar.end_move);
+    spar_seconds_->setObjectName(QStringLiteral("spar_seconds"));
+    spar_seconds_->setRange(0.1, 60.0);
+    spar_seconds_->setDecimals(1);
+    spar_seconds_->setSingleStep(0.1);
+    spar_seconds_->setSuffix(tr(" s"));
+    spar_seconds_->setValue(spar.seconds);
 
     auto* form = new QFormLayout();
     form->addRow(tr("Engine"), binary_row);
@@ -60,6 +71,8 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, QWidget* parent)
     form->addRow(tr("Hash"), hash_mb_);
     form->addRow(tr("Seconds per search"), seconds_);
     form->addRow(tr("Lines"), lines_);
+    form->addRow(tr("Spar ends at move"), spar_end_move_);
+    form->addRow(tr("Seconds per spar reply"), spar_seconds_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -76,6 +89,10 @@ EngineSettings SettingsDialog::engine() const {
         .seconds = seconds_->value(),
         .lines = lines_->value(),
     };
+}
+
+SparSettings SettingsDialog::spar() const {
+    return SparSettings{.end_move = spar_end_move_->value(), .seconds = spar_seconds_->value()};
 }
 
 } // namespace chesscoach::app

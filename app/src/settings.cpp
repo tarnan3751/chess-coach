@@ -56,16 +56,18 @@ EngineSettings Settings::engine() const {
     return engine;
 }
 
-int Settings::spar_end_move() const {
+SparSettings Settings::spar() const {
+    SparSettings spar;
     bool ok = false;
-    const int end_move = read(QStringLiteral("spar/end_move")).toInt(&ok);
-    return ok && end_move >= 1 && end_move <= 200 ? end_move : 25;
-}
-
-double Settings::spar_seconds() const {
-    bool ok = false;
-    const double seconds = read(QStringLiteral("spar/seconds")).toDouble(&ok);
-    return ok && seconds >= 0.1 && seconds <= 60 ? seconds : 0.5;
+    if (const int end_move = read(QStringLiteral("spar/end_move")).toInt(&ok);
+        ok && end_move >= 1 && end_move <= 200) {
+        spar.end_move = end_move;
+    }
+    if (const double seconds = read(QStringLiteral("spar/seconds")).toDouble(&ok);
+        ok && seconds >= 0.1 && seconds <= 60) {
+        spar.seconds = seconds;
+    }
+    return spar;
 }
 
 std::optional<quint64> Settings::spar_seed() const {
@@ -84,6 +86,13 @@ void Settings::set_engine(const EngineSettings& engine) {
         {QStringLiteral("engine/hash_mb"), QString::number(engine.hash_mb)},
         {QStringLiteral("engine/seconds"), QString::number(engine.seconds)},
         {QStringLiteral("engine/lines"), QString::number(engine.lines)},
+    });
+}
+
+void Settings::set_spar(const SparSettings& spar) {
+    write({
+        {QStringLiteral("spar/end_move"), QString::number(spar.end_move)},
+        {QStringLiteral("spar/seconds"), QString::number(spar.seconds)},
     });
 }
 

@@ -3,8 +3,8 @@
 // meeting an interruption on a Dubious move and another on an off-book move, the hand-off to the
 // engine, the end at the move limit with the summary and the saved session listed, its replay with
 // the interruptions at their plies; a session as black, where the coach moves first; and End
-// session saving a stopped session. Screenshots of the interruption, the summary and the replay
-// (ui_harness.hpp, fixture_db.hpp).
+// session saving a stopped session; and the Settings dialog's spar entries. Screenshots of the
+// interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 
 #include "board_view.hpp"
@@ -15,7 +15,10 @@
 #include "ui_harness.hpp"
 
 #include <QAbstractButton>
+#include <QAction>
 #include <QComboBox>
+#include <QDialog>
+#include <QDoubleSpinBox>
 #include <QFrame>
 #include <QLabel>
 #include <QListWidget>
@@ -23,6 +26,7 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTabBar>
 #include <QTableWidget>
 #include <QTemporaryDir>
@@ -33,6 +37,7 @@ using chesscoach::app::BoardView;
 using chesscoach::app::EngineSettings;
 using chesscoach::app::MainWindow;
 using chesscoach::app::Settings;
+using chesscoach::app::SparSettings;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
 using chesscoach::app::test::FixtureDb;
@@ -261,6 +266,31 @@ class SparTest : public QObject {
         QTRY_COMPARE(rows(window, QStringLiteral("spar_sessions")), 1);
         QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 5), QStringLiteral("stopped"));
         QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("2"));
+    }
+
+    void the_settings_dialog_sets_the_spar_settings() {
+        const Session session(*db_);
+        MainWindow& window = *session.window;
+        child<QAction>(window, QStringLiteral("settings_action")).trigger();
+        auto& dialog = child<QDialog>(window, QStringLiteral("settings_dialog"));
+        QCOMPARE(child<QSpinBox>(dialog, QStringLiteral("spar_end_move")).value(), 4);
+        child<QSpinBox>(dialog, QStringLiteral("spar_end_move")).setValue(2);
+        child<QDoubleSpinBox>(dialog, QStringLiteral("spar_seconds")).setValue(0.3);
+        dialog.accept();
+        const SparSettings saved = Settings(session.data_dir).spar();
+        QCOMPARE(saved.end_move, 2);
+        QCOMPARE(saved.seconds, 0.3);
+
+        // The next session ends at move 2: after 1. d4 and the coach's reply.
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        press(window, QStringLiteral("spar_start"));
+        QTRY_VERIFY(board.isEnabled());
+        click(board, "d2");
+        click(board, "d4");
+        QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
+        QVERIFY(child<QLabel>(window, QStringLiteral("spar_summary_text"))
+                    .text()
+                    .contains(QStringLiteral("ended at its move limit")));
     }
 
     void the_spar_screen_leaves_explores_line_alone() {

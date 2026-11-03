@@ -15,6 +15,12 @@
 
 namespace chesscoach::app {
 
+// Spar's settings: the move number a session ends at and each off-book reply's seconds.
+struct SparSettings {
+    int end_move = 25;    // 1 to 200
+    double seconds = 0.5; // 0.1 to 60
+};
+
 class Settings {
   public:
     explicit Settings(const QString& data_dir);
@@ -30,15 +36,15 @@ class Settings {
     [[nodiscard]] EngineSettings engine() const;
     [[nodiscard]] static EngineSettings default_engine();
 
-    // Spar's: the move number a session ends at (25, 1 to 200), each off-book reply's seconds
-    // (0.5, 0.1 to 60), and a fixed seed, which only a harness sets (nullopt: the clock's).
-    [[nodiscard]] int spar_end_move() const;
-    [[nodiscard]] double spar_seconds() const;
+    // Spar's, each at its default when unset or out of range; and a fixed seed, which only a
+    // harness sets (nullopt: the clock's).
+    [[nodiscard]] SparSettings spar() const;
     [[nodiscard]] std::optional<quint64> spar_seed() const;
 
     void set_theme(const QString& theme);
     void set_last_tier(int tier);
     void set_engine(const EngineSettings& engine);
+    void set_spar(const SparSettings& spar);
 
     [[nodiscard]] QString file() const { return file_; }
 

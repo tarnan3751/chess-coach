@@ -252,11 +252,12 @@ tier selected), and the engine's `engine/binary` (empty for the default binary),
 0.1 to 60) and `engine/lines` (3, 1 to 10), and sparring's `spar/end_move` (25, 1 to 200: the
 move number that ends a session), `spar/seconds` (0.5, 0.1 to 60: each off-book reply's search)
 and `spar/seed` (unset: each session's seed is the clock's seconds; set, every session uses it),
-each at its default when unset or out of range. The spar settings have no dialog yet.
-*Edit > Settings…* (`SettingsDialog`, `settings_dialog`) edits the engine's: the binary with a
-Browse button, the threads, the hash, the seconds and the lines; accepting saves them, sends them
-to the engine worker, which restarts its engine with them at the next search, and evaluates the
-position again. Reading does not create anything; the first write, when the theme or the tier
+each at its default when unset or out of range. *Edit > Settings…* (`SettingsDialog`,
+`settings_dialog`) edits the engine's (the binary with a Browse button, the threads, the hash,
+the seconds and the lines) and Spar's move limit and seconds per reply (`spar_end_move`,
+`spar_seconds`); accepting saves them, sends them to the engine worker and the spar worker, which
+restart their engines with them at the next search, and evaluates the position again. A new move
+limit applies from the next session. Reading does not create anything; the first write, when the theme or the tier
 changes, creates the data directory and the file. This is the first thing the app writes: a run
 that changes no setting leaves the data directory as it found it, or absent.
 

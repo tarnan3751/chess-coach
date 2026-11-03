@@ -170,7 +170,7 @@ MainWindow::MainWindow(const QString& data_dir, QString db, QWidget* parent)
     connect(spar_worker_, &SparWorker::replay_ready, this, &MainWindow::spar_replay_ready);
     spar_thread_.setObjectName(QStringLiteral("spar"));
     spar_thread_.start();
-    emit spar_configure_requested(settings_.engine(), settings_.spar_seconds());
+    emit spar_configure_requested(settings_.engine(), settings_.spar().seconds);
 }
 
 MainWindow::~MainWindow() {
@@ -425,14 +425,17 @@ void MainWindow::update_eval_bar() {
 }
 
 void MainWindow::show_settings() {
-    auto* dialog = new SettingsDialog(settings_.engine(), this);
+    auto* dialog = new SettingsDialog(settings_.engine(), settings_.spar(), this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, dialog] {
-        // Applying saves the settings and restarts the engine with them at the next search.
+        // Applying saves the settings and restarts the engines with them at the next search; a
+        // new move limit applies from the next session.
         const EngineSettings engine = dialog->engine();
+        const SparSettings spar = dialog->spar();
         settings_.set_engine(engine);
+        settings_.set_spar(spar);
         emit configure_requested(engine);
-        emit spar_configure_requested(engine, settings_.spar_seconds());
+        emit spar_configure_requested(engine, spar.seconds);
         request_evaluation();
     });
     dialog->open();
@@ -514,7 +517,7 @@ void MainWindow::spar_start(bool user_white) {
     rebuild_move_list();
     const quint64 seed =
         settings_.spar_seed().value_or(static_cast<quint64>(QDateTime::currentSecsSinceEpoch()));
-    emit spar_start_requested(tier(), user_white, seed, settings_.spar_end_move());
+    emit spar_start_requested(tier(), user_white, seed, settings_.spar().end_move);
     update_board_input();
 }
 
