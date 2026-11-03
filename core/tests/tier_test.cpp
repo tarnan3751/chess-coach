@@ -1,9 +1,12 @@
 // Unit tests for chesscoach/tier.hpp (core; unit): every boundary of docs/database.md §4's table,
-// the floor of an odd sum, the stored index both ways, and the labels.
+// the floor of an odd sum, the lower bounds, the stored index both ways, and the labels. The lower
+// bounds' test has brackets in its name, which the labels test (cmake/labels_check.cmake) needs a
+// test to have.
 #include <chesscoach/tier.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cstdint>
 #include <limits>
 
@@ -40,6 +43,10 @@ TEST_CASE("tier_of averages the two ratings and floors an odd sum", "[tier]") {
           Tier::r2200_up);
     CHECK(tier_of(std::numeric_limits<int>::min(), std::numeric_limits<int>::min()) ==
           Tier::under_1200);
+}
+
+TEST_CASE("The lower bounds of tiers 1 to 6 are [1200, 1400, 1600, 1800, 2000, 2200]", "[tier]") {
+    CHECK(chesscoach::tier_lower_bounds == std::array{1200, 1400, 1600, 1800, 2000, 2200});
 }
 
 TEST_CASE("A tier's index is the stored value, and back", "[tier]") {

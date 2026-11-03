@@ -54,7 +54,9 @@ function(chesscoach_add_test target)
     catch_discover_tests(${target} TEST_LIST ${target}_TESTS)
     # catch_discover_tests's PROPERTIES loses the semicolon of a list value (LABELS "a;b" arrives
     # as LABELS a b), so the labels are set by a script ctest includes after the discovered
-    # tests, over the list of their names that catch_discover_tests defines.
+    # tests, over the list of their names that catch_discover_tests defines. That list holds each
+    # [ and ] of a name as the bytes 0x02 and 0x03 (CatchAddTests.cmake), since an unbalanced
+    # bracket would break the list, so the script restores them and sets one test at a time.
     # A property test's RapidCheck configuration rides on the same script.
     set(labels_script "${CMAKE_CURRENT_BINARY_DIR}/${target}_labels.cmake")
     set(environment "")
@@ -62,9 +64,13 @@ function(chesscoach_add_test target)
       set(environment " ENVIRONMENT \"RC_PARAMS=${CHESSCOACH_RC_PARAMS}\"")
     endif()
     file(WRITE "${labels_script}"
-         "if(${target}_TESTS)\n"
-         "  set_tests_properties(\${${target}_TESTS} PROPERTIES LABELS \"${arg_MODULE};${arg_KIND}\"${environment})\n"
-         "endif()\n")
+         "string(ASCII 2 open_bracket)\n"
+         "string(ASCII 3 close_bracket)\n"
+         "foreach(name IN LISTS ${target}_TESTS)\n"
+         "  string(REPLACE \"\${open_bracket}\" \"[\" name \"\${name}\")\n"
+         "  string(REPLACE \"\${close_bracket}\" \"]\" name \"\${name}\")\n"
+         "  set_tests_properties(\"\${name}\" PROPERTIES LABELS \"${arg_MODULE};${arg_KIND}\"${environment})\n"
+         "endforeach()\n")
     set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES "${labels_script}")
   endif()
 endfunction()

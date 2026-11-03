@@ -105,4 +105,10 @@ if(BUILD_TESTING)
            COMMAND "${CMAKE_COMMAND}" "-DCHESSCOACH_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
                    -P "${PROJECT_SOURCE_DIR}/cmake/boundary_check.cmake")
   set_tests_properties(boundary PROPERTIES LABELS "cmake;unit")
+  # Every test, Catch2 names with brackets included, carries a module and a kind label.
+  add_test(NAME labels
+           COMMAND "${CMAKE_COMMAND}" "-DCTEST=${CMAKE_CTEST_COMMAND}"
+                   "-DBUILD_DIR=${PROJECT_BINARY_DIR}"
+                   -P "${PROJECT_SOURCE_DIR}/cmake/labels_check.cmake")
+  set_tests_properties(labels PROPERTIES LABELS "cmake;unit")
 endif()

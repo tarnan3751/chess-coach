@@ -72,7 +72,13 @@ chesscoach_add_test(<target> MODULE <core|pipeline|cli|app>
   `catch_discover_tests` registers each `TEST_CASE` as its own ctest test, named by the test
   case, after the target is built. The labels are set by a small script ctest includes after the
   discovered tests (`build/<preset>/<module>/<target>_labels.cmake`), because
-  `catch_discover_tests(PROPERTIES LABELS "a;b")` loses the list's semicolon.
+  `catch_discover_tests(PROPERTIES LABELS "a;b")` loses the list's semicolon. Catch2's list of
+  the discovered names holds each `[` and `]` as the bytes 0x02 and 0x03, so the script restores
+  them and labels one test at a time, and a test case whose name has brackets keeps its labels.
+- **The `labels` ctest test** (labels `cmake;unit`) runs `cmake -P cmake/labels_check.cmake`,
+  which reads `ctest --show-only=json-v1` and fails on any test without exactly one module label
+  (`core`, `pipeline`, `cli`, `app`, or `cmake` for the build's own tests) and one kind label, and
+  when no test has brackets in its name (`core_tier_test` has one), so that case stays checked.
 - **Property tests** are Catch2 test cases that `REQUIRE(rc::check("<name>", [] { ... }))`
   with RapidCheck (`LIBS rapidcheck`). ctest runs every KIND `property` test with
   `RC_PARAMS="max_success=2000 seed=20261103"` (set by the same labels script), so each property
