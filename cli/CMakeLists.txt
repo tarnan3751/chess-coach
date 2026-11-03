@@ -5,6 +5,8 @@
 add_library(cli_commands STATIC
   src/commands/common.cpp
   src/commands/common.hpp
+  src/commands/drill.cpp
+  src/commands/drill.hpp
   src/commands/dump.cpp
   src/commands/dump.hpp
   src/commands/engine_common.cpp
@@ -15,6 +17,10 @@ add_library(cli_commands STATIC
   src/commands/explore.hpp
   src/commands/name.cpp
   src/commands/name.hpp
+  src/commands/profiles.cpp
+  src/commands/profiles.hpp
+  src/commands/repertoire.cpp
+  src/commands/repertoire.hpp
   src/commands/spar.cpp
   src/commands/spar.hpp
   src/commands/stats.cpp
@@ -66,6 +72,14 @@ if(BUILD_TESTING)
                              CHESSCOACH_FAKE_STOCKFISH_LEGAL="${CMAKE_CURRENT_SOURCE_DIR}/tests/fake-stockfish-legal.sh"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_assert_no_qt(cli_spar_test)
+
+  # repertoire, drill and profile on scratch data directories and the fixture database.
+  chesscoach_add_test(cli_repertoire_commands_test MODULE cli KIND unit
+                      SOURCES tests/repertoire_commands_test.cpp
+                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt)
+  target_compile_definitions(cli_repertoire_commands_test PRIVATE
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_assert_no_qt(cli_repertoire_commands_test)
 
   # Writes the fixture database for driving the CLI and the golden runner by hand; not a test.
   add_executable(cli_write_fixture tests/write_fixture.cpp)

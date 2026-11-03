@@ -37,8 +37,10 @@ store with the engine cache (`docs/reference/core.md`), which `chess-coach-cli e
 engine reply provider and the saved sessions of `profiles.db` version 2 (`docs/reference/core.md`),
 `chess-coach-cli spar` (`docs/reference/cli.md`), and the app's Spar screen on a spar worker of its
 own (interruptions with the better choices, the summary, the saved sessions and their replay,
-`docs/reference/app.md`); Phase 5's `core` part has begun with the SM-2 scheduler and repertoire
-coverage (`docs/reference/core.md`). **Phase 3 (app shell and Explore) is in progress:** the board
+`docs/reference/app.md`); Phase 5's `core` part has begun with the SM-2 scheduler, repertoire
+coverage, PGN import, and the repertoires, drill cards, reviews and export of `profiles.db`
+version 3 (`docs/reference/core.md`), which `chess-coach-cli repertoire`, `drill` and `profile`
+use (`docs/reference/cli.md`). **Phase 3 (app shell and Explore) is in progress:** the board
 (SVG pieces, two-click and drag input, hints, highlights, animation, flip, promotion); the main
 window with the tier selector and the move list; the Explore screen on `--db` through a database
 worker on its own thread (moves with badges, result bars, scores and top-tier shares, the evaluation

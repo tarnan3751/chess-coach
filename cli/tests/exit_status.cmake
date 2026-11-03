@@ -3,8 +3,9 @@
 #         -P exit_status.cmake
 # Every rejected command line and every command error prints exactly one line on stderr, nothing
 # on stdout, and exits 2; --version, --help and no arguments exit 0. No case needs a database:
-# the ones that open one name a file that does not exist. eval's and spar's cases may create
-# profiles.db in DATA_DIR, and none of them finds an engine.
+# the ones that open one name a file that does not exist. eval's, spar's, repertoire's, drill's and
+# profile's cases may create profiles.db in DATA_DIR, none of them changes it, and none of them
+# finds an engine.
 cmake_minimum_required(VERSION 3.28)
 
 if(NOT CLI OR NOT MISSING_DB OR NOT DATA_DIR)
@@ -78,6 +79,35 @@ expect(2 spar --data-dir "${DATA_DIR}" --list --script "e4")
 expect(2 spar --data-dir "${DATA_DIR}" --list --profile Nobody)
 expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --replay 1)
 expect(2 spar --data-dir "${DATA_DIR}" --db "${MISSING_DB}" --tier 3 --colour white --seconds 0)
+expect(0 repertoire --help)
+expect(0 repertoire coverage --help)
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white)
+expect(2 repertoire --data-dir "${DATA_DIR}" list)
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour green list)
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white --profile Nobody list)
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white add)
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white add --moves "e4 e9")
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white remove --moves "e4")
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white coverage --tier 3)
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white coverage --db "${MISSING_DB}")
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white coverage --db "${MISSING_DB}" --tier 3)
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white import "${MISSING_DB}")
+expect(2 repertoire --data-dir "${DATA_DIR}" --colour white import)
+expect(0 drill --help)
+expect(2 drill --data-dir "${DATA_DIR}" --colour white)
+expect(2 drill --data-dir "${DATA_DIR}" --colour white review 1)
+expect(2 drill --data-dir "${DATA_DIR}" --colour white review 1 meh)
+expect(2 drill --data-dir "${DATA_DIR}" --colour white review 999 good)
+expect(2 drill --data-dir "${DATA_DIR}" --colour white list --at soon)
+expect(0 profile --help)
+expect(2 profile list)
+expect(2 profile --data-dir "${DATA_DIR}")
+expect(2 profile --data-dir "${DATA_DIR}" create Club)
+expect(2 profile --data-dir "${DATA_DIR}" create Club --tier 7)
+expect(2 profile --data-dir "${DATA_DIR}" remove Nobody)
+expect(2 profile --data-dir "${DATA_DIR}" remove Default)
+expect(2 profile --data-dir "${DATA_DIR}" import "${MISSING_DB}")
+expect(2 profile --data-dir "${DATA_DIR}" export "${DATA_DIR}/profiles.db")
 
 if(failures)
   list(JOIN failures "\n  " listing)

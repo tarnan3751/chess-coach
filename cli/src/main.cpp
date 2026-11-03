@@ -1,16 +1,19 @@
 // chess-coach-cli: the entry point, wiring only (docs/reference/cli.md). It parses the command
-// line with CLI11 and runs one subcommand: dump, stats, explore or name, each over --db <file>,
-// or eval, over the profile store of --data-dir <dir>.
+// line with CLI11 and runs one subcommand: dump, stats, explore or name, each over --db <file>;
+// eval, spar, repertoire, drill or profile, over the profile store of --data-dir <dir>.
 // --version, --help, and the help when run without arguments, exit 0. A command line CLI11
 // rejects and an error a command returns each print one line on stderr and exit 2; an exception
 // that reaches main is reported on stderr with exit status 1.
 #include <chesscoach/engine.hpp>
 #include <chesscoach/version.hpp>
 
+#include "commands/drill.hpp"
 #include "commands/dump.hpp"
 #include "commands/eval.hpp"
 #include "commands/explore.hpp"
 #include "commands/name.hpp"
+#include "commands/profiles.hpp"
+#include "commands/repertoire.hpp"
 #include "commands/spar.hpp"
 #include "commands/stats.hpp"
 
@@ -22,6 +25,7 @@
 #include <cstdio>
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <string>
 
 namespace {
@@ -52,6 +56,101 @@ CLI::App* spar_command_of(CLI::App& app, chesscoach::cli::SparOptions& spar) {
         "spar", "Play a sparring session against the coach at a tier, or list or replay one.");
     command->add_option("--db", spar.db, "The opening database (not needed for --list)");
     command->add_option("--data-dir", spar.data_dir, "The data directory holding profiles.db")
+        ->required();
+    return command;
+}
+
+// A subcommand of repertoire, drill or profile, which also takes its parent's options after it.
+CLI::App* action_of(CLI::App& command, const std::string& name, const std::string& description) {
+    CLI::App* action = command.add_subcommand(name, description);
+    action->fallthrough();
+    return action;
+}
+
+// The name of the subcommand parsed under the command.
+std::string parsed_action(const CLI::App& command) {
+    const auto parsed = command.get_subcommands();
+    return parsed.empty() ? std::string() : parsed.front()->get_name();
+}
+
+// The options of coverage and gaps.
+void tier_options_of(CLI::App& action, chesscoach::cli::RepertoireOptions& options) {
+    action.add_option("--tier", options.tier, "The tier, 0 to 6")->required();
+    action.add_option("--depth", options.depth, "The plies walked from the start")
+        ->capture_default_str();
+    action.add_option("--limit", options.limit, "The gaps listed")->capture_default_str();
+}
+
+// repertoire and its subcommands, over a profile's repertoire for one colour.
+CLI::App* repertoire_command_of(CLI::App& app, chesscoach::cli::RepertoireOptions& options) {
+    CLI::App* command =
+        app.add_subcommand("repertoire", "Add to, list, import or measure a profile's repertoire.");
+    command->require_subcommand(1);
+    command->add_option("--data-dir", options.data_dir, "The data directory holding profiles.db")
+        ->required();
+    command->add_option("--colour", options.colour, "The repertoire's colour: white or black")
+        ->required();
+    command->add_option("--profile", options.profile, "The profile")->capture_default_str();
+    command->add_option("--db", options.db, "The opening database (coverage and gaps)");
+    action_of(*command, "add", "Choose, at each of the colour's positions, the line's move")
+        ->add_option("--moves", options.moves,
+                     "The moves from the start position, UCI or SAN, separated by spaces")
+        ->required();
+    action_of(*command, "remove", "Remove the choice at the position the line reaches")
+        ->add_option("--moves", options.moves,
+                     "The moves from the start position, UCI or SAN, separated by spaces")
+        ->required();
+    action_of(*command, "list", "List the choices");
+    tier_options_of(*action_of(*command, "coverage",
+                               "Print the share of games the repertoire answers and its largest "
+                               "gaps at a tier"),
+                    options);
+    tier_options_of(*action_of(*command, "gaps", "List the gaps at a tier, largest first"),
+                    options);
+    action_of(*command, "import", "Add the choices of a PGN file's games and variations")
+        ->add_option("file", options.pgn, "The PGN file")
+        ->required();
+    return command;
+}
+
+// drill and its subcommands, over the cards of a profile's repertoire for one colour.
+CLI::App* drill_command_of(CLI::App& app, chesscoach::cli::DrillOptions& options,
+                           std::int64_t& at) {
+    CLI::App* command = app.add_subcommand("drill", "List, review or sync a repertoire's cards.");
+    command->require_subcommand(1);
+    command->add_option("--data-dir", options.data_dir, "The data directory holding profiles.db")
+        ->required();
+    command->add_option("--colour", options.colour, "The repertoire's colour: white or black")
+        ->required();
+    command->add_option("--profile", options.profile, "The profile")->capture_default_str();
+    command->add_option("--at", at, "The time in Unix seconds (default: the clock's)");
+    action_of(*command, "list", "List the cards due");
+    CLI::App* review = action_of(*command, "review", "Grade a card");
+    review->add_option("card", options.card, "The card's id")->required();
+    review->add_option("grade", options.grade, "again, hard, good or easy")->required();
+    action_of(*command, "sync", "Bring the cards in step with the repertoire");
+    return command;
+}
+
+// profile and its subcommands, over the profiles of a data directory.
+CLI::App* profile_command_of(CLI::App& app, chesscoach::cli::ProfileOptions& options) {
+    CLI::App* command =
+        app.add_subcommand("profile", "List, create or remove profiles, or export or import them.");
+    command->require_subcommand(1);
+    command->add_option("--data-dir", options.data_dir, "The data directory holding profiles.db")
+        ->required();
+    action_of(*command, "list", "List the profiles");
+    CLI::App* create = action_of(*command, "create", "Create a profile");
+    create->add_option("name", options.name, "The profile's name")->required();
+    create->add_option("--tier", options.tier, "Its tier, 0 to 6")->required();
+    action_of(*command, "remove", "Remove a profile with everything it holds")
+        ->add_option("name", options.name, "The profile's name")
+        ->required();
+    action_of(*command, "export", "Write a copy of profiles.db to a new file")
+        ->add_option("path", options.path, "The file to write, which must not exist")
+        ->required();
+    action_of(*command, "import", "Replace profiles.db with an exported file")
+        ->add_option("path", options.path, "The exported file")
         ->required();
     return command;
 }
@@ -196,6 +295,14 @@ int main(int argc, char** argv) {
             spar_command->add_option("--replay", spar_replay, "Replay a saved session by its id");
         spar_list_option->excludes(spar_script_option);
 
+        chesscoach::cli::RepertoireOptions repertoire;
+        const CLI::App* repertoire_command = repertoire_command_of(app, repertoire);
+        chesscoach::cli::DrillOptions drill;
+        std::int64_t drill_at = 0;
+        const CLI::App* drill_command = drill_command_of(app, drill, drill_at);
+        chesscoach::cli::ProfileOptions profile;
+        const CLI::App* profile_command = profile_command_of(app, profile);
+
         chesscoach::cli::NameOptions name;
         CLI::App* name_command = app.add_subcommand(
             "name", "Print the name of the deepest named position along the moves.");
@@ -277,6 +384,21 @@ int main(int argc, char** argv) {
                 eval.engine.stockfish = eval_stockfish;
             }
             return report(chesscoach::cli::run_eval(eval, std::cout));
+        }
+        if (*repertoire_command) {
+            repertoire.action = parsed_action(*repertoire_command);
+            return report(chesscoach::cli::run_repertoire(repertoire, std::cout));
+        }
+        if (*drill_command) {
+            drill.action = parsed_action(*drill_command);
+            if (drill_command->count("--at") > 0) {
+                drill.at = drill_at;
+            }
+            return report(chesscoach::cli::run_drill(drill, std::cout));
+        }
+        if (*profile_command) {
+            profile.action = parsed_action(*profile_command);
+            return report(chesscoach::cli::run_profile(profile, std::cout));
         }
         if (*name_fen) {
             name.fen = fen;
