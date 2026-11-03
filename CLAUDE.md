@@ -196,8 +196,8 @@ laptop. Treat them as hard rules.
   results arrive by queued signal; a widget is touched only on the GUI thread.
 - **The board is a `QGraphicsView` scene** with SVG pieces, animated moves and our own hit
   testing in board coordinates; theming through one stylesheet. No Qt Quick.
-- **Every screen works with `--data-dir` and `--db`**; the app writes nowhere outside its data
-  directory.
+- **Every screen works with `--data-dir` and `--db`**; the app writes in its data directory and,
+  on an export, in the file the user picks, nowhere else.
 - **User-facing strings go through `tr()`** from the first screen; no translation files until a
   second language is asked for.
 - **Persistence is versioned SQLite** with a migration per version; a profile saved by any
