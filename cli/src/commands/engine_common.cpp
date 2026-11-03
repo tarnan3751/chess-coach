@@ -30,29 +30,6 @@ std::string_view describe(EngineError error) {
     return "failed";
 }
 
-std::string_view describe(ProfileError error) {
-    switch (error) {
-    case ProfileError::unwritable:
-        return "cannot be created or opened";
-    case ProfileError::not_profiles:
-        return "is not a profiles.db";
-    case ProfileError::newer_version:
-        return "was written by a newer version";
-    case ProfileError::migration_failed:
-        return "could not be migrated";
-    case ProfileError::invalid_name:
-    case ProfileError::duplicate_name:
-    case ProfileError::no_such_profile:
-    case ProfileError::last_profile:
-    case ProfileError::invalid_choice:
-    case ProfileError::no_such_card:
-        return "refused a profile change";
-    case ProfileError::storage:
-        return "could not be written";
-    }
-    return "failed";
-}
-
 bool is_file(const std::filesystem::path& path) {
     std::error_code error;
     return std::filesystem::is_regular_file(path, error);
@@ -89,8 +66,36 @@ std::optional<std::filesystem::path> on_path() {
 
 } // namespace
 
-Result<ProfileStore> open_profiles(const std::string& data_dir) {
-    auto profiles = ProfileStore::open(data_dir);
+std::string_view describe(ProfileError error) {
+    switch (error) {
+    case ProfileError::unwritable:
+        return "cannot be created or opened";
+    case ProfileError::not_profiles:
+        return "is not a profiles.db";
+    case ProfileError::newer_version:
+        return "was written by a newer version";
+    case ProfileError::migration_failed:
+        return "could not be migrated";
+    case ProfileError::invalid_name:
+        return "needs a name";
+    case ProfileError::duplicate_name:
+        return "already has a profile of that name";
+    case ProfileError::no_such_profile:
+        return "has no such profile";
+    case ProfileError::last_profile:
+        return "keeps its last profile";
+    case ProfileError::storage:
+        return "could not be written";
+    case ProfileError::invalid_choice:
+        return "refused a choice whose position or move is not valid";
+    case ProfileError::no_such_card:
+        return "has no such card";
+    }
+    return "failed";
+}
+
+Result<ProfileStore> open_profiles(const std::string& data_dir, const Clock& clock) {
+    auto profiles = ProfileStore::open(data_dir, clock);
     if (!profiles) {
         return fail(fmt::format("profiles.db in {} {}", data_dir, describe(profiles.error())));
     }

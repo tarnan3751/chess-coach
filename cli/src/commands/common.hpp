@@ -35,10 +35,11 @@ template <typename T> using Result = tl::expected<T, CommandError>;
 
 // A position resolved from the command line, with the keys of every position from the one it
 // started at to it: the start position and each position after a move of --moves, or the FEN's
-// position alone.
+// position alone; and the moves of --moves in UCI, none for a FEN.
 struct Resolved {
     Position position;
     std::vector<Key> path;
+    std::vector<std::string> moves;
 };
 
 // The position of --fen, or of --moves played from the start position (each move in UCI or SAN,

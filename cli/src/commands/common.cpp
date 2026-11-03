@@ -88,11 +88,11 @@ Result<Resolved> resolve_position(const std::optional<std::string>& fen,
         if (!position) {
             return fail(fmt::format("bad FEN \"{}\": {}", *fen, describe(position.error())));
         }
-        Resolved resolved{.position = std::move(*position), .path = {}};
+        Resolved resolved{.position = std::move(*position), .path = {}, .moves = {}};
         resolved.path.push_back(resolved.position.key());
         return resolved;
     }
-    Resolved resolved{.position = Position::start(), .path = {}};
+    Resolved resolved{.position = Position::start(), .path = {}, .moves = {}};
     resolved.path.push_back(resolved.position.key());
     if (!moves) {
         return resolved;
@@ -110,6 +110,7 @@ Result<Resolved> resolve_position(const std::optional<std::string>& fen,
                 fmt::format("bad move {} \"{}\": {}", number, move, describe(played.error())));
         }
         resolved.path.push_back(played->child);
+        resolved.moves.push_back(std::move(played->uci));
     }
     return resolved;
 }

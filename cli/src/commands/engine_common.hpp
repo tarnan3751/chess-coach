@@ -1,7 +1,8 @@
 // What eval and explore --engine share (docs/reference/cli.md, **eval**): finding the engine
 // binary, a search through the profile store's engine cache (a lookup, and on a miss the engine
 // started, searched and the result stored), and the text of an engine line: its score from the
-// side to move and its pv in SAN. The engine runs only through core's Engine, the cache only
+// side to move and its pv in SAN; with opening the profile store and the text of its errors, which
+// every command over --data-dir uses. The engine runs only through core's Engine, the cache only
 // through core's ProfileStore, the moves only through core's Position.
 #pragma once
 
@@ -15,6 +16,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace chesscoach::cli {
@@ -42,8 +44,13 @@ struct EngineAnswer {
     bool cached = false;
 };
 
-// The profile store of the data directory, which ProfileStore::open creates when missing.
-[[nodiscard]] Result<ProfileStore> open_profiles(const std::string& data_dir);
+// What a profile store error says after the file or the store it names: "profiles.db <text>".
+[[nodiscard]] std::string_view describe(ProfileError error);
+
+// The profile store of the data directory on the clock, which ProfileStore::open creates when
+// missing.
+[[nodiscard]] Result<ProfileStore> open_profiles(const std::string& data_dir,
+                                                 const Clock& clock = system_clock_seconds);
 
 // --stockfish when given; else the environment variable CHESS_COACH_STOCKFISH when set; else
 // stockfish on the PATH. An error when none of them names a file.
