@@ -21,8 +21,8 @@ heading of this file or of a doc.
 
 ## Status
 
-**Phases 0 to 4 are complete and Phase 5's `core` and CLI have landed; the app's Repertoire and
-Drill screens and Phase 6's release remain.** The skeleton (presets, the gate, the boundary
+**Phases 0 to 4 are complete and Phase 5's `core`, CLI and app screens have landed; Phase 6's
+release remains.** The skeleton (presets, the gate, the boundary
 check, CI on macOS and Ubuntu; `docs/reference/testing-tools.md`); the data contract
 (`docs/database.md`); `core` (the position key, `Position` over chess-library, tiers, badges,
 names, the read-only opening store and the canonical dump, the recommendation score, the UCI
@@ -34,14 +34,15 @@ passes with a count-min sketch, the evaluation merge, badges, names, the sample 
 golden dump, the benchmark; `docs/reference/pipeline.md`); the CLI (`dump`, `stats`, `explore`
 with `--score` and `--engine`, `name`, `eval`, `spar`, `repertoire`, `drill`, `profile`;
 `docs/reference/cli.md`); the app (the board, the shell, Explore on a database worker with the
-engine worker's lines and cancellation, the Spar screen on a spar worker, themes, settings in
+engine worker's lines and cancellation, the Spar screen on a spar worker, the Repertoire and
+Drill screens on a profile worker with profile export and import, themes, settings in
 `<data-dir>/settings.ini`, About, the UI harness with screenshots; `docs/reference/app.md`);
 and the macOS package with Qt and Stockfish inside, the licence texts in `legal/`,
 `tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`).
-In progress: the Repertoire and Drill screens, the review folds, the public-milestone files,
-and the release database (a recent month builds on the owner's machine). `PLAN.md` §7 lists
-the seven phases with their sizes, §6 the data, §9 the process, §11 the decisions, §12 the
-resolved questions and §14 the deferred path.
+In progress: the review folds, the public-milestone files, and the release database (a recent
+month builds on the owner's machine). `PLAN.md` §7 lists the seven phases with their sizes, §6
+the data, §9 the process, §11 the decisions, §12 the resolved questions and §14 the deferred
+path.
 
 ## Stack (pinned)
 

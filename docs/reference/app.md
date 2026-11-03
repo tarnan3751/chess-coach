@@ -2,22 +2,27 @@
 
 `chess-coach` is the Qt 6 Widgets application (`CLAUDE.md`, **app/ is presentation**). This file
 covers the main window, the board, the database worker, the engine worker, the Explore screen,
-the Spar screen and its worker, the settings, the themes, the About dialog, and the UI harness.
+the Spar screen and its worker, the profile worker, the Repertoire and Drill screens, export and
+import, the settings, the themes, the About dialog, and the UI harness.
 
 Every widget lives on the GUI thread. The opening database (`--db`) is opened read-only and read
 only by the database worker on its own thread (**Database worker**); the engine and the engine
 cache belong to the engine worker on another (**Engine worker**); a sparring session, with its
-own connection to `--db` and its own engine, belongs to the spar worker on a third (**Spar**).
-The app writes two files in `--data-dir`: `settings.ini`, only when a setting changes
-(**Settings**), and `profiles.db`, only when the engine worker stores a search (**Engine
-worker**) or the spar worker saves a session (**Spar**).
+own connection to `--db` and its own engine, belongs to the spar worker on a third (**Spar**);
+the repertoires and cards, with another connection to `--db` for coverage and the score, belong
+to the profile worker on a fourth (**Profile worker**). The app writes two files in
+`--data-dir`: `settings.ini`, only when a setting changes (**Settings**), and `profiles.db`, only
+when the engine worker stores a search (**Engine worker**), the spar worker saves a session
+(**Spar**), the profile worker changes a repertoire or a card (**Profile worker**), or a profile
+is imported (**Export and import**), which also leaves `profiles.db.previous`.
 
 ## Code
 
 | File | What |
 |---|---|
 | `app/src/main.cpp` | The entry point, wiring only: `QApplication`, `--data-dir` and `--db`, the window |
-| `main_window.{hpp,cpp}` | `MainWindow`: the frame, the line played, the worker's thread (**Shell**) |
+| `main_window.{hpp,cpp}` | `MainWindow`: the frame, the line played, the workers' threads, export and import (**Shell**) |
+| `main_window_repertoire.cpp`, `main_window_drill.cpp` | `MainWindow`'s Repertoire and Drill parts: the board on those screens and the profile worker's answers (**Repertoire**, **Drill**) |
 | `db_worker.{hpp,cpp}` | `DbWorker`, the database worker on its own thread (**Database worker**) |
 | `engine_worker.{hpp,cpp}` | `EngineWorker`, the engine and its cache on their own thread (**Engine worker**) |
 | `explore_data.hpp` | `ExploreData` and `ExploreMove`, the worker's answer for a position |
@@ -27,9 +32,15 @@ worker**) or the spar worker saves a session (**Spar**).
 | `spar_worker.{hpp,cpp}` | `SparWorker`, the live session, its store connections and its engine on their own thread (**Spar**) |
 | `spar_data.hpp` | The spar worker's answers: `SparState`, `SparInterruption`, `SparSummary`, the saved sessions, a replay |
 | `spar_screen.{hpp,cpp}` | `SparScreen`, the Spar screen (**Spar**) |
+| `profile_worker.{hpp,cpp}` | `ProfileWorker`, the repertoires and cards on their own thread (**Profile worker**) |
+| `profile_data.hpp` | The profile worker's answers: the repertoire tree, coverage, scores, a PGN import's counts, the cards due |
+| `repertoire_screen.{hpp,cpp}` | `RepertoireScreen`, the Repertoire screen (**Repertoire**) |
+| `drill_screen.{hpp,cpp}` | `DrillScreen`, the Drill screen (**Drill**) |
+| `default_profile.{hpp,cpp}` | The profile the app works on: Default, else the first |
+| `tables.{hpp,cpp}` | The read-only tables of Spar and Repertoire |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
-| `settings.{hpp,cpp}` | `Settings`: the theme, the last tier and the engine in `settings.ini` (**Settings**) |
-| `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings for the engine (**Settings**) |
+| `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
+| `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings (**Settings**) |
 | `about_dialog.{hpp,cpp}` | `AboutDialog`, the versions and the attributions (**About**) |
 | `board_view.{hpp,cpp}` | `BoardView`, the board: position, input, animation (**Board**) |
 | `board_scene.{hpp,cpp}` | `BoardScene`, the board's items and their layout, and the hit test |
@@ -46,34 +57,35 @@ which the executable and the UI tests link. The piece set and the two stylesheet
 
 `MainWindow(data_dir, db)` is titled `chess-coach <version>` and holds:
 
-- **A toolbar** (`toolbar`): *New game* (`new_game_action`: back to the start position),
-  *Back* (`back_action`, the platform's Back shortcut: one move back), both disabled on the Spar
-  screen, *Flip board*
-  (`flip_action`), and the tier selector (`tier_selector`), a `QComboBox` of the seven
-  `tier_label` strings with the tier index as each item's data, at the last tier the settings
-  hold, else tier 2 (`MainWindow::default_tier`).
-- **The menus**: *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with
-  *Light* and *Dark* (`theme_light`, `theme_dark`), and *Help* with *About chess-coach*
-  (`about_action`) and *About Qt* (`about_qt_action`).
+- **A toolbar** (`toolbar`): *New game* (`new_game_action`: back to the start position), *Back*
+  (`back_action`, the platform's Back shortcut: one move back), both working on Explore's line and
+  Repertoire's and disabled on Spar and Drill, *Flip board* (`flip_action`), and the tier selector
+  (`tier_selector`), a `QComboBox` of the seven `tier_label` strings with the tier index as each
+  item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`).
+- **The menus**: *File* with *Export profile…* and *Import profile…* (`export_action`,
+  `import_action`, **Export and import**), *Edit > Settings…* (`settings_action`, **Settings**),
+  *View > Theme* with *Light* and *Dark* (`theme_light`, `theme_dark`), and *Help* with *About
+  chess-coach* (`about_action`) and *About Qt* (`about_qt_action`).
 - **The evaluation bar** (`eval_bar`) and **the board** (`board`, a `BoardView`) on the left, and
   below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
   `1. e4 e5`.
 - **The screen switcher** on the right: a `QTabBar` (`screen_tabs`) over a `QStackedWidget`
-  (`screens`) with Explore (**Explore**), Spar (**Spar**), then Repertoire and Drill, each a
-  centred placeholder label for now.
+  (`screens`) with Explore (**Explore**), Spar (**Spar**), Repertoire (**Repertoire**) and Drill
+  (**Drill**). The board belongs to the current screen: a move on it goes to that screen's line,
+  session or card, and the evaluation bar and Explore's engine are idle on the other three.
 - **The status bar**: `database_status`, "No database" or the `--db` file's name (its tooltip the
   full path); `data_version_status`, "Data version <v>" once the database is open; and
   `engine_status`, "Engine: <state>" as the engine worker reports it ("not started" until then,
   "not found", the engine's name when idle, "searching").
 
-**The line.** The window keeps the moves played from the start position (UCI and SAN) and the key
-of every position along them. On Explore, a move on the board (`move_played`) appends to it (on
-Spar it goes to the session instead, **Spar**); clicking a row
-of the move list goes to the position after that row's last move, *Back* drops the last move, and
-*New game* drops them all: the window replays the line on a fresh `Position` into the board with
-`set_position`, without animation. After every change, and when the tier changes, the window asks
-the database worker for the position at the end of the line at the selected tier; after every
-change of position (not of tier), and once at start, it asks the engine worker to evaluate it.
+**The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
+every position along them. On Explore, a move on the board (`move_played`) appends to it (on the
+other screens it goes to theirs); clicking a row of the move list goes to the position after that
+row's last move, *Back* drops the last move, and *New game* drops them all: the window replays the
+line on a fresh `Position` into the board with `set_position`, without animation. After every
+change, and when the tier changes, the window asks the database worker for the position at the end
+of the line at the selected tier; after every change of position (not of tier), and once at start,
+it asks the engine worker to evaluate it.
 
 **The database.** With `--db`, the window asks the worker to open it at start; the status bar
 names it and, once open, shows its data version. When it does not open, a non-blocking message
@@ -247,23 +259,119 @@ nothing on Spar.
   with the position (`spar_replay_position`, "ply 3 of 6") on the board, and each interruption is
   shown read-only, without Continue, after the move it interrupted. *Start* ends the replay.
 
+## Profile worker
+
+`ProfileWorker` is a `QObject` on its own `QThread` for the window's life, set up like the
+others. It owns a `ProfileStore` connection to `<data-dir>/profiles.db`, through which every read
+and change of the repertoires and cards goes, under the Default profile (`default_profile`: the
+profile named Default, else the first, as the spar worker saves its sessions), and its own
+read-only `OpeningStore` connection to `--db` for coverage and the score; the GUI thread touches
+neither. `profiles.db` is opened when it exists or when a slot writes, so looking at an empty
+repertoire creates nothing. Its slots, reached by queued connection:
+
+| Slot | Answer |
+|---|---|
+| `set_choice(white, key, fen, uci)`, `remove_choice(white, key)` | `repertoire_changed(white, message)`; the store keeps the node's card in step |
+| `load_repertoire(white)` | `repertoire_ready(RepertoireData)`: the choices by key and the tree |
+| `compute_coverage(white, tier, depth)` | `coverage_ready(CoverageData)`: core's `compute_coverage` to `depth` plies, the gaps' lines in SAN |
+| `score_position(key, tier)` | `scores_ready(ScoreData)`: core's `score_moves` with each move's SAN |
+| `import_pgn(path, white)` | `pgn_imported(PgnImportInfo)`, then `repertoire_changed`: `import_repertoire_pgn` and `import_choices` |
+| `sync_cards(white)` | `cards_synced(white, created, reset, deleted)` |
+| `due_cards(white)` | `cards_ready(CardsData)`: the colour's cards due now, each with its FEN, its answer in SAN and its name, and both colours' due and total counts |
+| `record_review(card_id, grade)` | `review_recorded(card_id, due_at)` |
+| `export_profiles(path)` | `profiles_exported(path)`, or `export_failed(message)` |
+| `close_stores()` | Closes the profile store (**Export and import**) |
+
+A failure answers `profile_failed(message)`, which the current screen shows, or a message box
+off Repertoire and Drill. **The tree** is the repertoire's lines from the start, walked depth
+first: where the colour is to move, its choice; where the opponent is, each legal reply, by UCI,
+that reaches a position with a choice. A position is walked once, by the first line that reaches
+it, so a transposition shows under one line only, and a card is named by that line ("1. e4 e5
+2. Nf3"), by "the start position", or by its FEN when the tree does not reach it. "Now" is the
+clock's seconds, given to the store for the due cards and each review.
+
+## Repertoire
+
+On Repertoire the board is at a line of the screen's own, from the start, which the move list
+shows and *New game*, *Back* and the move list's rows go back along. `RepertoireScreen` holds:
+
+- the colour (`repertoire_white`, `repertoire_black`), whose repertoire is shown and edited; the
+  board turns to its side;
+- *Import PGN…* (`repertoire_import`), a file dialog and then `import_pgn`; the message line
+  (`repertoire_message`) gives the counts: "Imported 1 games and 0 variations: 2 choices, 1
+  added, 0 already made, 1 conflicts, 0 unparsable.", a conflict being a later move in the file
+  for a position it has chosen, or a choice the repertoire already answers differently, which it
+  keeps;
+- the coverage (`repertoire_coverage`), "Coverage at 1800-1999 to 20 plies: 62.5%", at the tier
+  selected and the depth in the settings, computed again after every change and at a change of
+  tier;
+- the tree (`repertoire_tree`, a `QTreeView`), the choices in bold, the opponent's replies plain;
+  a click on a move takes the board to the position after it;
+- the position (`repertoire_position`): "Your move here: Nf3", "No choice here yet…", or "The
+  opponent is to move…", and *Remove choice* (`repertoire_remove`);
+- the recommendation panel (`repertoire_scores`, when the colour is to move): Move, Sound, Loss,
+  Expected, Replies, Penalty, Score and Share, as core's score gives them, and *Choose*
+  (`repertoire_choose`), which makes the selected move the choice;
+- the gaps (`repertoire_gaps`): Mass, Line and FEN, most often met first, and *Go to*
+  (`repertoire_goto`), which takes the board to the selected gap.
+
+A board move where the colour is to move makes that move the position's choice, replacing any;
+a move where the opponent is to move only follows the line.
+
+## Drill
+
+`DrillScreen` holds the colour (`drill_white`, `drill_black`), "Due: 1 of 2 cards"
+(`drill_due`), both repertoires' progress, "White: 1 due / 2 total · Black: 0 due / 0 total"
+(`drill_progress`), *Sync cards* (`drill_sync`) and *Start drill* (`drill_start`), the status line
+(`drill_status`), the verdict (`drill_verdict`), *Hard*, *Easy* and *Next* (`drill_hard`,
+`drill_easy`, `drill_next`), and the summary (`drill_summary`, `drill_summary_text`).
+
+Entering the screen, or Sync cards, syncs the colour's cards with its repertoire and then asks for
+the cards due. A drill takes the first due card each time: the board at the card's position,
+turned to its colour, and "Your move after 1. e4 e5" (the opponent's last move is not known, so
+the position is named by its line). The board takes one move:
+
+- **correct**: "Correct: Nf3.", graded good unless *Hard* or *Easy* is pressed first; the grade
+  is recorded once, at the first of a press, *Next*, or the end of two seconds;
+- **wrong**: recorded as again at once; the verdict names the card's move, and the board goes
+  back to the card's position and plays it.
+
+*Next* asks for the cards due again, so a card answered is no longer among them; when none is
+due the drill ends with "Drill over: 2 reviewed, 1 correct, 1 again." Leaving the screen ends a
+drill the same way, and closing the window records a grade still open.
+
+## Export and import
+
+*File > Export profile…* writes a copy of `profiles.db` through the profile worker
+(`ProfileStore::export_profiles`, `docs/database.md` §12.5). An export never replaces a file, so
+the save dialog does not offer to, and a name that is taken gets a message box (`profile_error`).
+*File > Import profile…* replaces `profiles.db` with the chosen file. Every connection to it
+closes first: the engine worker's search stops, so that it answers at once, and the engine, spar
+and profile workers close their stores (`close_stores`, each a blocking queued call); then the
+window runs `ProfileStore::import_profiles` itself, a file operation, which migrates the copy and
+keeps the replaced file as `profiles.db.previous`. Each worker opens the file again at its next
+use, and the current screen reads it again. An error goes to the message box. A running spar
+session is kept and saved into the imported file when it ends.
+
 ## Settings
 
 `Settings` reads and writes `<data-dir>/settings.ini` through `QSettings` in INI format, never the
-registry or the platform's own settings store: `theme` (`light` or `dark`), `tier` (the last
-tier selected), and the engine's `engine/binary` (empty for the default binary),
-`engine/threads` (half the cores, at least one), `engine/hash_mb` (64), `engine/seconds` (2.0,
-0.1 to 60) and `engine/lines` (3, 1 to 10), and sparring's `spar/end_move` (25, 1 to 200: the
-move number that ends a session), `spar/seconds` (0.5, 0.1 to 60: each off-book reply's search)
-and `spar/seed` (unset: each session's seed is the clock's seconds; set, every session uses it),
-each at its default when unset or out of range. *Edit > Settings…* (`SettingsDialog`,
-`settings_dialog`) edits the engine's (the binary with a Browse button, the threads, the hash,
-the seconds and the lines) and Spar's move limit and seconds per reply (`spar_end_move`,
-`spar_seconds`); accepting saves them, sends them to the engine worker and the spar worker, which
-restart their engines with them at the next search, and evaluates the position again. A new move
-limit applies from the next session. Reading does not create anything; the first write, when the theme or the tier
-changes, creates the data directory and the file. This is the first thing the app writes: a run
-that changes no setting leaves the data directory as it found it, or absent.
+registry or the platform's own settings store: `theme` (`light` or `dark`), `tier` (the last tier
+selected), and the engine's `engine/binary` (empty for the default binary), `engine/threads` (half
+the cores, at least one), `engine/hash_mb` (64), `engine/seconds` (2.0, 0.1 to 60) and
+`engine/lines` (3, 1 to 10), and sparring's `spar/end_move` (25, 1 to 200: the move number that ends
+a session), `spar/seconds` (0.5, 0.1 to 60: each off-book reply's search) and `spar/seed` (unset:
+each session's seed is the clock's seconds; set, every session uses it), and Repertoire's
+`repertoire/depth` (20, 2 to 40: the coverage depth in plies), each at its default when unset or out
+of range. *Edit > Settings…* (`SettingsDialog`, `settings_dialog`) edits the engine's (the binary
+with a Browse button, the threads, the hash, the seconds and the lines), Spar's move limit and
+seconds per reply (`spar_end_move`, `spar_seconds`) and the coverage depth (`repertoire_depth`);
+accepting saves them, sends them to the engine worker and the spar worker, which restart their
+engines with them at the next search, evaluates the position again and, on Repertoire, computes the
+coverage again. A new move limit applies from the next session. Reading does not create anything;
+the first write, when the theme or the tier changes, creates the data directory and the file. This
+is the first thing the app writes: a run that changes no setting leaves the data directory as it
+found it, or absent.
 
 ## Themes
 
@@ -393,12 +501,26 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   interrupted on 1. a3 with its better choices, Continue, interrupted again on 2. h4 off book and
   answered by the engine, ended at its move limit with the summary and the saved session listed,
   and replayed with the interruptions at plies one and three; a session as black, where the
-  coach moves first and the board turns; End session saving a stopped session; and Explore's
-  line untouched by a session. Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
+  coach moves first and the board turns; End session saving a stopped session, and closing the
+  window saving one; the Settings dialog's spar entries ending the next session at the new limit;
+  and Explore's line and tier untouched by a session, the tier selector disabled only on Spar.
+  Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
+- `ui_repertoire_test`, on the same tier-4 tree: 1. e4 chosen by a board move and shown in the tree,
+  then replaced by 1. a3, each time with the coverage equal to core's `compute_coverage` on the same
+  stores; the gap 1. a3 e5 listed and Go to taking the board there; Choose setting Nf3 there from
+  the recommendation panel and Remove choice clearing it; a PGN import with its counts, a conflict
+  among them; the black repertoire, the board turned and white's move only followed; and an export,
+  refused a second time over the same file, imported back after the choice was removed. Screenshots:
+  `repertoire-gaps`, `repertoire-tree`.
+- `ui_drill_test`, on a white repertoire of two choices saved through `ProfileStore` with its
+  cards then deleted (`drop_cards` in the fixture), so that entering the screen syncs them back:
+  a drill with a correct move, graded good at Next and due again a day later, a wrong move,
+  graded again with the card's move played on the board, and the summary; and Easy changing a
+  correct move's grade. Screenshots: `drill-card`, `drill-summary`.
 
-The window and Explore tests set `CHESS_COACH_STOCKFISH` to a path that does not exist, so no
-real engine runs in them and they write nothing; the engine and Spar tests name the fake engine
-in their settings.
+The window, Explore, Repertoire and Drill tests set `CHESS_COACH_STOCKFISH` to a path that does
+not exist, so no real engine runs in them, and the window and Explore tests write nothing; the
+engine and Spar tests name the fake engine in their settings.
 
 `tools/ui_tests.sh [<regex>]` builds the `dev` preset, runs the UI tests (`ctest -L ui`, filtered
 by name with the regex), and lists the screenshots of the run; the full gate runs the same tests

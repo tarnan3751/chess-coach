@@ -12,11 +12,10 @@ name.
 ## Status
 
 As of 3 November 2026: pre-alpha, version 0.1.0, not yet released. The pipeline builds the
-tiered database from the Lichess dumps and the CLI queries it; the app has its Explore and Spar
-screens; Repertoire and Drill work in the CLI, and their screens in the app are still
-placeholders. The macOS package and the release workflow are in place, and no release has been
-published yet. The next milestones are the Repertoire and Drill screens, the first release
-database and version 1.0.
+tiered database from the Lichess dumps and the CLI queries it; the app has its four screens,
+Explore, Spar, Repertoire and Drill, and exports and imports its profile as one file. The macOS
+package and the release workflow are in place, and no release has been published yet. The next
+milestones are the first release database and version 1.0.
 
 ## The four screens
 
@@ -41,11 +40,22 @@ replied:
 
 ![Spar: the board after 1. a3 e5 and the interruption panel with the reason, the badges and loss of a3, and e4 and d4 as better choices](docs/images/spar-interruption.png)
 
-**Repertoire** holds your lines per colour and per profile and shows how much of what you will
-face at a tier they cover, with the largest gaps; lines can be imported from PGN. **Drill** turns
-every repertoire move into a card scheduled by spaced repetition (SM-2). Both work today through
-`chess-coach-cli repertoire` and `chess-coach-cli drill` (**The CLI**); their screens in the app
-come next.
+**Repertoire** holds your lines per colour, built by playing them on the board or imported from
+PGN, and shows how much of what you will face at a tier they cover, the largest gaps, and the
+recommended moves where your choice is still open. Here a white repertoire of 1. a3 and, after
+1... e5, 2. Nf3 chosen from the recommendation panel, which covers everything opponents play at
+the tier:
+
+![Repertoire: the tree of 1. a3 e5 2. Nf3, full coverage at 1800–1999, the choice at the current position and the recommendation panel](docs/images/repertoire.png)
+
+**Drill** turns every repertoire move into a card scheduled by spaced repetition (SM-2): the
+position comes up, you play your move, and a wrong one is shown on the board. Here a drill of two
+cards ended, the second answered wrong and its move played:
+
+![Drill: the summary of two cards reviewed, one correct and one again, with the answer Nf3 on the board](docs/images/drill.png)
+
+Both also work from a terminal through `chess-coach-cli repertoire` and `chess-coach-cli drill`
+(**The CLI**).
 
 ## Install
 
