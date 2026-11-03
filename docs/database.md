@@ -39,7 +39,7 @@ the first check it fails, so the counters partition the skipped games.
 | 2 | `unrated` | `Event` is absent or does not begin with `Rated ` (casual games) |
 | 3 | `speed` | the word after `Rated ` in `Event` is not exactly `Blitz`, `Rapid` or `Classical` |
 | 4 | `variant` | `Variant` is present and is not `Standard`, or a `SetUp` or `FEN` header is present |
-| 5 | `rating` | `WhiteElo` or `BlackElo` is absent or is not a decimal integer (Lichess writes `?`) |
+| 5 | `rating` | `WhiteElo` or `BlackElo` is absent or is not a decimal integer of at most nine digits (Lichess writes `?`) |
 | 6 | `result` | `Result` is not `1-0`, `0-1` or `1/2-1/2` (an unfinished game is `*`) |
 | 7 | `moves` | any of the game's first `max_ply` moves (§8) cannot be read as legal SAN in its position |
 
