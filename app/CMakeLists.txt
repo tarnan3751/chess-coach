@@ -32,6 +32,9 @@ add_library(app_lib STATIC
   src/main_window.hpp
   src/piece_set.cpp
   src/piece_set.hpp
+  src/profile_data.hpp
+  src/profile_worker.cpp
+  src/profile_worker.hpp
   src/promotion_chooser.cpp
   src/promotion_chooser.hpp
   src/result_delegate.cpp
