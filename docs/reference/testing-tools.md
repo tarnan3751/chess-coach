@@ -119,7 +119,10 @@ leak shows only in the Linux job.
 includes are regrouped into blocks: the file's own header (for a test, the header it tests),
 `<chesscoach/...>`, the app's own quoted headers, third-party headers (any `<...>` with a slash,
 a dot or a capital, Qt's included), then the standard library (`<lowercase_name>`). Namespace
-closing comments are added.
+closing comments are added. The two CI jobs format with different clang-format versions
+(Homebrew's current one on macOS, apt's on Ubuntu); if they ever format differently, the Ubuntu
+job's apt clang-format is the authority, and pinning one version on both through the PyPI
+clang-format wheels is the fix.
 
 `.clang-tidy` enables `bugprone-*`, `cert-*`, `clang-analyzer-*`, `concurrency-*`,
 `cppcoreguidelines-*`, `misc-*`, `modernize-*`, `performance-*`, `portability-*` and
@@ -128,8 +131,10 @@ closing comments are added.
 `cppcoreguidelines-pro-bounds-array-to-pointer-decay`, `cppcoreguidelines-owning-memory` (Qt
 parent ownership), both non-private-member-variables checks,
 `bugprone-easily-swappable-parameters`, `readability-function-cognitive-complexity`,
-`misc-include-cleaner` and `cppcoreguidelines-avoid-do-while`. The list starts from `-*`, so the
-compiler's own warnings are left to the build. Every finding is an error; headers are checked
+`misc-include-cleaner`, `cppcoreguidelines-avoid-do-while` and `portability-avoid-pragma-once`
+(the project's headers use `#pragma once`). The list starts from `-*`, so the compiler's own
+warnings are left to the build, and `ExtraArgs: ['-Wno-unknown-warning-option']` keeps clang from
+reporting the GCC-only warning flags in a GCC build's compile commands. Every finding is an error; headers are checked
 when their path is under one of the four modules. The gate runs `run-clang-tidy` over the
 `gate` build's `compile_commands.json` for the sources under `core/`, `pipeline/`, `cli/` and
 `app/`. A `NOLINT` names its check and sits on the one line it excuses.
@@ -180,8 +185,9 @@ copyright. To move it, change `REF`, `SHA512` (`shasum -a 512` of
 
 **Outside vcpkg:** Qt 6 Widgets, Svg, SvgWidgets and Test from Homebrew (6.12.0 at setup) or
 apt (6.4.2 on Ubuntu 24.04), `find_package(Qt6 6.4 ...)` in `app/` only; Stockfish 19 from
-Homebrew, a separate process, never linked; clang-format and clang-tidy from Homebrew's LLVM
-(23 at setup; the gate finds `run-clang-tidy` under the `llvm` keg) or apt. `NOTICE` names
+Homebrew, a separate process, never linked; clang-format from its own Homebrew formula
+(`clang-format`, 23 at setup) or apt; clang-tidy and `run-clang-tidy` from Homebrew's `llvm`
+(23 at setup; not linked into the `PATH`, so the gate looks in the keg) or apt. `NOTICE` names
 every component and its licence.
 
 ## Lanes and landing
