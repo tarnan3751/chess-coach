@@ -93,6 +93,11 @@ add_subdirectory(pipeline)
 add_subdirectory(cli)
 add_subdirectory(app)
 
+# The macOS package: cmake --build --preset release --target package (cmake/packaging.cmake).
+if(APPLE)
+  include(cmake/packaging.cmake)
+endif()
+
 if(BUILD_TESTING)
   # The module boundary and the no-network rule over the sources, the same patterns as
   # tools/gates.sh's boundary step.

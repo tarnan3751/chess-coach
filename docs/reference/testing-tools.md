@@ -1,9 +1,9 @@
 # Tests and tools
 
 How the build is configured, how the tests are declared and selected, what the gate runs, the
-module boundary check, the compiler, format and tidy settings, CI, the pinned dependencies, and
-how lanes deliver and land a series. The commands are in `CLAUDE.md`, **Commands**; the rules
-they enforce are in `CLAUDE.md`, **Architecture rules**.
+module boundary check, the compiler, format and tidy settings, CI, the macOS package, the
+pinned dependencies, and how lanes deliver and land a series. The commands are in `CLAUDE.md`,
+**Commands**; the rules they enforce are in `CLAUDE.md`, **Architecture rules**.
 
 ## Presets
 
@@ -175,6 +175,64 @@ is kept in the Actions cache, keyed by the OS and the hash of `vcpkg.json`,
 `vcpkg-configuration.json` and `vcpkg/ports/`. On a failure the job uploads
 `build/gate-failures/`. `.github/dependabot.yml` updates the actions weekly. macOS minutes cost
 ten times Ubuntu's on a private repository (`PLAN.md` §9).
+
+## Packaging
+
+`cmake --build --preset release --target package` makes `chess-coach-<version>-macos-<arch>.dmg`
+in `build/release/` with CPack's DragNDrop generator: an image named `chess-coach <version>`
+holding `chess-coach.app` and a link to `/Applications`, the version being `project()`'s and the
+arch the build's (`CMAKE_OSX_ARCHITECTURES`, else the processor). `cmake/packaging.cmake` is
+included at the root on macOS only; Linux and Windows packages come after 1.0.
+
+The `app` target stays a plain executable, so the `dev` and `gate` builds hold no bundle and
+nothing of the packaging runs in a build. The install rules assemble the bundle in CPack's
+staging directory: `Contents/MacOS/chess-coach`; `Contents/Info.plist` from
+`cmake/Info.plist.in`, with the version and the placeholder bundle identifier
+`dev.chess-coach.app`; and `LICENSE`, `NOTICE` and `legal/` under `Contents/Resources/`. The
+pieces and the themes are compiled into the executable. CPack then runs
+`cmake/package_bundle.cmake` on the staged bundle (`CPACK_PRE_BUILD_SCRIPTS`), in four steps:
+
+- **The engine.** The Stockfish named by `CHESS_COACH_STOCKFISH` in the environment, else
+  `stockfish` on the `PATH` (the `PATH` alone, never an app bundle), is copied unmodified to
+  `Contents/Resources/engine/stockfish`, with `legal/stockfish.txt` (GPL-3.0) beside it as
+  `COPYING` and a `SOURCE.txt` naming the version from the `id name` of its `uci` answer, the
+  source `https://github.com/official-stockfish/Stockfish/releases/tag/sf_<version>`, and how the
+  binary was obtained, from the keg's `INSTALL_RECEIPT.json` when it is Homebrew's (a bottle or
+  a source build of the formula). No Stockfish, or one whose version is not a number like `19`
+  or `17.1`, fails the package. The binary is the build machine's CPU's.
+- **Qt.** `macdeployqt` from `brew --prefix qt` copies the frameworks the app links and their
+  libraries into `Contents/Frameworks/` and rewrites the references. It runs with `-no-plugins`
+  and is given three plugins to deploy for, copied into `Contents/PlugIns/` first: the cocoa
+  platform, the macOS style, and the offscreen platform, which lets the bundled app run
+  headless. Homebrew's `qt` installs every module's plugins in one directory, and
+  `macdeployqt`'s own plugin set would deploy the virtual keyboard and through it QtQuick, QtQml
+  and QtNetwork. `Contents/Resources/qt.conf` sets `Plugins = PlugIns`, so the app never loads a
+  plugin, and with it a second Qt, from Homebrew's prefix.
+- **The licences.** Every library `macdeployqt` copied in beside the Qt frameworks (ICU, GLib,
+  OpenSSL, FreeType, HarfBuzz and the rest that Homebrew's Qt links) must have its licence text
+  in `legal/<formula>.txt`, the formula being the Homebrew keg the library's
+  `<brew prefix>/opt/*/lib/` path resolves to, named without an `@<version>`; one that has none
+  fails the package, so a library Homebrew's Qt starts to link cannot ship without its licence.
+  `NOTICE` names each, under the libraries Qt depends on.
+- **The signature.** `codesign --force --deep --sign -` over the bundle: an ad-hoc signature,
+  which Apple silicon requires once `macdeployqt` has rewritten the binaries. Releases are not
+  signed with an identity or notarized.
+
+**The opening database is not bundled.** When the size rule (`PLAN.md` §12) lets a release carry
+one, configure with the cache variable `CHESS_COACH_BUNDLE_DB` set to the file
+(`cmake --preset release -DCHESS_COACH_BUNDLE_DB=<file>`), and the install rules copy it to
+`Contents/Resources/openings.db`; `-DCHESS_COACH_BUNDLE_DB=` clears it.
+
+`tools/package.sh` builds the `release` preset and the package, mounts the image read-only and
+checks the bundle: `otool -L` of the app binary shows only Qt frameworks through `@rpath`,
+`@loader_path` or `@executable_path` and system libraries, and no run path outside the bundle;
+the app, started under the offscreen platform with a scratch `--data-dir`, loads the bundle's
+offscreen plugin and is still running three seconds later, having loaded no library from
+outside the bundle but the system's (`DYLD_PRINT_LIBRARIES`), which a Homebrew Qt on the build
+machine would otherwise hide; and the bundled Stockfish answers `uci` with `uciok`, with
+`COPYING` and `SOURCE.txt` beside it. It prints the image's path and size and exits non-zero on
+the first failure. It takes minutes, so it is not part of the gate; anyone changing the packaging
+runs it.
 
 ## Dependencies
 

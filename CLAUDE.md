@@ -103,7 +103,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | The pipeline on the sample dump | `build/dev/pipeline/chess-coach-pipeline build --in pipeline/tests/sample/lichess_db_standard_rated_2013-01.pgn.zst --out <file>` |
 | Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` |
-| Package | `cmake --build --preset release --target package` (Phase 6) |
+| Package: the macOS disk image; the image built and checked mounted | `cmake --build --preset release --target package`; `tools/package.sh` |
 | Land a delivered series; in a batch, every series but the last with `--no-gate` | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--no-gate]` |
 | The changelog section for a release, from the commit log | `tools/changelog.sh <version> [<from-ref>] [<to-ref>]` |
 
