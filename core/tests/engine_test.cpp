@@ -1,0 +1,307 @@
+// Unit tests for chesscoach/engine.hpp against fake-uci (core; unit): every script of the fake
+// engine, with the exact result, the engine's state afterwards and, from the fake's log, exactly
+// what the client sent and in which order: isready before every position, one go at a time, stop
+// once, ucinewgame through new_game, the options only when they change.
+#include <chesscoach/engine.hpp>
+#include <chesscoach/position.hpp>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <future>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <thread>
+#include <vector>
+
+using chesscoach::Engine;
+using chesscoach::EngineError;
+using chesscoach::EngineOptions;
+using chesscoach::Position;
+using chesscoach::SearchLine;
+using namespace std::chrono_literals;
+
+namespace {
+
+constexpr std::string_view start_fen_sent =
+    "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+// The fake engine's log of what it received, in a file of its own under the build directory.
+class Log {
+  public:
+    explicit Log(std::string_view name)
+        : path_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "engine" /
+                (std::string(name) + ".log")) {
+        std::filesystem::create_directories(path_.parent_path());
+        std::filesystem::remove(path_);
+    }
+    [[nodiscard]] const std::filesystem::path& path() const { return path_; }
+    [[nodiscard]] std::vector<std::string> lines() const {
+        std::ifstream in(path_);
+        std::vector<std::string> lines;
+        for (std::string line; std::getline(in, line);) {
+            lines.push_back(line);
+        }
+        return lines;
+    }
+
+  private:
+    std::filesystem::path path_;
+};
+
+EngineOptions fake(std::string_view script, const Log& log, int delay_ms = 0,
+                   std::chrono::milliseconds reply_timeout = 1000ms) {
+    EngineOptions options;
+    options.arguments = {std::string(script), std::to_string(delay_ms), log.path().string()};
+    options.reply_timeout = reply_timeout;
+    return options;
+}
+
+Engine start(std::string_view script, const Log& log, int delay_ms = 0,
+             std::chrono::milliseconds reply_timeout = 1000ms) {
+    auto engine = Engine::start(CHESSCOACH_FAKE_UCI, fake(script, log, delay_ms, reply_timeout));
+    REQUIRE(engine.has_value());
+    return std::move(*engine);
+}
+
+SearchLine line(int multipv, int depth, int cp, std::vector<std::string> pv) {
+    return {
+        .multipv = multipv,
+        .depth = depth,
+        .score_cp = cp,
+        .score_mate = {},
+        .pv = std::move(pv),
+    };
+}
+
+std::vector<std::string> handshake() {
+    return {
+        "uci",
+        "setoption name Threads value 1",
+        "setoption name Hash value 16",
+        "isready",
+    };
+}
+
+std::vector<std::string> then(std::vector<std::string> first,
+                              std::initializer_list<std::string> more) {
+    first.insert(first.end(), more);
+    return first;
+}
+
+} // namespace
+
+TEST_CASE("The handshake records the name and sends the options", "[engine]") {
+    const Log log("handshake");
+    {
+        const auto engine = start("normal", log);
+        CHECK(engine.name() == "FakeUCI 1.0");
+        CHECK(engine.is_alive());
+    }
+    CHECK(log.lines() == then(handshake(), {"quit"}));
+}
+
+TEST_CASE("A search sends isready before its position and collects the last info per line",
+          "[engine]") {
+    const Log log("search");
+    {
+        auto engine = start("normal", log);
+        const auto result = engine.search(Position::start(), {.lines = 3, .seconds = 0.05});
+        REQUIRE(result.has_value());
+        CHECK(result->lines == std::vector{line(1, 3, 29, {"e2e4", "e7e5"}),
+                                           line(2, 3, 28, {"d2d4", "e7e5"}),
+                                           line(3, 3, 27, {"g1f3", "e7e5"})});
+        CHECK(result->best_move == "e2e4");
+        CHECK(result->engine_name == "FakeUCI 1.0");
+        CHECK_FALSE(result->limited);
+        CHECK_FALSE(result->elo.has_value());
+        CHECK_FALSE(result->stopped);
+
+        // The same line count again: no MultiPV, but isready before the position once more.
+        auto e4 = Position::start();
+        REQUIRE(e4.play_san("e4").has_value());
+        const auto again = engine.search(e4, {.lines = 3, .seconds = 0.05});
+        REQUIRE(again.has_value());
+        CHECK(again->lines.size() == 3);
+        REQUIRE(engine.new_game().has_value());
+        const auto one = engine.search(Position::start(), {.lines = 1, .seconds = 0.05});
+        REQUIRE(one.has_value());
+        CHECK(one->lines == std::vector{line(1, 3, 29, {"e2e4", "e7e5"})});
+    }
+    CHECK(log.lines() ==
+          then(handshake(),
+               {"setoption name MultiPV value 3", "isready", std::string(start_fen_sent),
+                "go movetime 50", "isready",
+                "position fen rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+                "go movetime 50", "ucinewgame", "isready", "setoption name MultiPV value 1",
+                "isready", std::string(start_fen_sent), "go movetime 50", "quit"}));
+}
+
+TEST_CASE("A limited search clamps the Elo to the engine's range and resets after", "[engine]") {
+    const Log log("limited");
+    {
+        auto engine = start("normal", log);
+        const auto low = engine.search(Position::start(), {.seconds = 0.02, .limit_elo = 800});
+        REQUIRE(low.has_value());
+        CHECK(low->limited);
+        CHECK(low->elo == 1320);
+        const auto high = engine.search(Position::start(), {.seconds = 0.02, .limit_elo = 5000});
+        REQUIRE(high.has_value());
+        CHECK(high->elo == 3190);
+        const auto full = engine.search(Position::start(), {.seconds = 0.02});
+        REQUIRE(full.has_value());
+        CHECK_FALSE(full->limited);
+        CHECK_FALSE(full->elo.has_value());
+    }
+    CHECK(log.lines() ==
+          then(handshake(),
+               {"setoption name UCI_LimitStrength value true", "setoption name UCI_Elo value 1320",
+                "isready", std::string(start_fen_sent), "go movetime 20",
+                "setoption name UCI_Elo value 3190", "isready", std::string(start_fen_sent),
+                "go movetime 20", "setoption name UCI_LimitStrength value false", "isready",
+                std::string(start_fen_sent), "go movetime 20", "quit"}));
+}
+
+TEST_CASE("stop() ends a search in progress, and a second call is busy meanwhile", "[engine]") {
+    const Log log("stop");
+    {
+        auto engine = start("normal", log);
+        const auto began = std::chrono::steady_clock::now();
+        auto running = std::async(std::launch::async, [&] {
+            return engine.search(Position::start(), {.lines = 1, .seconds = 5.0});
+        });
+        std::this_thread::sleep_for(200ms);
+        const auto second = engine.search(Position::start(), {});
+        REQUIRE_FALSE(second.has_value());
+        CHECK(second.error() == EngineError::busy);
+        const auto new_game = engine.new_game();
+        REQUIRE_FALSE(new_game.has_value());
+        CHECK(new_game.error() == EngineError::busy);
+        engine.stop();
+        const auto result = running.get();
+        const auto elapsed = std::chrono::steady_clock::now() - began;
+        REQUIRE(result.has_value());
+        CHECK(result->stopped);
+        CHECK(result->lines.size() == 1);
+        CHECK(result->best_move == "e2e4");
+        CHECK(elapsed < 1500ms);
+        CHECK(engine.is_alive());
+
+        // stop() with no search in progress changes nothing.
+        engine.stop();
+        const auto next = engine.search(Position::start(), {.seconds = 0.02});
+        REQUIRE(next.has_value());
+        CHECK_FALSE(next->stopped);
+    }
+    CHECK(log.lines() ==
+          then(handshake(), {"isready", std::string(start_fen_sent), "go movetime 5000", "stop",
+                             "isready", std::string(start_fen_sent), "go movetime 20", "quit"}));
+}
+
+TEST_CASE("A late readyok is waited for within the bound, and past it is a timeout", "[engine]") {
+    SECTION("within the bound") {
+        const Log log("late-readyok-within");
+        auto engine = start("late-readyok", log, 100, 1000ms);
+        const auto result = engine.search(Position::start(), {.seconds = 0.02});
+        REQUIRE(result.has_value());
+        CHECK(result->lines.size() == 1);
+        CHECK(engine.is_alive());
+    }
+    SECTION("past the bound") {
+        const Log log("late-readyok-past");
+        auto engine = start("late-readyok", log, 800, 200ms);
+        const auto result = engine.search(Position::start(), {.seconds = 0.02});
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error() == EngineError::timeout);
+        CHECK_FALSE(engine.is_alive());
+        CHECK(engine.search(Position::start(), {}).error() == EngineError::died);
+        CHECK(engine.new_game().error() == EngineError::died);
+    }
+}
+
+TEST_CASE("Interleaved, repeated, bound and junk info lines leave the last exact one per line",
+          "[engine]") {
+    const Log log("interleaved");
+    auto engine = start("interleaved-info", log);
+    const auto result = engine.search(Position::start(), {.lines = 2, .seconds = 0.02});
+    REQUIRE(result.has_value());
+    CHECK(result->lines == std::vector{line(1, 2, 25, {"e2e4", "e7e5", "g1f3"}),
+                                       SearchLine{.multipv = 2,
+                                                  .depth = 3,
+                                                  .score_cp = {},
+                                                  .score_mate = -2,
+                                                  .pv = {"d2d4", "e7e5"}}});
+    CHECK(result->best_move == "e2e4");
+}
+
+TEST_CASE("A missing bestmove is a timeout, and the engine is unusable after", "[engine]") {
+    const Log log("no-bestmove");
+    auto engine = start("no-bestmove", log, 0, 300ms);
+    const auto began = std::chrono::steady_clock::now();
+    const auto result = engine.search(Position::start(), {.seconds = 0.05});
+    const auto elapsed = std::chrono::steady_clock::now() - began;
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error() == EngineError::timeout);
+    CHECK(elapsed >= 340ms);
+    CHECK(elapsed < 2s);
+    CHECK_FALSE(engine.is_alive());
+    CHECK(engine.search(Position::start(), {}).error() == EngineError::died);
+}
+
+TEST_CASE("An engine dying mid-search is reported, and the engine is unusable after", "[engine]") {
+    const Log log("die-mid-search");
+    auto engine = start("die-mid-search", log);
+    const auto result = engine.search(Position::start(), {.seconds = 1.0});
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error() == EngineError::died);
+    CHECK_FALSE(engine.is_alive());
+    CHECK(engine.new_game().error() == EngineError::died);
+}
+
+TEST_CASE("Lines before uciok are ignored, and an engine without UCI_Elo cannot limit",
+          "[engine]") {
+    const Log log("garbage");
+    auto engine = start("garbage", log);
+    CHECK(engine.name() == "FakeUCI 1.0");
+    const auto result = engine.search(Position::start(), {.seconds = 0.02});
+    REQUIRE(result.has_value());
+    CHECK(result->lines.size() == 1);
+    const auto limited = engine.search(Position::start(), {.limit_elo = 1500});
+    REQUIRE_FALSE(limited.has_value());
+    CHECK(limited.error() == EngineError::unsupported);
+    CHECK(engine.is_alive());
+}
+
+TEST_CASE("An invalid request sends nothing", "[engine]") {
+    const Log log("invalid");
+    {
+        auto engine = start("normal", log);
+        CHECK(engine.search(Position::start(), {.lines = 0}).error() ==
+              EngineError::invalid_request);
+        CHECK(engine.search(Position::start(), {.seconds = 0.0}).error() ==
+              EngineError::invalid_request);
+        CHECK(engine.search(Position::start(), {.seconds = -1.0}).error() ==
+              EngineError::invalid_request);
+        CHECK(engine.is_alive());
+    }
+    CHECK(log.lines() == then(handshake(), {"quit"}));
+}
+
+TEST_CASE("A binary that cannot start is reported", "[engine]") {
+    const auto engine =
+        Engine::start(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "no-such-engine");
+    REQUIRE_FALSE(engine.has_value());
+    CHECK(engine.error() == EngineError::start_failed);
+}
+
+TEST_CASE("An engine moves with its process", "[engine]") {
+    const Log log("moved");
+    auto engine = start("normal", log);
+    auto moved = std::move(engine);
+    const auto result = moved.search(Position::start(), {.seconds = 0.02});
+    REQUIRE(result.has_value());
+    CHECK(moved.is_alive());
+}

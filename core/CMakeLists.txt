@@ -6,6 +6,7 @@ configure_file("${PROJECT_SOURCE_DIR}/cmake/version_info.hpp.in"
 
 add_library(core STATIC
   include/chesscoach/badges.hpp
+  include/chesscoach/engine.hpp
   include/chesscoach/key.hpp
   include/chesscoach/names.hpp
   include/chesscoach/opening_schema.hpp
@@ -16,6 +17,7 @@ add_library(core STATIC
   include/chesscoach/version.hpp
   src/board_key.cpp
   src/board_key.hpp
+  src/engine.cpp
   src/names.cpp
   src/opening_schema.cpp
   src/opening_store.cpp
@@ -28,7 +30,9 @@ add_library(chesscoach::core ALIAS core)
 target_include_directories(core PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
                                        "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated>")
 find_package(SQLiteCpp CONFIG REQUIRED)
-target_link_libraries(core PUBLIC fmt::fmt tl::expected PRIVATE SQLiteCpp chesscoach::warnings)
+find_package(reproc++ CONFIG REQUIRED)
+target_link_libraries(core PUBLIC fmt::fmt tl::expected
+                           PRIVATE SQLiteCpp reproc++ chesscoach::warnings)
 # chess-library is one header that warns under our flags, so it comes in as a system include, and
 # only from core/src (never from a public header) and the one test that uses it as an oracle.
 find_path(CHESSCOACH_CHESS_LIBRARY_INCLUDE_DIR chess-library/chess.hpp REQUIRED)
@@ -36,8 +40,23 @@ target_include_directories(core SYSTEM PRIVATE "${CHESSCOACH_CHESS_LIBRARY_INCLU
 chesscoach_assert_no_qt(core)
 
 if(BUILD_TESTING)
+  # fake-uci: the scripted UCI engine core_engine_test drives; an executable, not a test.
+  add_executable(fake-uci tests/fake_uci.cpp)
+  target_link_libraries(fake-uci PRIVATE chesscoach::warnings)
+  chesscoach_assert_no_qt(fake-uci)
+
   chesscoach_add_test(core_badges_test MODULE core KIND unit
                       SOURCES tests/badges_test.cpp
+                      LIBS chesscoach::core)
+  chesscoach_add_test(core_engine_test MODULE core KIND unit
+                      SOURCES tests/engine_test.cpp
+                      LIBS chesscoach::core)
+  add_dependencies(core_engine_test fake-uci)
+  target_compile_definitions(core_engine_test PRIVATE
+                             CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
+  chesscoach_add_test(core_engine_stockfish_test MODULE core KIND engine
+                      SOURCES tests/engine_stockfish_test.cpp
                       LIBS chesscoach::core)
   chesscoach_add_test(core_key_test MODULE core KIND unit
                       SOURCES tests/key_test.cpp
@@ -81,6 +100,8 @@ if(BUILD_TESTING)
                       SOURCES tests/version_property_test.cpp
                       LIBS chesscoach::core rapidcheck)
   chesscoach_assert_no_qt(core_badges_test)
+  chesscoach_assert_no_qt(core_engine_test)
+  chesscoach_assert_no_qt(core_engine_stockfish_test)
   chesscoach_assert_no_qt(core_key_test)
   chesscoach_assert_no_qt(core_key_property_test)
   chesscoach_assert_no_qt(core_names_test)
