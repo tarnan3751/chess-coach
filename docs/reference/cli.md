@@ -12,7 +12,7 @@ through `core`'s `OpeningStore`, opened read-only, and plays moves only through 
 ```
 chess-coach-cli dump    --db <file>
 chess-coach-cli stats   --db <file>
-chess-coach-cli explore --db <file> --tier <0-6> [--fen "<fen>" | --moves "<moves>"]
+chess-coach-cli explore --db <file> --tier <0-6> [--fen "<fen>" | --moves "<moves>"] [--score]
 chess-coach-cli name    --db <file> (--fen "<fen>" | --moves "<moves>")
 chess-coach-cli --version | --help | <command> --help
 ```
@@ -74,6 +74,13 @@ Nc3 b1c3 P 100 40% 10% 50% 40% no
   position; and `yes` when its child is in book at the tier (has a `nodes` row there, §7.3),
   `no` when the move leads off book. A position with a `nodes` row and no moves (visited only
   at the depth cap, or where its games ended) prints no move lines.
+- With `--score`, each move line gains six columns, the recommendation score's components
+  (`docs/reference/core.md`, **The recommendation score**): `yes` or `no` for sound; the loss in
+  centipawns, or `-` when it is undefined; the expected score; the replies needed; the penalty;
+  and the score, the three fractions with three decimals. The lines keep their order:
+  ```
+  Nf3 g1f3 P 22 36% 5% 59% 45% yes yes 12 0.452 3 0.040 0.412
+  ```
 - A position that is off book at the tier (no `nodes` row there) prints, after the lines above,
   the one line `off book at tier <t> (<band>)`, and exits 0: an absent position is an answer,
   not an error.
@@ -110,7 +117,8 @@ are the `cli_commands` library, which the executable and the tests link.
   a handful of positions, nodes, moves, names and evaluations whose keys come from `Position`,
   and compares the whole output with the expected text: `--moves` in SAN and in UCI, two move
   orders reaching one position, badges, a mate score, a position without moves, an off-book
-  position, and every error a command returns.
+  position, the `--score` columns with their numbers worked out by hand, and every error a
+  command returns.
 - `cli_exit_status` (labels `cli;unit`) runs the executable on rejected command lines and
   failing commands and checks the status 2, the one line on stderr and the empty stdout, and
   status 0 for `--version`, `--help` and no arguments.
@@ -128,7 +136,8 @@ given another binary, prints a diff for every query that differs, and exits 1 wh
 `--update` rewrites the `.out` files from the current output instead.
 
 The queries: the dump's first 30 lines, `stats`, `explore` of the start position at tiers 0 and
-6, `explore` after 1. e4 c5 at tier 3, and `name` of an open Sicilian line. Their expected output
+6, `explore` after 1. e4 c5 at tier 3, with and without `--score`, and `name` of an open Sicilian
+line. Their expected output
 belongs to the sample corpus's database (`pipeline/tests/sample/`), which `tools/run_corpus.sh`
 builds and runs the queries against; a change that regenerates the sample's golden dump
 regenerates them too, with `--update` on that database (`build/dev/corpus/sample.db`).

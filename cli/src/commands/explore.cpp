@@ -2,12 +2,14 @@
 #include "explore.hpp"
 
 #include <chesscoach/badges.hpp>
+#include <chesscoach/score.hpp>
 #include <chesscoach/tier.hpp>
 
 #include <fmt/format.h>
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
 #include <string>
 
 namespace chesscoach::cli {
@@ -37,6 +39,14 @@ Result<std::string> san_of(const Position& position, const std::string& uci) {
                                 position.fen()));
     }
     return std::move(*san);
+}
+
+// The --score columns: sound, loss, expected, replies, penalty, score.
+std::string score_columns(const ScoreComponents& components) {
+    return fmt::format(" {} {} {:.3f} {} {:.3f} {:.3f}", components.sound ? "yes" : "no",
+                       components.loss ? std::to_string(*components.loss) : std::string("-"),
+                       components.expected_score, components.replies_needed, components.penalty,
+                       components.score);
 }
 
 } // namespace
@@ -86,6 +96,12 @@ Result<void> run_explore(const ExploreOptions& options, std::ostream& out) {
     for (const auto& move : moves) {
         sum += move.total();
     }
+    std::map<std::string, ScoreComponents, std::less<>> scores;
+    if (options.score) {
+        for (auto& components : score_moves(*store, key, *tier)) {
+            scores.emplace(components.move, std::move(components));
+        }
+    }
     for (const auto& move : moves) {
         const auto san = san_of(position, move.move);
         if (!san) {
@@ -93,10 +109,20 @@ Result<void> run_explore(const ExploreOptions& options, std::ostream& out) {
         }
         const std::int64_t total = move.total();
         const bool in_book = store->node(move.child, *tier).has_value();
-        out << fmt::format("{} {} {} {} {}% {}% {}% {}% {}\n", *san, move.move,
+        std::string columns;
+        if (options.score) {
+            const auto components = scores.find(move.move);
+            if (components == scores.end()) {
+                return fail(fmt::format("no score for the move {}: the position has no "
+                                        "positions row",
+                                        move.move));
+            }
+            columns = score_columns(components->second);
+        }
+        out << fmt::format("{} {} {} {} {}% {}% {}% {}% {}{}\n", *san, move.move,
                            badge_letters(move.badges), total, percent(move.white, total),
                            percent(move.draws, total), percent(move.black, total),
-                           percent(total, sum), in_book ? "yes" : "no");
+                           percent(total, sum), in_book ? "yes" : "no", columns);
     }
     return {};
 }

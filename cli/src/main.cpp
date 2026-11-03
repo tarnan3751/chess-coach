@@ -68,6 +68,8 @@ int main(int argc, char** argv) {
                 ->add_option("--moves", moves,
                              "The moves from the start position, UCI or SAN, separated by spaces")
                 ->excludes(explore_fen);
+        explore_command->add_flag("--score", explore.score,
+                                  "Append the recommendation score's components to each move");
 
         chesscoach::cli::NameOptions name;
         CLI::App* name_command = app.add_subcommand(

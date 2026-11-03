@@ -35,12 +35,13 @@ std::string run(const std::function<chesscoach::cli::Result<void>(std::ostream&)
 }
 
 std::string explore(const std::string& db, int tier, std::optional<std::string> moves,
-                    std::optional<std::string> fen = std::nullopt) {
+                    std::optional<std::string> fen = std::nullopt, bool score = false) {
     const chesscoach::cli::ExploreOptions options{
         .db = db,
         .tier = tier,
         .fen = std::move(fen),
         .moves = std::move(moves),
+        .score = score,
     };
     return run([&](std::ostream& out) { return chesscoach::cli::run_explore(options, out); });
 }
@@ -151,6 +152,26 @@ TEST_CASE("explore prints the start position's moves at a tier", "[cli]") {
                                                       "d4 d2d4 BP 55 45% 27% 27% 55% no\n"
                                                       "e4 e2e4 BP 45 44% 33% 22% 45% yes\n",
                                                       start_fen, key_after("")));
+}
+
+TEST_CASE("explore --score appends the score's components to each move", "[cli]") {
+    const FixtureDb db;
+    // At tier 3, white to move, the start position at 19 cp:
+    // e4: (520 + 60 + 30) / 1260 = 0.484; e4 at 30 cp gains, loss 0; e4's replies 300, 250, 50:
+    //     two reach 80% of 600, penalty 0.020, score 0.464.
+    // d4: (300 + 30 + 30) / 660 = 0.545; d4 at 20 cp, loss 0; replies 200, 100: two of 300,
+    //     penalty 0.020, score 0.525.
+    // Nf3: (80 + 10 + 30) / 220 = 0.545; Nf3 unevaluated, loss -; replies 60, 20: two of 80.
+    // f3: (10 + 0 + 30) / 100 = 0.400; f3 off book and unevaluated: no replies, no penalty.
+    CHECK(explore(db.path(), 3, std::nullopt, std::nullopt, true) ==
+          fmt::format("fen: {}\n"
+                      "key: {}\n"
+                      "eval: cp 19 depth 40 best e4 e2e4\n"
+                      "e4 e2e4 BP 600 43% 10% 47% 60% yes yes 0 0.484 2 0.020 0.464\n"
+                      "d4 d2d4 BP 300 50% 10% 40% 30% yes yes 0 0.545 2 0.020 0.525\n"
+                      "Nf3 g1f3 B 80 50% 13% 38% 8% yes yes - 0.545 2 0.020 0.525\n"
+                      "f3 f2f3 - 20 25% 0% 75% 2% no yes - 0.400 0 0.000 0.400\n",
+                      start_fen, key_after("")));
 }
 
 TEST_CASE("explore orders equal totals by move text", "[cli]") {
