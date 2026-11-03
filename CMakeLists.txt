@@ -59,6 +59,14 @@ include(cmake/warnings.cmake)
 include(cmake/sanitizers.cmake)
 include(cmake/boundary.cmake)
 
+find_package(fmt CONFIG REQUIRED)
+find_package(tl-expected CONFIG REQUIRED)
+if(BUILD_TESTING)
+  include(cmake/testing.cmake)
+endif()
+
+add_subdirectory(core)
+
 if(BUILD_TESTING)
   # The module boundary and the no-network rule over the sources, the same patterns as
   # tools/gates.sh's boundary step.
