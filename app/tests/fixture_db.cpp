@@ -1,7 +1,8 @@
 // The app tests' opening database (fixture_db.hpp): the CLI fixture's rows (cli/tests/fixture.cpp,
 // which app/ cannot link), and a small tree at tier 4 for the Spar tests. The counts are consistent
 // with the counting rule of docs/database.md §6.4 at tier 3; tiers 0 and 6 hold only a few rows.
-// Badges are set by hand and are not recomputed from §7.
+// Badges are set by hand, as §7.3 gives them for these rows: Book only where the parent has a
+// tier-6 node, the move at least 5% of it and both positions evaluated within 50 cp.
 #include "fixture_db.hpp"
 
 #include <chesscoach/opening_schema.hpp>
@@ -146,8 +147,8 @@ const std::vector<NodeRow>& nodes() {
         node("e4 e5", 3, 140, 30, 130), node("d4", 3, 150, 30, 120),
         node("d4 d5", 3, 100, 20, 80),  node("Nf3", 3, 40, 10, 30),
         node("Nf3 d5", 3, 30, 5, 25),   node("d4 d5 Nf3", 3, 80, 15, 65),
-        node("f3 e5 g4", 0, 0, 0, 10),  node("", 4, 45, 17, 38),
-        node("e4", 4, 30, 10, 20),      node("d4", 4, 5, 2, 3),
+        node("f3 e5 g4", 0, 0, 0, 10),  node("", 4, 44, 17, 38),
+        node("e4", 4, 30, 10, 20),      node("d4", 4, 4, 2, 3),
         node("a3", 4, 10, 5, 15),       node("a3 e5", 4, 5, 3, 12),
     };
     return rows;
@@ -155,34 +156,34 @@ const std::vector<NodeRow>& nodes() {
 
 const std::vector<MoveRow>& moves() {
     static const std::vector<MoveRow> rows{
-        move("", 0, "e2e4", "e4", 5, 1, 6, 2),
+        move("", 0, "e2e4", "e4", 5, 1, 6, 3),
         move("", 0, "f2f3", "f3", 4, 0, 4, 2),
         move("", 3, "e2e4", "e4", 260, 60, 280, 3),
         move("", 3, "d2d4", "d4", 150, 30, 120, 3),
-        move("", 3, "g1f3", "Nf3", 40, 10, 30, 1),
+        move("", 3, "g1f3", "Nf3", 40, 10, 30, 0),
         move("", 3, "f2f3", "f3", 5, 0, 15, 0),
         move("", 6, "e2e4", "e4", 20, 15, 10, 3),
         move("", 6, "d2d4", "d4", 25, 15, 15, 3),
         move("e4", 3, "e7e5", "e4 e5", 140, 30, 130, 2),
         move("e4", 3, "c7c5", "e4 c5", 110, 20, 120, 3),
-        move("e4", 3, "e7e6", "e4 e6", 10, 10, 30, 6),
+        move("e4", 3, "e7e6", "e4 e6", 10, 10, 30, 0),
         move("e4", 6, "c7c5", "e4 c5", 12, 8, 6, 3),
-        move("e4 c5", 3, "g1f3", "e4 c5 Nf3", 70, 10, 70, 3),
+        move("e4 c5", 3, "g1f3", "e4 c5 Nf3", 70, 10, 70, 2),
         move("e4 c5", 3, "b1c3", "e4 c5 Nc3", 40, 10, 50, 2),
-        move("d4", 3, "d7d5", "d4 d5", 100, 20, 80, 3),
+        move("d4", 3, "d7d5", "d4 d5", 100, 20, 80, 2),
         move("d4", 3, "g8f6", "d4 Nf6", 50, 10, 40, 2),
-        move("d4 d5", 3, "g1f3", "d4 d5 Nf3", 50, 10, 40, 3),
-        move("d4 d5", 3, "c2c4", "d4 d5 c4", 50, 10, 40, 3),
-        move("Nf3", 3, "d7d5", "Nf3 d5", 30, 5, 25, 3),
+        move("d4 d5", 3, "g1f3", "d4 d5 Nf3", 50, 10, 40, 2),
+        move("d4 d5", 3, "c2c4", "d4 d5 c4", 50, 10, 40, 2),
+        move("Nf3", 3, "d7d5", "Nf3 d5", 30, 5, 25, 2),
         move("Nf3", 3, "g8f6", "Nf3 Nf6", 10, 5, 5, 2),
-        move("Nf3 d5", 3, "d2d4", "Nf3 d5 d4", 30, 5, 25, 3),
+        move("Nf3 d5", 3, "d2d4", "Nf3 d5 d4", 30, 5, 25, 2),
         move("f3 e5 g4", 0, "d8h4", "f3 e5 g4 Qh4#", 0, 0, 8, 2),
-        // Tier 4, for Spar: Popular 1. e4, Dubious 1. a3, Book 1. d4; after 1. a3 black's one
-        // candidate is e5; after 1. a3 e5 only 2. Nf3 was played, so anything else leaves the
-        // book.
-        move("", 4, "e2e4", "e4", 30, 10, 20, 2),
+        // Tier 4, for Spar: Book and Popular 1. e4, Dubious 1. a3, Book 1. d4 (9% of the plays,
+        // so not Popular, and below the sampler's 10 games); after 1. a3 black's one candidate is
+        // e5; after 1. a3 e5 only 2. Nf3 was played, so anything else leaves the book.
+        move("", 4, "e2e4", "e4", 30, 10, 20, 3),
         move("", 4, "a2a3", "a3", 10, 5, 15, 6),
-        move("", 4, "d2d4", "d4", 5, 2, 3, 1),
+        move("", 4, "d2d4", "d4", 4, 2, 3, 1),
         move("a3", 4, "e7e5", "a3 e5", 5, 3, 12, 2),
         move("a3 e5", 4, "g1f3", "a3 e5 Nf3", 3, 2, 5, 2),
     };

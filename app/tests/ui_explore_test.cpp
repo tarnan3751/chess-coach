@@ -144,6 +144,15 @@ class ExploreTest : public QObject {
         QCOMPARE(child<QLabel>(window, QStringLiteral("explore_games")).text(),
                  QStringLiteral("1000 games at 1600-1799"));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("start-tier3"));
+
+        // Tier 4: 1. a3 is Popular and Dubious, losing 109 cp.
+        select_tier(window, 4);
+        QTRY_COMPARE(table_moves(window), (QStringList{QStringLiteral("e4"), QStringLiteral("a3"),
+                                                       QStringLiteral("d4")}));
+        QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("PD"));
+        QCOMPARE(model(window).index(1, ExploreModel::badges_column).data(Qt::ToolTipRole),
+                 QStringLiteral("Popular, Dubious"));
+        QCOMPARE(cell(window, 2, ExploreModel::badges_column), QStringLiteral("B"));
     }
 
     void switching_tiers_changes_the_table() {
@@ -179,9 +188,8 @@ class ExploreTest : public QObject {
                  QStringLiteral("B00 King's Pawn Game"));
         // Black to move: the score is black's.
         QCOMPARE(cell(window, 0, ExploreModel::score_column), QStringLiteral("48.3"));
-        QCOMPARE(cell(window, 2, ExploreModel::badges_column), QStringLiteral("PD"));
-        QCOMPARE(model(window).index(2, ExploreModel::badges_column).data(Qt::ToolTipRole),
-                 QStringLiteral("Popular, Dubious"));
+        QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("BP"));
+        QCOMPARE(cell(window, 2, ExploreModel::badges_column), QString()); // 8%, unevaluated
 
         click(board, "c7");
         click(board, "c5");

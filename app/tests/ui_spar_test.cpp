@@ -124,7 +124,7 @@ void meet_a_dubious_move(MainWindow& window, const BoardView& board) {
              QStringLiteral("a3 played: PD, loses 109 cp"));
     QCOMPARE(rows(window, QStringLiteral("spar_better")), 2);
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 0), QStringLiteral("e4"));
-    QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 1), QStringLiteral("P"));
+    QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 1), QStringLiteral("BP"));
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 2), QStringLiteral("60"));
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 1, 0), QStringLiteral("d4"));
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 1, 1), QStringLiteral("B"));
