@@ -30,7 +30,9 @@ The data contract is `docs/database.md`. **Phase 1 (data contract and pipeline) 
 and the read-only opening store with the canonical dump (`docs/reference/core.md`), and
 `chess-coach-cli` has `dump`, `stats`, `explore` and `name` (`docs/reference/cli.md`), and
 `chess-coach-pipeline build` builds `openings.db` from monthly dumps in two passes, with the
-sample corpus and its golden dump (`docs/reference/pipeline.md`). **Phase 3 (app shell and
+sample corpus and its golden dump (`docs/reference/pipeline.md`). Phase 2's `core` part has
+begun: the recommendation score, the UCI engine client with its fake engine, and the profile
+store at version 1 with the engine cache (`docs/reference/core.md`). **Phase 3 (app shell and
 Explore) has begun:** the board (SVG pieces, two-click and drag input, hints, highlights,
 animation, flip, promotion), the main window's frame with the tier selector, the move list and
 placeholder screens, and the UI harness with screenshots (`tools/ui_tests.sh`,

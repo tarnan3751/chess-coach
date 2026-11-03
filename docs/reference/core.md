@@ -1,11 +1,12 @@
 # Core
 
 How `core` works: the position key, `Position` over chess-library, tiers, badges, opening names,
-and the read-only opening store with the canonical dump. What these must do is fixed by
-`docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11); this
-file says how `core` does it. The rules it obeys are in `CLAUDE.md`, **`core/` is exact,
-deterministic and keyed by position**. The recommendation score is described below; the profile
-store, the scheduler, the sampler and the UCI client are described here when they land.
+the read-only opening store with the canonical dump, the recommendation score, the UCI engine
+client and the profile store with the engine cache. What these must do is fixed by
+`docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11,
+`profiles.db` §12, the score's inputs §13); this file says how `core` does it. The rules it obeys
+are in `CLAUDE.md`, **`core/` is exact, deterministic and keyed by position**. The scheduler and
+the sampler are described here when they land.
 
 | Header (`core/include/chesscoach/`) | Holds |
 |---|---|
@@ -17,10 +18,13 @@ store, the scheduler, the sampler and the UCI client are described here when the
 | `opening_schema.hpp` | `openings_schema_sql()`, `opening_schema_version` |
 | `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
 | `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_loss`, the score's numbers |
+| `engine.hpp` | `Engine`, `EngineOptions`, `SearchRequest`, `SearchLine`, `SearchResult`, `EngineError` |
+| `profile_store.hpp` | `ProfileStore`, `Profile`, `CachedSearch`, `Migration`, `Clock`, `ProfileError` |
 | `version.hpp` | `Version` (Phase 0) |
 
 Errors are values (`tl::expected` with an `enum class` or a small struct). No public header
-includes chess-library or SQLite: `Position` and `OpeningStore` hold them behind a pointer.
+includes chess-library, SQLite or reproc: `Position`, `OpeningStore`, `Engine` and `ProfileStore`
+hold them behind a pointer.
 
 ## The key
 
@@ -223,6 +227,87 @@ are the same on every platform.
 `evaluation_loss` repeats the rule the pipeline applies for the badges (`pipeline/src/badges.cpp`)
 with the same 50 cp margin; moving the pipeline onto `core`'s function is a later refactor.
 
+## The engine
+
+`Engine` is one UCI engine, Stockfish in practice, as a child process over reproc++ (stdin and
+stdout piped, stderr discarded). Its calls are synchronous; the app's engine worker runs them on
+its own thread. `stop()` may come from any other thread.
+
+| Call | Sent | Awaited, within |
+|---|---|---|
+| `start(binary, options)` | `uci`; then `setoption name Threads`, `setoption name Hash`; `isready` | every line up to `uciok`, then `readyok`, each within `reply_timeout` |
+| `new_game()` | `ucinewgame`, `isready` | `readyok`, within `reply_timeout` |
+| `search(position, request)` | `setoption name MultiPV` when the line count changed; `setoption name UCI_LimitStrength value true` or `false` when that changed, and `UCI_Elo` when limited; `isready`; `position fen <normalized FEN> 0 1`; `go movetime <ms>` | `readyok` within `reply_timeout`; then info lines up to `bestmove`, within the movetime plus `reply_timeout` |
+| `stop()` during a search | `stop`, written by the searching thread | `bestmove` within `reply_timeout` of the stop |
+| destruction | `quit` | the process's exit; then terminate, then kill, a second apart |
+
+- **The handshake** records the `id name`, and `UCI_Elo`'s `min` and `max` when the engine
+  advertises the option; every other line before `uciok` is ignored. A limited search clamps
+  its Elo to that range (Stockfish's floor is 1320) and reports the value applied; an engine
+  without `UCI_Elo` answers a limited request with `unsupported`.
+- **Info lines.** A line counts when it has a `depth` and an exact `score cp` or `score mate`
+  (and usually a `pv`); a missing `multipv` is 1. `info string`, `currmove` and `nps` lines,
+  lines with a `lowerbound` or `upperbound` score, unreadable numbers and multipvs above the
+  request are ignored. The result keeps the last counted line per multipv, ordered by multipv;
+  `best_move` is what `bestmove` names (empty for `(none)`), which need not be the first line's
+  first move when the engine's last word on it was a bound.
+- **One call at a time.** A mutex marks a call as running: a second `search` or `new_game` from
+  another thread returns `busy` without touching the process; `stop()` sets a flag under the
+  same mutex only while a search runs, so it reaches the running search or nothing. The
+  searching thread polls stdout in 25 ms slices and checks the flag and the deadline between
+  slices, so all I/O stays on one thread and there is never a second `go` in flight.
+- **Failure.** A missed bound is `timeout`, a closed pipe or failed write is `died`; either kills
+  the process, `is_alive()` turns false for good, and every later call returns `died`; the
+  caller starts a new engine. `start` ignores SIGPIPE process-wide, once, on POSIX, because
+  writing to a dead engine's stdin would otherwise end this process.
+
+**The fake engine.** `core/tests/fake_uci.cpp` builds `fake-uci`, an executable `core_engine_test`
+drives: `fake-uci <script> [delay_ms] [log_path]`, logging every line it receives so the test
+checks exactly what the client sent and in which order. Its scripts: `normal` (the protocol as
+Stockfish speaks it, a `go` answered after its movetime or on `stop`), `late-readyok` (every
+`readyok` after the first `delay_ms` late), `interleaved-info` (junk, `info string`, multipv 2
+before 1, repeated depths, a bound score, a multipv above the request and a mate score),
+`no-bestmove`, `die-mid-search` and `garbage` (non-UCI lines before `uciok`, no options). The
+tests set `reply_timeout` to fractions of a second, so the timeouts are tested in well under one.
+`core_engine_stockfish_test` (label `engine`) drives the real Stockfish, found through
+`CHESS_COACH_STOCKFISH` or the `PATH`, with one thread and a 16 MB hash, and skips with a message
+when there is none.
+
+## The profile store
+
+`ProfileStore::open(data_dir, clock, migrations)` opens `profiles.db` in the data directory,
+creating the directory when it is missing, read-write with a 2 s busy timeout and foreign keys
+on. The clock (Unix seconds, UTC; `system_clock_seconds` by default) is injected, and the
+connection registers `chesscoach_now()`, an SQL function answered from it, so a migration script
+can timestamp rows and stay plain SQL.
+
+**Versions** (§12.1). `profile_migrations()` lists one script per version; version 1 creates
+`meta`, `profiles` and `engine_cache` and the profile `Default` at tier 2. An absent or
+zero-length file is created by running every script; an existing file must have a `meta` table
+with a positive decimal `schema_version`, else it is refused as `not_profiles` without being
+modified; a version above the last script's is `newer_version`, also unmodified; an older one
+runs each later script in its own transaction, which records `schema_version` as its last
+statement, so a failing script (`migration_failed`) leaves the file at the last version that
+succeeded. Tests pass longer migration lists to exercise all of this. Each version's file is
+kept as a fixture (`core/tests/fixtures/profiles-v1.db`), written by the hidden test case
+`[.fixture]` and opened unchanged by every later build.
+
+**Profiles.** `profiles()` by id; `create_profile`, `rename_profile`, `set_tier` and
+`remove_profile` return the profile or an error: `invalid_name` (empty), `duplicate_name`,
+`no_such_profile`, `last_profile` (the only profile cannot be removed), `storage` (the write
+failed).
+
+**The engine cache** (§12.2), one row per line, keyed by `(key, lines, line)`:
+
+- `cache_lookup(key, lines, min_depth)` hits when a row exists for `(key, lines)` and the least
+  depth among them is at least `min_depth`. Callers do not look up for a limited search.
+- `cache_store(key, lines, result)` writes nothing for a limited result, a stopped one or one
+  without lines, and returns it as it is. Otherwise, in one transaction, the result's lines
+  replace the stored ones when nothing is stored or their least depth is at least the stored
+  least depth, and the stored lines are kept and returned when it is not. A result with fewer
+  lines than asked for (a position with fewer legal moves) is complete and stored as such.
+- A pv is stored as UCI moves separated by spaces; scores stay from the side to move.
+
 ## Tests
 
 `core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
@@ -237,6 +322,9 @@ gate with defined, undefined and mate losses, the penalty and its cap, off-book 
 children, the floor at zero, the shares and the sort, each number worked out by hand) and
 `score_property_test` (over generated rows: every score between 0 and 1, an unsound move at 0, a
 sound score equal to max(0, expected − penalty), the penalty within its cap, the shares summing
-to one, the order). The property tests' random games (`random_games.hpp`) start from the start
+to one, the order); `engine_test` (every fake script, `busy`, `stop`, the options sent, the
+timeouts, a missing binary) and `engine_stockfish_test`; `profile_store_test` (creation, every
+error, migrations, the refused files, the cache rules and the version 1 fixture). The property
+tests' random games (`random_games.hpp`) start from the start
 position or from positions that soon castle, promote or meet en passant, and pick moves by index
 into the sorted legal moves.
