@@ -20,6 +20,7 @@ sampler, the spar session, the scheduler and repertoire coverage are described b
 | `opening_schema.hpp` | `openings_schema_sql()`, `opening_schema_version` |
 | `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
 | `opening_locator.hpp` | `locate_opening_database`, `LocatorInput`, `import_opening_database`, `ImportedDatabase`, `ImportError` |
+| `file_swap.hpp` | `replace_keeping_previous`, `KeepPrevious`: the swap both imports end with |
 | `score.hpp` | `score_moves`, `ScoreComponents`, `ChildRows`, `evaluation_value`, `evaluation_loss`, `book_margin_cp`, the score's numbers |
 | `sampler.hpp` | `sampler_candidates`, `sample_reply`, `Candidate`, `SamplerConfig` |
 | `spar.hpp` | `SparSession`, `SparConfig`, `Interruption`, `Summary`, `ReplyProvider`, `SparError` |
@@ -235,6 +236,17 @@ find the file through it.
 It returns the path, the `data_version` (`opening_data_version`), meta's `months` as stored and
 whether a file was replaced. A reader holding the old file keeps reading it until it opens the
 path again; the source is only read.
+
+**Replacing a file.** `replace_keeping_previous(staged, current, previous, keep)` is the swap both
+imports end with. When `current` is a regular file it removes `previous` first (a symlink there is
+removed, never followed, and a read-only file is removed like any other), then makes `previous` a
+hard link to `current`: one system call, which keeps the old file whatever its mode. Where the
+link fails, on a file system without hard links, or when `keep` is `KeepPrevious::copy`, it
+copies `current` to `previous` + `.importing` and renames that onto `previous`, so a copy failing
+midway never leaves a partial `previous`. Then one rename puts `staged` onto `current`, which
+replaces it in one step on APFS and ext4. A failed step returns false having removed `staged` and
+the `.importing` beside `previous`, and `current` is the file it was. `file_swap_test` checks the
+link, the copy fallback, a read-only or symlinked `previous`, and a final rename that fails.
 
 ## The recommendation score
 
@@ -644,7 +656,9 @@ file rolled back, a file locked by another connection reported busy, the version
 migrated and the version 3 one opened unchanged);
 `profile_store_property_test` (over random choices for one position and random reviews, a card's
 stored state is the replay of its stored reviews);
-`opening_locator_test` (the locator's order, an explicit path taken though it is not there, a
+`file_swap_test` (the swap both imports end with: a hard link kept, the copy fallback, a
+read-only or symlinked `previous`, a final rename that fails); `opening_locator_test` (the
+locator's order, an explicit path taken though it is not there, a
 directory where the data directory's file is expected, the import's round trip with `.previous`,
 every refusal leaving the data directory as it was);
 `random_test` (the reference output of seed 0, one sequence per seed; `key_test`'s pinned values

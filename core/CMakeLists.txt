@@ -8,6 +8,7 @@ add_library(core STATIC
   include/chesscoach/badges.hpp
   include/chesscoach/engine.hpp
   include/chesscoach/engine_reply_provider.hpp
+  include/chesscoach/file_swap.hpp
   include/chesscoach/key.hpp
   include/chesscoach/names.hpp
   include/chesscoach/opening_schema.hpp
@@ -28,6 +29,7 @@ add_library(core STATIC
   src/board_key.hpp
   src/engine.cpp
   src/engine_reply_provider.cpp
+  src/file_swap.cpp
   src/names.cpp
   src/opening_schema.cpp
   src/opening_locator.cpp
@@ -80,6 +82,11 @@ if(BUILD_TESTING)
   chesscoach_add_test(core_engine_stockfish_test MODULE core KIND engine
                       SOURCES tests/engine_stockfish_test.cpp
                       LIBS chesscoach::core)
+  chesscoach_add_test(core_file_swap_test MODULE core KIND unit
+                      SOURCES tests/file_swap_test.cpp
+                      LIBS chesscoach::core)
+  target_compile_definitions(core_file_swap_test PRIVATE
+                             CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_key_test MODULE core KIND unit
                       SOURCES tests/key_test.cpp
                       LIBS chesscoach::core)
@@ -177,6 +184,7 @@ if(BUILD_TESTING)
   chesscoach_assert_no_qt(core_engine_test)
   chesscoach_assert_no_qt(core_engine_reply_provider_test)
   chesscoach_assert_no_qt(core_engine_stockfish_test)
+  chesscoach_assert_no_qt(core_file_swap_test)
   chesscoach_assert_no_qt(core_key_test)
   chesscoach_assert_no_qt(core_key_property_test)
   chesscoach_assert_no_qt(core_names_test)
