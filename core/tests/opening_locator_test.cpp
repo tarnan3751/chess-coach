@@ -1,9 +1,10 @@
 // Unit tests for chesscoach/opening_locator.hpp (core; unit): the locator's order, an explicit path
 // taken whether or not it is there, then the data directory and the bundle's resources; the
-// import's round trip, which keeps the replaced file as openings.db.previous; and every refusal,
-// after which the data directory is as it was. Each database is a small file in core's schema
-// (openings_schema_sql) whose meta varies. The undo of a failed final rename cannot be provoked
-// without a fault hook, so it is documented (docs/reference/core.md) rather than tested.
+// import's round trip, which keeps the replaced file as openings.db.previous, compared by canonical
+// dump; a source in WAL mode, read through its -wal; and every refusal, after which the data
+// directory is as it was. Each database is a small file in core's schema (openings_schema_sql)
+// whose meta varies. The swap the import ends with is replace_keeping_previous, which
+// file_swap_test checks, a failed final rename included.
 #include <chesscoach/opening_locator.hpp>
 #include <chesscoach/opening_schema.hpp>
 
@@ -86,6 +87,16 @@ std::string read_bytes(const std::filesystem::path& path) {
     return buffer.str();
 }
 
+// The canonical dump of the opening database at path (§11), its content whatever its bytes: an
+// import copies through SQLite's backup API, which need not reproduce the source byte for byte.
+std::string dump_of(const std::filesystem::path& path) {
+    const auto store = chesscoach::OpeningStore::open(path);
+    REQUIRE(store.has_value());
+    std::ostringstream out;
+    store->dump(out);
+    return out.str();
+}
+
 // The names in the directory, sorted, to show what an import left there.
 std::string listing(const std::filesystem::path& directory) {
     std::vector<std::string> names;
@@ -149,7 +160,7 @@ TEST_CASE("An import puts a copy in place and keeps the file it replaces", "[loc
     CHECK(put->data_version == 3);
     CHECK(put->months == "2013-01");
     CHECK_FALSE(put->replaced);
-    CHECK(read_bytes(data_dir / "openings.db") == read_bytes(first));
+    CHECK(dump_of(data_dir / "openings.db") == dump_of(first));
     CHECK(listing(data_dir) == "openings.db ");
 
     const auto replaced = chesscoach::import_opening_database(data_dir, second);
@@ -157,12 +168,38 @@ TEST_CASE("An import puts a copy in place and keeps the file it replaces", "[loc
     CHECK(replaced->data_version == 4);
     CHECK(replaced->months == "2013-01,2013-02");
     CHECK(replaced->replaced);
-    CHECK(read_bytes(data_dir / "openings.db") == read_bytes(second));
-    CHECK(read_bytes(data_dir / "openings.db.previous") == read_bytes(first));
+    CHECK(dump_of(data_dir / "openings.db") == dump_of(second));
+    CHECK(dump_of(data_dir / "openings.db.previous") == dump_of(first));
     CHECK(listing(data_dir) == "openings.db openings.db.previous ");
     // The sources are only read.
     CHECK(chesscoach::OpeningStore::open(first).has_value());
     CHECK(chesscoach::OpeningStore::open(second).has_value());
+}
+
+TEST_CASE("An import reads through the -wal beside a source in WAL mode", "[locator]") {
+    const Scratch scratch("wal");
+    const auto data_dir = scratch.path("data");
+    const auto source = scratch.path("wal.db");
+    write_openings(source, "1", "5");
+    // A row committed to the -wal and not yet in the file: the writer stays open, so the WAL is
+    // not checkpointed into the file before the import reads it.
+    SQLite::Database writer(source, SQLite::OPEN_READWRITE);
+    REQUIRE(writer.execAndGet("PRAGMA journal_mode = WAL").getString() == "wal");
+    writer.exec("INSERT INTO meta (key, value) VALUES ('extra', 'in the wal')");
+    auto wal = source;
+    wal += "-wal";
+    REQUIRE(std::filesystem::file_size(wal) > 0);
+
+    const auto imported = chesscoach::import_opening_database(data_dir, source);
+    REQUIRE(imported.has_value());
+    CHECK(imported->data_version == 5);
+    const auto store = chesscoach::OpeningStore::open(data_dir / "openings.db");
+    REQUIRE(store.has_value());
+    const std::string* extra = store->meta().find("extra");
+    REQUIRE(extra != nullptr);
+    CHECK(*extra == "in the wal");
+    // The copy is in rollback mode: nothing beside it.
+    CHECK(listing(data_dir) == "openings.db ");
 }
 
 TEST_CASE("An import that cannot be used is refused and changes nothing", "[locator]") {

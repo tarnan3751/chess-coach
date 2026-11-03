@@ -1,11 +1,14 @@
 // The opening database's location and its import (chesscoach/opening_locator.hpp). The import
 // stages under a name of its own and renames within the data directory, so a reader never sees a
 // partial file at openings.db.
+#include <chesscoach/file_swap.hpp>
 #include <chesscoach/opening_locator.hpp>
 #include <chesscoach/opening_schema.hpp>
 #include <chesscoach/spar.hpp>
 
+#include <SQLiteCpp/Backup.h>
 #include <SQLiteCpp/SQLiteCpp.h>
+#include <sqlite3.h>
 
 #include <string_view>
 #include <system_error>
@@ -50,6 +53,33 @@ int recorded_schema_version(const std::filesystem::path& path) {
         return std::stoi(text);
     } catch (const SQLite::Exception&) {
         return 0;
+    }
+}
+
+// Copies source to destination with SQLite's online backup API, which reads through a -wal beside
+// a WAL-mode source as a plain file copy would not, then leaves the copy in rollback mode, so a
+// read-only connection opens it without a -shm. Both connections wait up to 2 s for a lock, as
+// the profile store's do, so a commit another tool makes meanwhile is waited out. False when the
+// copy does not complete or does not leave rollback mode.
+bool back_up(const std::filesystem::path& source, const std::filesystem::path& destination) {
+    constexpr int busy_timeout_ms = 2000;
+    try {
+        SQLite::Database from(source, SQLite::OPEN_READONLY);
+        from.setBusyTimeout(busy_timeout_ms);
+        // SQLite's open flags are ints, combined with | as its API documents.
+        // NOLINTNEXTLINE(bugprone-signed-bitwise)
+        const int flags = SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE;
+        SQLite::Database to(destination, flags);
+        to.setBusyTimeout(busy_timeout_ms);
+        {
+            SQLite::Backup backup(to, from);
+            if (backup.executeStep() != SQLITE_DONE) {
+                return false;
+            }
+        }
+        return to.execAndGet("PRAGMA journal_mode = DELETE").getString() == "delete";
+    } catch (const SQLite::Exception&) {
+        return false;
     }
 }
 
@@ -124,8 +154,7 @@ import_opening_database(const std::filesystem::path& data_dir,
         return unwritable();
     }
     std::filesystem::remove(importing, error);
-    std::filesystem::copy_file(source, importing, error);
-    if (error) {
+    if (!back_up(source, importing)) {
         return unwritable();
     }
     // The copy is what was validated, or it is not put in place.
@@ -134,20 +163,10 @@ import_opening_database(const std::filesystem::path& data_dir,
         return unwritable();
     }
 
+    // The current openings.db is kept as openings.db.previous, a hard link and so instant however
+    // large the file, and the copy renamed onto it: an openings.db is there at every instant.
     imported.replaced = is_file(current);
-    if (imported.replaced) {
-        std::filesystem::rename(current, previous, error);
-        if (error) {
-            return unwritable();
-        }
-    }
-    std::filesystem::rename(importing, current, error);
-    if (error) {
-        // The openings.db this import was to replace goes back.
-        if (imported.replaced) {
-            std::error_code ignored;
-            std::filesystem::rename(previous, current, ignored);
-        }
+    if (!replace_keeping_previous(importing, current, previous)) {
         return unwritable();
     }
     return imported;

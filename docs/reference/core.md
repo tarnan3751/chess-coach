@@ -225,13 +225,15 @@ find the file through it.
    `OpeningStore::open` refuses (`not_openings`, with its `StoreError`); a `wrong_version` whose
    `schema_version` is above `opening_schema_version` is `newer_version`, with the source's
    version, so the message can name both;
-2. it creates the data directory, copies the source to `openings.db.importing`, a plain copy, and
-   opens the copy, which must open with the source's `data_version`, else the copy is removed
-   (`unwritable`, as is any copy or rename that fails);
-3. it renames the current `openings.db`, if any, to `openings.db.previous`, replacing an earlier
-   one, and the copy to `openings.db`; when that second rename fails, the first is undone, so an
-   `openings.db` that was there stays. The undo is not tested, since no failure of a rename in
-   one directory can be provoked without a fault hook.
+2. it creates the data directory, copies the source to `openings.db.importing` through SQLite's
+   online backup API, which reads through a `-wal` beside a source another tool left in WAL mode,
+   as a plain file copy would not, and sets the copy's journal mode to `DELETE`, so a read-only
+   connection opens it without a `-shm`; then it opens the copy, which must open with the source's
+   `data_version`, else the copy is removed (`unwritable`, as is any copy or rename that fails);
+3. it swaps the copy in with `replace_keeping_previous` (**Replacing a file**, below): the current
+   `openings.db`, if any, is kept as `openings.db.previous`, a hard link, so instant however large
+   the file, and the copy is renamed onto `openings.db`, which is there at every instant; a
+   failure leaves the `openings.db` that was there.
 
 It returns the path, the `data_version` (`opening_data_version`), meta's `months` as stored and
 whether a file was replaced. A reader holding the old file keeps reading it until it opens the
@@ -665,9 +667,9 @@ migrated and the version 3 one opened unchanged);
 stored state is the replay of its stored reviews);
 `file_swap_test` (the swap both imports end with: a hard link kept, the copy fallback, a
 read-only or symlinked `previous`, a final rename that fails); `opening_locator_test` (the
-locator's order, an explicit path taken though it is not there, a
-directory where the data directory's file is expected, the import's round trip with `.previous`,
-every refusal leaving the data directory as it was);
+locator's order, an explicit path taken though it is not there, a directory where the data
+directory's file is expected, the import's round trip with `.previous`, a WAL-mode source read
+through its `-wal`, every refusal leaving the data directory as it was);
 `random_test` (the reference output of seed 0, one sequence per seed; `key_test`'s pinned values
 guard the tables); `sampler_test` (min_games, the order, no draw without a candidate, the draw by
 cumulative weight, one sequence per seed, and the frequencies over 200,000 draws within half a point

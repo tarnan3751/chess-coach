@@ -53,7 +53,8 @@ struct ImportError {
 };
 
 // Puts a copy of source in place as <data_dir>/openings.db: refused, changing nothing, unless
-// OpeningStore opens it; copied to openings.db.importing, which is opened again; then the current
+// OpeningStore opens it; copied to openings.db.importing through SQLite's backup API, which reads
+// through a -wal beside a WAL-mode source, and opened again; then the current
 // openings.db, if any, is renamed to openings.db.previous, replacing an earlier one, and the copy
 // to openings.db, the first rename undone when the second fails, so an openings.db that was there
 // stays. The source is never written. A reader holding the old file keeps reading it until it
