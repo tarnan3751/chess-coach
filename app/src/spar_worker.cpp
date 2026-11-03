@@ -78,6 +78,18 @@ SparInterruption converted(const Interruption& interruption, const QString& play
 
 std::int64_t now() { return QDateTime::currentSecsSinceEpoch(); }
 
+// The coach's recorded move off book, for a replay; in book the sampler draws it again.
+class Recorded final : public ReplyProvider {
+  public:
+    explicit Recorded(std::string move) : move_(std::move(move)) {}
+    tl::expected<std::string, ProviderError> reply(const Position& /*position*/) override {
+        return move_;
+    }
+
+  private:
+    std::string move_;
+};
+
 // A read of a corrupt opening database throws (OpeningStore, SparSession::coach_reply).
 QString unreadable() {
     return translate("The opening database could not be read; end the session to save it.");
@@ -405,23 +417,45 @@ void SparWorker::replay_session(qint64 id) {
             }
             return;
         }
-        const std::vector<Interruption>& interruptions = replayed->interruptions;
+        // The record replays (the check above); a session stepped through it ply by ply then
+        // says which of the user's moves it interrupted.
+        auto started = SparSession::start(*store, row.tier, row.colour, row.seed,
+                                          SparConfig{
+                                              .end_move = row.end_move,
+                                              .sampler = {.min_games = row.min_games},
+                                          });
+        if (!started) {
+            emit session_failed(tr("The saved session does not replay on this database."));
+            return;
+        }
+        SparSession& session = *started;
         SparReplay replay;
         replay.id = row.id;
         replay.tier = tier_index(row.tier);
         replay.user_white = row.colour == Color::white;
-        Position position = Position::start();
-        std::size_t next = 0; // the next interruption to place
-        for (std::size_t ply = 0; ply < row.moves.size(); ++ply) {
-            const std::string& move = row.moves.at(ply);
-            const bool users = (ply % 2 == 0) == replay.user_white;
-            const auto played = position.play_uci(move);
+        for (const std::string& move : row.moves) {
+            const Position before = session.position();
             SparReplayPly out;
             out.uci = QString::fromStdString(move);
-            out.san = QString::fromStdString(played ? played->san : move);
-            if (users && next < interruptions.size() && interruptions.at(next).played == move) {
-                out.interruption = converted(interruptions.at(next), out.san);
-                ++next;
+            if (session.user_to_move()) {
+                const auto played = session.play_user_move(move);
+                if (!played) {
+                    emit session_failed(tr("The saved session does not replay on this database."));
+                    return;
+                }
+                const UserMoveOutcome& outcome = *played;
+                out.san = QString::fromStdString(outcome.san);
+                if (outcome.interruption.has_value()) {
+                    out.interruption = converted(*outcome.interruption, out.san);
+                }
+            } else {
+                Recorded recorded(move);
+                const auto reply = session.coach_reply(recorded);
+                if (!reply || *reply != move) {
+                    emit session_failed(tr("The saved session does not replay on this database."));
+                    return;
+                }
+                out.san = QString::fromStdString(before.san_of(move).value_or(move));
             }
             replay.plies.append(out);
         }
