@@ -1,0 +1,20 @@
+# The C++ formatting, applied by tools/format.sh and checked by the gate (CLAUDE.md, **Code
+# conventions**): LLVM, four-space indent, 100 columns, pointers left-aligned; includes regrouped
+# as the file's own header, then <chesscoach/...>, then the app's own quoted headers, then
+# third-party, then the standard library.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+PointerAlignment: Left
+FixNamespaceComments: true
+IncludeBlocks: Regroup
+IncludeIsMainRegex: '(_test|_property_test)?$'
+IncludeCategories:
+  - Regex: '^<chesscoach/'
+    Priority: 1
+  - Regex: '^"'
+    Priority: 2
+  - Regex: '^<[a-z_]+>$'
+    Priority: 4
+  - Regex: '^<'
+    Priority: 3

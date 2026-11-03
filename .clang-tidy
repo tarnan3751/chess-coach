@@ -1,0 +1,35 @@
+# clang-tidy over core, pipeline, cli and app, run by the gate on the gate build's
+# compile_commands.json (CLAUDE.md, **Code conventions**; docs/reference/testing-tools.md,
+# **Formatting and tidy**). Every finding is an error. The compiler's own warnings are the
+# build's (cmake/warnings.cmake), so the list starts from nothing; #pragma once is the project's
+# convention, so portability-avoid-pragma-once is off.
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -misc-non-private-member-variables-in-classes,
+  -bugprone-easily-swappable-parameters,
+  -readability-function-cognitive-complexity,
+  -misc-include-cleaner,
+  -cppcoreguidelines-avoid-do-while,
+  -portability-avoid-pragma-once
+WarningsAsErrors: '*'
+# GCC's compile commands carry GCC-only warning flags (cmake/warnings.cmake), unknown to clang.
+ExtraArgs: ['-Wno-unknown-warning-option']
+HeaderFilterRegex: '.*/(core|pipeline|cli|app)/.*'
