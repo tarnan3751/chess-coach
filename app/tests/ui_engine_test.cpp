@@ -2,7 +2,8 @@
 // as the binary through tests/fake-stockfish.sh: lines after a request, with scores from white's
 // side and the evaluation bar following the first line where nothing is stored; a request served
 // from the engine cache; a long search cancelled by moving on while the window keeps processing
-// events; a missing binary; with screenshots (ui_harness.hpp, fixture_db.hpp).
+// events; a missing binary; the Settings dialog and its values surviving a new window; with
+// screenshots (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/engine.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
@@ -231,6 +232,38 @@ class EngineTest : public QObject {
         // Nothing was searched, so nothing was cached: settings.ini is all there is.
         QCOMPARE(QDir(session.data_dir).entryList(QDir::AllEntries | QDir::NoDotAndDotDot),
                  QStringList{QStringLiteral("settings.ini")});
+    }
+
+    void the_settings_dialog_saves_and_applies_the_engine_settings() {
+        const Session session(*db_, fake(0.1));
+        MainWindow& window = *session.window;
+        QTRY_COMPARE(line_count(window), 3);
+        child<QAction>(window, QStringLiteral("settings_action")).trigger();
+        auto& dialog = child<QDialog>(window, QStringLiteral("settings_dialog"));
+        QVERIFY(dialog.isVisible());
+        QCOMPARE(child<QLineEdit>(dialog, QStringLiteral("engine_binary")).text(),
+                 QStringLiteral(CHESSCOACH_FAKE_STOCKFISH));
+        child<QSpinBox>(dialog, QStringLiteral("engine_hash")).setValue(32);
+        child<QDoubleSpinBox>(dialog, QStringLiteral("engine_seconds")).setValue(0.2);
+        child<QSpinBox>(dialog, QStringLiteral("engine_lines_setting")).setValue(2);
+        save_screenshot(dialog, QStringLiteral("settings"), QStringLiteral("dialog"));
+        dialog.accept();
+
+        // Applied: the next search has two lines.
+        QTRY_COMPARE(line_count(window), 2);
+        const EngineSettings saved = Settings(session.data_dir).engine();
+        QCOMPARE(saved.hash_mb, 32);
+        QCOMPARE(saved.seconds, 0.2);
+        QCOMPARE(saved.lines, 2);
+        QCOMPARE(saved.binary, QStringLiteral(CHESSCOACH_FAKE_STOCKFISH));
+
+        // A new window on the same data directory starts with them.
+        const MainWindow again(session.data_dir, QString());
+        child<QAction>(again, QStringLiteral("settings_action")).trigger();
+        const auto& reopened = child<QDialog>(again, QStringLiteral("settings_dialog"));
+        QCOMPARE(child<QSpinBox>(reopened, QStringLiteral("engine_lines_setting")).value(), 2);
+        QCOMPARE(child<QSpinBox>(reopened, QStringLiteral("engine_hash")).value(), 32);
+        QCOMPARE(child<QDoubleSpinBox>(reopened, QStringLiteral("engine_seconds")).value(), 0.2);
     }
 };
 

@@ -1,12 +1,12 @@
 // The main window (docs/reference/app.md, **Shell**): a toolbar with New game, Back, Flip board
 // and the tier selector; the evaluation bar and the board on the left with the move list below
 // them; the screen switcher on the right over the four screens, Explore live and the others
-// placeholders; the View > Theme and Help menus; the database and the engine in the status bar. It
-// keeps the line played on the board, sends each position at the selected tier to the database
-// worker and each position to the engine worker, each on its own thread, and shows their answers;
-// it never touches the opening store, the profile store or the engine itself. GUI thread only. It
-// writes the settings file itself (settings.hpp); the engine worker writes the engine cache,
-// profiles.db.
+// placeholders; the Edit > Settings, View > Theme and Help menus; the database and the engine in
+// the status bar. It keeps the line played on the board, sends each position at the selected
+// tier to the database worker and each position to the engine worker, each on its own thread,
+// and shows their answers; it never touches the opening store, the profile store or the engine
+// itself. GUI thread only. It writes the settings file itself (settings.hpp); the engine worker
+// writes the engine cache, profiles.db.
 #pragma once
 
 #include "engine_worker.hpp"
@@ -73,6 +73,7 @@ class MainWindow : public QMainWindow {
     void lines_ready(quint64 key, int request_id, const QVector<EngineLine>& lines, bool cached);
     void engine_failed(const QString& message);
     void update_eval_bar();
+    void show_settings();
     void database_opened(const QString& data_version);
     void database_failed(const QString& message);
     void position_ready(const ExploreData& explore);

@@ -34,6 +34,8 @@ add_library(app_lib STATIC
   src/promotion_chooser.hpp
   src/settings.cpp
   src/settings.hpp
+  src/settings_dialog.cpp
+  src/settings_dialog.hpp
   src/squares.cpp
   src/squares.hpp)
 add_library(chesscoach::app_lib ALIAS app_lib)

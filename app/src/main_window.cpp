@@ -12,6 +12,7 @@
 #include "engine_worker.hpp"
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
+#include "settings_dialog.hpp"
 
 #include <QAction>
 #include <QActionGroup>
@@ -182,6 +183,12 @@ void MainWindow::build_toolbar() {
 }
 
 void MainWindow::build_menus() {
+    QMenu* edit = menuBar()->addMenu(tr("&Edit"));
+    QAction* settings = edit->addAction(tr("&Settings\u2026"));
+    settings->setObjectName(QStringLiteral("settings_action"));
+    settings->setMenuRole(QAction::PreferencesRole);
+    connect(settings, &QAction::triggered, this, &MainWindow::show_settings);
+
     QMenu* view = menuBar()->addMenu(tr("&View"));
     QMenu* theme = view->addMenu(tr("&Theme"));
     themes_ = new QActionGroup(this);
@@ -354,6 +361,19 @@ void MainWindow::engine_failed(const QString& message) { explore_->show_engine_s
 void MainWindow::update_eval_bar() {
     const std::optional<Score>& score = stored_score_ ? stored_score_ : engine_score_;
     eval_bar_->set_evaluation(score ? score->cp : std::nullopt, score ? score->mate : std::nullopt);
+}
+
+void MainWindow::show_settings() {
+    auto* dialog = new SettingsDialog(settings_.engine(), this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &QDialog::accepted, this, [this, dialog] {
+        // Applying saves the settings and restarts the engine with them at the next search.
+        const EngineSettings engine = dialog->engine();
+        settings_.set_engine(engine);
+        emit configure_requested(engine);
+        request_evaluation();
+    });
+    dialog->open();
 }
 
 void MainWindow::choose_theme(const QString& theme) {
