@@ -1,0 +1,202 @@
+# Core
+
+How `core` works: the position key, `Position` over chess-library, tiers, badges, opening names,
+and the read-only opening store with the canonical dump. What these must do is fixed by
+`docs/database.md` (the key §5, the schema §6, the badges §7, the names §10, the dump §11); this
+file says how `core` does it. The rules it obeys are in `CLAUDE.md`, **`core/` is exact,
+deterministic and keyed by position**. The score, the profile store, the scheduler, the sampler
+and the UCI client are described here when they land (Phase 2 onward).
+
+| Header (`core/include/chesscoach/`) | Holds |
+|---|---|
+| `key.hpp` | `Key`, the Zobrist tables, the bit cast SQLite stores |
+| `position.hpp` | `Position`, `Color`, `FenError`, `MoveError`, `PlayedMove` |
+| `tier.hpp` | `Tier`, `tier_of`, the bounds, the labels |
+| `badges.hpp` | `Badge`, `Badges` |
+| `names.hpp` | `load_names`, `NameTable`, `Opening`, `NameError` |
+| `opening_schema.hpp` | `openings_schema_sql()`, `opening_schema_version` |
+| `opening_store.hpp` | `OpeningStore`, the row structs, `Meta`, `StoreError` |
+| `version.hpp` | `Version` (Phase 0) |
+
+Errors are values (`tl::expected` with an `enum class` or a small struct). No public header
+includes chess-library or SQLite: `Position` and `OpeningStore` hold them behind a pointer.
+
+## The key
+
+`Key` is `std::uint64_t`. `zobrist::table` is the 781 values of §5.2, computed at compile time
+(`consteval make_table()`, splitmix64 from `0x434845535320434F`) in the contract's draw order;
+`piece_square(piece, square)`, `black_to_move()`, `castling(CastlingRight)` and
+`en_passant_file(file)` index it. chess-library's `Piece` as an int (white P N B R Q K, then
+black) and `Square` as an int (a1 = 0 to h8 = 63) are the contract's indices, so the board's own
+values index the table directly. `key_to_sql` and `key_from_sql` are the `std::bit_cast` between
+the key and the int64 the `key` and `child` columns store.
+
+Two computations, one result:
+
+- **From scratch** (`core/src/board_key.cpp`, private because it takes a `chess::Board`): the XOR
+  of every piece on its square, black to move, each castling right the board holds, and the en
+  passant file when the board keeps a target. `Position::start` and `Position::from_fen` key
+  this way.
+- **Incrementally** (`make_move` in `core/src/position.cpp`), before and after the library makes
+  the move: toggle black to move; remove the old en passant file; XOR the moving piece out of
+  its square and the placed piece (the promoted piece for a promotion) into its target, and the
+  captured piece out (the pawn beside the target for en passant); for castling, which
+  chess-library encodes as king takes rook, the king and the rook from their squares to the
+  standard castling squares; after the move, every castling right held before and not after,
+  and the new en passant file. A debug build asserts the result equals the from-scratch key on
+  every move; the property tests check it from the printed FEN, where `NDEBUG` removes the
+  assertion.
+
+The pinned values (the table's first and last, the start position, after 1. e4, and the en
+passant position after 1. e4 d5 2. e5 f5) are in `core/tests/key_test.cpp`, agreed by
+independent implementations of §5.2.
+
+## Position
+
+`Position` wraps a `chess::Board` and the key. It is copyable (a copy allocates its own board);
+a moved-from `Position` may only be assigned to or destroyed.
+
+- `start()`, and `from_fen(text)`: four fields, or six with the counters, which must be
+  decimal and are ignored.
+- `key()`, `fen()` (the normalized four-field FEN, `getFen(false)`), `side_to_move()`,
+  `in_check()`, `legal_moves_uci()` (sorted bytewise, so an index into it means the same move on
+  every platform).
+- `play_san(san)` and `play_uci(uci)` return a `PlayedMove`: the move's UCI (§5.3), its SAN as
+  chess-library writes it before the move (check and mate suffixes included), and the child
+  key. `play_san_fast(san)` is `play_san` without the SAN: its `san` is empty. `san_of(uci)` and
+  `uci_of(san)` convert a legal move without playing it. A failed move leaves the position as it
+  was.
+
+**FEN.** `from_fen` checks before the library parses:
+
+| Error | When |
+|---|---|
+| `malformed` | not 4 or 6 fields on single spaces; a placement that is not eight ranks of eight squares of `PNBRQKpnbrqk` and digits; a side other than `w` or `b`; castling other than `-` or distinct letters of `KQkq`; an en passant field other than `-` or a file and rank 3 or 6; counters that are not decimal digits |
+| `kings` | not exactly one `K` and one `k` |
+| `illegal` | a castling letter without its king on e1 or e8 and its rook on its corner; a pawn on the first or last rank; the side not to move in check |
+
+It then **normalizes the en passant field** (§5.1): a target is kept only when a pawn of the side
+not to move stands where a double push would have put it, with the target and the square it
+passed empty; chess-library then drops it too unless a capture onto it is legal for the side to
+move, pins and checks included. The castling field's letters may come in any order; the library
+prints them `KQkq`.
+
+**SAN.** Accepted: `O-O`, `O-O-O`, `0-0`, `0-0-0`; a piece move `[KQRBN][a-h]?[1-8]?x?[a-h][1-8]`;
+a pawn move `[a-h][1-8]` or `[a-h]x[a-h][1-8]`, either with `=[QRBN]` on the last rank; then an
+optional `+` or `#` and up to two of `!` and `?`, which are ignored (a wrong suffix is not an
+error). Anything else is `malformed`. A well-formed move that matches no legal move is
+`illegal`; one that matches several is `ambiguous`, which includes a pawn reaching the last rank
+without a promotion piece (`e8`). Disambiguation is accepted when redundant (`Nb1c3`).
+
+**UCI.** `[a-h][1-8][a-h][1-8][qrbn]?`, else `malformed`; the text must equal the library's
+spelling of a legal move, else `illegal`. So castling is only the king's two-square move
+(`e1h1` is illegal) and a promotion needs its letter.
+
+**Cost.** Every `Position` allocates its board, and the board keeps a history entry per move
+played. `play_san` writes the move's SAN with chess-library's writer, which generates the
+mover's legal moves for disambiguation and copies the board for a checking move; the pipeline's
+loop over every move of every game uses `play_san_fast`, which skips it. Parsing SAN is one
+legal-move check when one piece can reach the target, else a generation of that piece type's
+moves. If the pipeline's benchmark finds `Position` the bottleneck, the first candidate is a
+play path that does not build the UCI string either.
+
+## chess-library and the wrapper
+
+chess-library (0.9.10, `vcpkg/ports/chess-library`) is the only rules implementation. It is one
+header that warns under our flags, so `core/CMakeLists.txt` finds it with
+`find_path(... chess-library/chess.hpp)` and adds it as a `SYSTEM PRIVATE` include of `core`
+and of the one test that uses it as an oracle (`core_key_property_test`); only `core/src`
+includes it. What the wrapper neutralizes:
+
+| The library | The wrapper |
+|---|---|
+| `Board(fen)` ignores a parse failure; `setFen` returns `false` but accepts ranks of the wrong width, and asserts without a king | `from_fen` checks every field and the kings first, then calls `setFen` |
+| `setFen` keeps an en passant target whenever a capture would be legal, without checking that the pawn that double pushed is there, so a target without one gives a capture of an empty square | `from_fen` drops a target whose double push did not happen |
+| A castling letter with no rook on its corner grants the right with any rook on that side | `from_fen` refuses it as `illegal` |
+| `makeMove<false>` (the default) keeps an en passant target whenever an enemy pawn attacks it | every move is `makeMove<true>`, which keeps it only when the capture is legal: §5.1's rule |
+| `parseSan` throws `SanParseError` or `AmbiguousMoveError`, returns `NO_MOVE` (which is `a1a1`, value 0) for an empty string, and reads past the end of some malformed strings (`O`, `e8=`) | the SAN syntax check runs first; the exceptions become `illegal` and `ambiguous`; `NO_MOVE` is compared explicitly |
+| `uciToMove` builds a move without checking legality | UCI is matched against the legal move list's spelling |
+| Castling is king takes rook internally | `moveToUci` writes `e1g1`; the incremental key uses the standard castling squares |
+
+The static analyzer, following our calls into the header, reports two kinds of false positive
+inside it (enum casts and a pawn-attack index on paths where a colour is `NONE`). A `NOLINT`
+cannot sit in a header we do not own, so `core/.clang-tidy` turns off
+`clang-analyzer-optin.core.EnumCastOutOfRange` and `clang-analyzer-security.ArrayBound` for
+core's sources and inherits everything else.
+
+The library's own `hash()` also ignores the counters and keeps en passant under the same rule, so
+`core_key_property_test` uses it as an oracle: over batches of random games, two positions have
+equal keys exactly when the library's hashes are equal.
+
+## Tiers and badges
+
+`Tier` is an `enum class : std::uint8_t` whose values are the stored indices: `under_1200` (0),
+`r1200_1399`, `r1400_1599`, `r1600_1799`, `r1800_1999`, `r2000_2199`, `r2200_up` (6), which is
+`top_tier`. `tier_lower_bounds` holds 1200 to 2200, the value of meta's `tiers` key;
+`tier_of(white_elo, black_elo)` floors the average, summed in 64 bits; `tier_index` and
+`tier_from_index` convert to and from the column; `tier_label` gives `<1200`, `1200-1399`, ...,
+`2200+`.
+
+`Badges` decodes the `moves.badges` column: `has(Badge)`, `set(Badge)`, `raw()`, with
+`Badge::book` = 1, `popular` = 2, `dubious` = 4. A bit outside the three is kept, so `raw()`
+gives the stored value back. The thresholds are the pipeline's (§7); nothing in `core` computes a
+badge.
+
+## Names
+
+`load_names(dir)` reads `a.tsv` to `e.tsv` (`opening_tsv_files`, the value of meta's
+`openings_tsv`) from `dir`, by §10's rule: each file's header must be `eco`, `name`, `pgn`
+separated by tabs; each line's moves, with the move-number tokens skipped, replay from the start
+position through `play_san_fast`; the final key gets the line's ECO code and name unless an
+earlier line named it. `NameTable` gives `find(key)` (a pointer to the `Opening`, or null) and
+the counts the pipeline reports: `lines()` = `size()` + `collisions()` + `failures()`, a failure
+being a line that is not three tab-separated fields or whose moves do not replay. A missing file,
+an unreadable one and a wrong header are `NameError`s naming the file. The five files are
+committed under `data/chess-openings/` with their source and licence (`README.md`,
+`COPYING.txt`).
+
+## The opening store
+
+`openings_schema_sql()` is the DDL of §6 (`meta`, then `positions`, `nodes` and `moves` `WITHOUT
+ROWID`), the one definition the pipeline's writer executes; it creates tables only.
+
+`OpeningStore::open(path)` opens the file `SQLITE_OPEN_READONLY`, sets `mmap_size` to 1 GiB,
+reads `meta` and prepares the three lookups once:
+
+| Error | When |
+|---|---|
+| `missing_file` | no regular file at the path |
+| `unreadable` | SQLite cannot read it (not a database, corrupt) |
+| `no_meta` | no `meta` table, or no `schema_version` row |
+| `wrong_version` | `schema_version` is not exactly `opening_schema_version` (`1`) |
+| `schema_mismatch` | a lookup does not prepare: `positions`, `nodes` or `moves` missing or misshapen |
+
+`meta()` is the table, read once, as a bytewise-ordered map with `find`. `position(key)`,
+`node(key, tier)` and `moves(key, tier)` return the rows as plain structs mirroring the columns
+(`std::optional` for a nullable one; `MoveRow::total()`), `moves` ordered by move bytewise, which
+is the primary key's order. Each lookup is one indexed query with the key bound as its int64.
+`counts()` gives the whole file's `StoreCounts` for the CLI's `stats`, by SQL rather than a scan:
+the `nodes` and `moves` rows per tier (`COUNT(*)` grouped by tier), the start position's `games`
+per tier (its `nodes` rows, by its key), and the `positions` rows, those with a name and those
+with an evaluation; a tier with no row counts zero. A
+store is used from one thread at a time, and a query that fails after a successful open (an I/O
+error, a file corrupted on disk) throws `std::runtime_error` (`SQLite::Exception`).
+
+`dump(out)` writes §11's canonical dump. `meta` comes from the map, without `built_at` and
+`pipeline_version`. Each table is read in two primary-key ranges, the keys whose int64 is
+non-negative and then the negative ones: the order of the keys as unsigned, with nothing sorted
+in memory. Every column is written as stored: NULL as `-`, an integer in decimal (a key column
+as the unsigned value of its bits), text as it is.
+
+## Tests
+
+`core/tests/`: `key_test` (the pinned values, en passant by hand, transpositions, castling
+rights, counters) and `key_property_test` (incremental equals from-scratch; the library-hash
+oracle); `position_test` (FEN acceptance, normalization and every error; SAN and UCI in both
+directions) and `position_property_test` (FEN and SAN/UCI round trips); `tier_test`,
+`badges_test`; `names_test` (the committed files, first wins, the errors); `opening_store_test`
+(a small database built from `openings_schema_sql()` with keys either side of the sign bit, the
+lookups, the dump against a golden text written from §11, a read-only file left unchanged, and
+every refusal). The property tests' random games (`random_games.hpp`) start from the start
+position or from positions that soon castle, promote or meet en passant, and pick moves by index
+into the sorted legal moves.
