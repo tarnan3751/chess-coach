@@ -40,6 +40,20 @@ class Log {
         std::filesystem::remove(path_);
     }
     [[nodiscard]] const std::filesystem::path& path() const { return path_; }
+    // Waits until the fake has received the line, so a test acts after it rather than after a
+    // guessed delay.
+    void wait_for(std::string_view line) const {
+        const auto until = std::chrono::steady_clock::now() + 10s;
+        while (std::chrono::steady_clock::now() < until) {
+            for (const auto& received : lines()) {
+                if (received == line) {
+                    return;
+                }
+            }
+            std::this_thread::sleep_for(10ms);
+        }
+        FAIL("the fake never received " << line);
+    }
     [[nodiscard]] std::vector<std::string> lines() const {
         std::ifstream in(path_);
         std::vector<std::string> lines;
@@ -53,8 +67,12 @@ class Log {
     std::filesystem::path path_;
 };
 
+// The tests' reply bound: generous, so that a loaded machine still starts the fake in time; a test
+// that times a bound sets its own.
+constexpr auto default_reply_timeout = 5000ms;
+
 EngineOptions fake(std::string_view script, const Log& log, int delay_ms = 0,
-                   std::chrono::milliseconds reply_timeout = 1000ms) {
+                   std::chrono::milliseconds reply_timeout = default_reply_timeout) {
     EngineOptions options;
     options.arguments = {std::string(script), std::to_string(delay_ms), log.path().string()};
     options.reply_timeout = reply_timeout;
@@ -62,7 +80,7 @@ EngineOptions fake(std::string_view script, const Log& log, int delay_ms = 0,
 }
 
 Engine start(std::string_view script, const Log& log, int delay_ms = 0,
-             std::chrono::milliseconds reply_timeout = 1000ms) {
+             std::chrono::milliseconds reply_timeout = default_reply_timeout) {
     auto engine = Engine::start(CHESSCOACH_FAKE_UCI, fake(script, log, delay_ms, reply_timeout));
     REQUIRE(engine.has_value());
     return std::move(*engine);
@@ -172,9 +190,9 @@ TEST_CASE("stop() ends a search in progress, and a second call is busy meanwhile
         auto engine = start("normal", log);
         const auto began = std::chrono::steady_clock::now();
         auto running = std::async(std::launch::async, [&] {
-            return engine.search(Position::start(), {.lines = 1, .seconds = 5.0});
+            return engine.search(Position::start(), {.lines = 1, .seconds = 30.0});
         });
-        std::this_thread::sleep_for(200ms);
+        log.wait_for("go movetime 30000");
         const auto second = engine.search(Position::start(), {});
         REQUIRE_FALSE(second.has_value());
         CHECK(second.error() == EngineError::busy);
@@ -188,7 +206,7 @@ TEST_CASE("stop() ends a search in progress, and a second call is busy meanwhile
         CHECK(result->stopped);
         CHECK(result->lines.size() == 1);
         CHECK(result->best_move == "e2e4");
-        CHECK(elapsed < 1500ms);
+        CHECK(elapsed < 15s); // ended by the stop, well before the 30 s movetime
         CHECK(engine.is_alive());
 
         // stop() with no search in progress changes nothing.
@@ -198,14 +216,14 @@ TEST_CASE("stop() ends a search in progress, and a second call is busy meanwhile
         CHECK_FALSE(next->stopped);
     }
     CHECK(log.lines() ==
-          then(handshake(), {"isready", std::string(start_fen_sent), "go movetime 5000", "stop",
+          then(handshake(), {"isready", std::string(start_fen_sent), "go movetime 30000", "stop",
                              "isready", std::string(start_fen_sent), "go movetime 20", "quit"}));
 }
 
 TEST_CASE("A late readyok is waited for within the bound, and past it is a timeout", "[engine]") {
     SECTION("within the bound") {
         const Log log("late-readyok-within");
-        auto engine = start("late-readyok", log, 100, 1000ms);
+        auto engine = start("late-readyok", log, 100, default_reply_timeout);
         const auto result = engine.search(Position::start(), {.seconds = 0.02});
         REQUIRE(result.has_value());
         CHECK(result->lines.size() == 1);
@@ -213,8 +231,11 @@ TEST_CASE("A late readyok is waited for within the bound, and past it is a timeo
     }
     SECTION("past the bound") {
         const Log log("late-readyok-past");
-        auto engine = start("late-readyok", log, 800, 200ms);
+        // The first readyok, the handshake's, is on time; the search's comes 4 s late.
+        auto engine = start("late-readyok", log, 4000, 1000ms);
+        const auto began = std::chrono::steady_clock::now();
         const auto result = engine.search(Position::start(), {.seconds = 0.02});
+        CHECK(std::chrono::steady_clock::now() - began < 4000ms);
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error() == EngineError::timeout);
         CHECK_FALSE(engine.is_alive());
@@ -240,14 +261,14 @@ TEST_CASE("Interleaved, repeated, bound and junk info lines leave the last exact
 
 TEST_CASE("A missing bestmove is a timeout, and the engine is unusable after", "[engine]") {
     const Log log("no-bestmove");
-    auto engine = start("no-bestmove", log, 0, 300ms);
+    auto engine = start("no-bestmove", log, 0, 1000ms);
     const auto began = std::chrono::steady_clock::now();
     const auto result = engine.search(Position::start(), {.seconds = 0.05});
     const auto elapsed = std::chrono::steady_clock::now() - began;
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error() == EngineError::timeout);
-    CHECK(elapsed >= 340ms);
-    CHECK(elapsed < 2s);
+    CHECK(elapsed >= 1050ms); // the movetime and the reply bound, never less
+    CHECK(elapsed < 15s);
     CHECK_FALSE(engine.is_alive());
     CHECK(engine.search(Position::start(), {}).error() == EngineError::died);
 }
@@ -316,20 +337,20 @@ TEST_CASE("An engine moves with its process", "[engine]") {
 
 TEST_CASE("After a stop, the shorter bound holds even while info keeps coming", "[engine]") {
     const Log log("chatty-after-stop");
-    auto engine = start("chatty-after-stop", log, 0, 300ms);
+    auto engine = start("chatty-after-stop", log, 0, 1000ms);
     auto running = std::async(std::launch::async, [&] {
-        return engine.search(Position::start(), {.lines = 1, .seconds = 10.0});
+        return engine.search(Position::start(), {.lines = 1, .seconds = 60.0});
     });
-    std::this_thread::sleep_for(200ms);
+    log.wait_for("go movetime 60000");
     const auto stopped_at = std::chrono::steady_clock::now();
     engine.stop();
     const auto result = running.get();
     const auto elapsed = std::chrono::steady_clock::now() - stopped_at;
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error() == EngineError::timeout);
-    // The reply bound after the stop, not the ten-second movetime.
-    CHECK(elapsed >= 250ms);
-    CHECK(elapsed < 1500ms);
+    // The reply bound after the stop, not the minute of movetime.
+    CHECK(elapsed >= 950ms);
+    CHECK(elapsed < 30s);
     CHECK_FALSE(engine.is_alive());
 }
 
