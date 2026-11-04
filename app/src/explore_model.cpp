@@ -153,7 +153,7 @@ QVariant ExploreModel::headerData(int section, Qt::Orientation orientation, int 
         case result_column:
             return translate("White wins · draws · Black wins, as a share of the games");
         case score_column:
-            return translate("The share of the points White scored here: a win counts 1, a draw "
+            return translate("The share of the points White scored here. A win counts 1 and a draw "
                              "½.");
         case top_tier_column:
             return translate("How often players rated 2200 and above choose this move");

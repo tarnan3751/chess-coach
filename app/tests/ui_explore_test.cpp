@@ -260,7 +260,7 @@ class ExploreTest : public QObject {
             QVariant(QStringLiteral("White wins · draws · Black wins, as a share of the games")));
         QCOMPARE(header(window, ExploreModel::score_column, Qt::ToolTipRole),
                  QVariant(QStringLiteral(
-                     "The share of the points White scored here: a win counts 1, a draw ½.")));
+                     "The share of the points White scored here. A win counts 1 and a draw ½.")));
         QCOMPARE(
             header(window, ExploreModel::top_tier_column, Qt::ToolTipRole),
             QVariant(QStringLiteral("How often players rated 2200 and above choose this move")));

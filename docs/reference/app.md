@@ -289,7 +289,7 @@ theme (the light one until then):
   tooltips in plain words: Badges `badges_tooltip` (**Wording**), the badges' three sentences, as
   Practice's says them (Explore is where the badges first appear), Games "How many games by players at this rating
   played this move here.", Results "White wins · draws · Black wins, as a share of the games",
-  Score for White "The share of the points White scored here: a win counts 1, a draw ½.", and Top
+  Score for White "The share of the points White scored here. A win counts 1 and a draw ½.", and Top
   players "How often players rated 2200 and above choose this move". The rows keep the worker's
   order. Activating a row, by double-click or by Return or Enter, plays its move on the board
   (`BoardView::play_move`), which then goes through the line like any other move.
