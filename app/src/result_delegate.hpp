@@ -3,9 +3,9 @@
 // black percentages inside their segments and the draws' only in a segment 18 px wide or more,
 // from the cell's shares_role data (a QList<double> of three fractions summing to 1). The badge
 // pills: Book, Popular and Dubious by name in their colours, or a muted dash for none, from the
-// cell's badges_role data (the bits, as Badges::raw holds them). ResultDelegate is the bar as a
-// delegate of its own, as Spar's better choices use it; Explore's table paints both through its
-// own delegate. GUI thread only.
+// cell's badges_role data (the bits, as Badges::raw holds them), each pill's tooltip the sentence
+// saying what its badge means. ResultDelegate is the bar as a delegate of its own, as Spar's
+// better choices use it; Explore's table paints both through its own delegate. GUI thread only.
 #pragma once
 
 #include <chesscoach/badges.hpp>
@@ -14,11 +14,15 @@
 
 #include <QFont>
 #include <QList>
+#include <QRect>
 #include <QSize>
 #include <QString>
 #include <QStyledItemDelegate>
 #include <QtGlobal>
+#include <vector>
 
+class QAbstractItemView;
+class QHelpEvent;
 class QModelIndex;
 class QPaintDevice;
 class QPainter;
@@ -35,6 +39,25 @@ inline constexpr QSize results_bar_size{150, 16};
 
 // The word a badge's pill reads.
 [[nodiscard]] QString badge_word(Badge badge);
+// What a badge means, its pill's tooltip: "Book: what strong players (2200 and above) choose."
+[[nodiscard]] QString badge_sentence(Badge badge);
+// The three badges' sentences, a Badges header's tooltip.
+[[nodiscard]] QString badges_explained();
+// The Results header's note: "white · draw · black".
+[[nodiscard]] QString results_note();
+
+// A badge's pill and where it lies.
+struct Pill {
+    Badge badge = Badge::book;
+    QRect rect;
+};
+// The pills of the badges in a cell, in order, after its left padding and centred in its height
+// above the row's rule, in the font (the table's) on the device.
+[[nodiscard]] std::vector<Pill> badge_pills(const QRect& cell, Badges badges, const QFont& font,
+                                            const QPaintDevice& device);
+// A tooltip event over a badges cell: the sentence of the pill under the pointer, or none.
+bool show_pill_tooltip(const QHelpEvent& event, const QAbstractItemView& view,
+                       const QStyleOptionViewItem& option, const QModelIndex& index);
 
 // Paints the results bar in the cell, after its left padding and centred in its height above the
 // row's rule; nothing unless there are three shares.

@@ -14,22 +14,27 @@
 #include "explore_screen.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
+#include "result_delegate.hpp"
 #include "study_palette.hpp"
 #include "tables.hpp"
 #include "ui_harness.hpp"
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QApplication>
 #include <QColor>
 #include <QComboBox>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QHeaderView>
+#include <QHelpEvent>
 #include <QImage>
 #include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QModelIndex>
 #include <QObject>
 #include <QPoint>
 #include <QRect>
@@ -37,13 +42,16 @@
 #include <QTableView>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QToolTip>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
+using chesscoach::Badges;
 using chesscoach::Position;
 using chesscoach::app::BoardView;
 using chesscoach::app::EvalBar;
@@ -156,8 +164,8 @@ class ExploreTest : public QObject {
         QCOMPARE(window.tier(), MainWindow::default_tier);
         QTRY_COMPARE(
             message(window),
-            QStringLiteral(
-                "No games at this rating after this move. The engine is your guide from here."));
+            QStringLiteral("You have left the known lines. Too few games by players at your rating "
+                           "reach this position."));
         QVERIFY(message_shown(window));
 
         select_tier(window, 3);
@@ -165,8 +173,6 @@ class ExploreTest : public QObject {
         QCOMPARE(table_moves(window), (QStringList{QStringLiteral("e4"), QStringLiteral("d4"),
                                                    QStringLiteral("Nf3"), QStringLiteral("f3")}));
         QCOMPARE(cell(window, 0, ExploreModel::badges_column), QStringLiteral("Book, Popular"));
-        QCOMPARE(model(window).index(0, ExploreModel::badges_column).data(Qt::ToolTipRole),
-                 QStringLiteral("Book, Popular"));
         QCOMPARE(
             model(window).index(0, ExploreModel::badges_column).data(ExploreModel::badges_role),
             QVariant(3U));
@@ -185,11 +191,14 @@ class ExploreTest : public QObject {
         QCOMPARE(
             model(window).index(3, ExploreModel::badges_column).data(ExploreModel::badges_role),
             QVariant(0U));
-        QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("Unnamed"));
+        QCOMPARE(label(window, QStringLiteral("explore_name")),
+                 QStringLiteral("Starting position"));
         QVERIFY(!child<QLabel>(window, QStringLiteral("explore_eco")).isVisible());
         QCOMPARE(label(window, QStringLiteral("explore_summary")),
                  QStringLiteral("White to move · 1,000 games by players rated 1600–1799 · the "
-                                "database's evaluation +0.2 at depth 40"));
+                                "database's evaluation +0.2 for White"));
+        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_summary")).toolTip(),
+                 QStringLiteral("The database's evaluation comes from a search to depth 40."));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("start-tier3"));
 
         // Tier 4: 1. a3 is Popular and Dubious, losing 109 cp.
@@ -197,9 +206,13 @@ class ExploreTest : public QObject {
         QTRY_COMPARE(table_moves(window), (QStringList{QStringLiteral("e4"), QStringLiteral("a3"),
                                                        QStringLiteral("d4")}));
         QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("Popular, Dubious"));
-        QCOMPARE(model(window).index(1, ExploreModel::badges_column).data(Qt::ToolTipRole),
-                 QStringLiteral("Popular, Dubious"));
         QCOMPARE(cell(window, 2, ExploreModel::badges_column), QStringLiteral("Book"));
+        // 1. a3: no named position on the line.
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        click(board, "a2");
+        click(board, "a3");
+        QTRY_COMPARE(label(window, QStringLiteral("explore_name")),
+                     QStringLiteral("No opening name"));
     }
 
     void the_screen_says_what_it_is_for() {
@@ -232,13 +245,20 @@ class ExploreTest : public QObject {
                               QStringLiteral("Score for White"), QStringLiteral("Top players")}));
         QCOMPARE(header(window, ExploreModel::result_column, chesscoach::app::header_note_role),
                  QVariant(QStringLiteral("white · draw · black")));
+        QCOMPARE(header(window, ExploreModel::badges_column, Qt::ToolTipRole),
+                 QVariant(QStringLiteral(
+                     "Book: what strong players (2200 and above) choose. Popular: what players at "
+                     "your rating often choose. Dubious: popular at your rating, but it loses "
+                     "ground.")));
         QCOMPARE(header(window, ExploreModel::games_column, Qt::ToolTipRole),
-                 QVariant(QStringLiteral("How many games at this rating reached this move")));
+                 QVariant(QStringLiteral(
+                     "How many games by players at this rating played this move here.")));
         QCOMPARE(
             header(window, ExploreModel::result_column, Qt::ToolTipRole),
             QVariant(QStringLiteral("White wins · draws · Black wins, as a share of the games")));
         QCOMPARE(header(window, ExploreModel::score_column, Qt::ToolTipRole),
-                 QVariant(QStringLiteral("Wins plus half the draws, for White")));
+                 QVariant(QStringLiteral(
+                     "The share of the points White scored here: a win counts 1, a draw ½.")));
         QCOMPARE(
             header(window, ExploreModel::top_tier_column, Qt::ToolTipRole),
             QVariant(QStringLiteral("How often players rated 2200 and above choose this move")));
@@ -275,23 +295,39 @@ class ExploreTest : public QObject {
         const int table_bottom = table.mapTo(&screen, QPoint(0, table.height())).y();
         const int panel_top = child<QWidget>(window, QStringLiteral("engine_panel")).y();
         QVERIFY(panel_top >= table_bottom && panel_top <= table_bottom + 10);
-        // The columns fill the width with none narrower than its content; Move and Results keep
-        // theirs, and the others share the rest.
+        // The columns fill the width, none narrower than its content.
         QCOMPARE(columns.length(), table.viewport()->width());
-        int spare = 0;
         for (int column = 0; column < model(window).columnCount(); ++column) {
-            const int content =
-                std::max(columns.sectionSizeHint(column), view.sizeHintForColumn(column));
-            QVERIFY(columns.sectionSize(column) >= content);
-            const bool fixed =
-                column == ExploreModel::move_column || column == ExploreModel::result_column;
-            if (fixed) {
-                QCOMPARE(columns.sectionSize(column), content);
-            }
-            spare += columns.sectionSize(column) - content;
+            QVERIFY(columns.sectionSize(column) >=
+                    std::max(columns.sectionSizeHint(column), view.sizeHintForColumn(column)));
         }
-        QVERIFY(spare > 0); // the window is wider than the columns need
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("fitted-tier3"));
+        // Every column keeps its width, and the Results bar its place, from one position to the
+        // next: tier 4's rows hold other pills, 1. e4's other moves.
+        QList<int> widths;
+        for (int column = 0; column < model(window).columnCount(); ++column) {
+            widths << columns.sectionSize(column);
+        }
+        const auto same_columns = [&] {
+            for (int column = 0; column < model(window).columnCount(); ++column) {
+                if (columns.sectionSize(column) != widths.at(column)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        select_tier(window, 4);
+        QTRY_COMPARE(table_moves(window), (QStringList{QStringLiteral("e4"), QStringLiteral("a3"),
+                                                       QStringLiteral("d4")}));
+        QVERIFY(same_columns());
+        select_tier(window, 3);
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        QTRY_COMPARE(model(window).rowCount(), 4);
+        click(board, "e2");
+        click(board, "e4");
+        QTRY_COMPARE(table_moves(window), (QStringList{QStringLiteral("e5"), QStringLiteral("c5"),
+                                                       QStringLiteral("e6")}));
+        QVERIFY(same_columns());
     }
 
     void the_table_paints_pills_bars_and_the_selection() {
@@ -333,8 +369,10 @@ class ExploreTest : public QObject {
             QVERIFY(!painted(rows, outside, light.result_black));
             QVERIFY(!painted(rows, outside, light.border));
         }
-        // Each row's rule, and the selected row's fill.
+        // Each row's rule but the last's, which the table's frame draws, and the selected row's
+        // fill.
         QVERIFY(painted(rows, rect(0, ExploreModel::games_column), light.row_line));
+        QVERIFY(!painted(rows, rect(2, ExploreModel::games_column), light.row_line));
         QVERIFY(!painted(rows, rect(1, ExploreModel::games_column), light.selection));
         table.selectRow(1);
         QVERIFY(painted(rows, rect(1, ExploreModel::games_column), light.selection));
@@ -344,6 +382,20 @@ class ExploreTest : public QObject {
         QVERIFY(painted(*columns.viewport(), columns.viewport()->rect(), light.chrome));
         QVERIFY(painted(*columns.viewport(), columns.viewport()->rect(), light.border));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("pills-tier4"));
+        // Each pill's tooltip says what its badge means.
+        const QModelIndex a3 = model(window).index(1, ExploreModel::badges_column);
+        const auto pills = chesscoach::app::badge_pills(
+            table.visualRect(a3),
+            Badges(static_cast<std::uint8_t>(a3.data(ExploreModel::badges_role).toUInt())),
+            table.font(), rows);
+        QCOMPARE(pills.size(), std::size_t{2});
+        for (const auto& [badge, area] : pills) {
+            QHelpEvent event(QEvent::ToolTip, area.center(), rows.mapToGlobal(area.center()));
+            QApplication::sendEvent(&rows, &event);
+            QTRY_COMPARE(QToolTip::text(), chesscoach::app::badge_sentence(badge));
+        }
+        QCOMPARE(chesscoach::app::badge_sentence(pills.back().badge),
+                 QStringLiteral("Dubious: popular at your rating, but it loses ground."));
     }
 
     void switching_tiers_changes_the_table() {
@@ -380,7 +432,7 @@ class ExploreTest : public QObject {
         QVERIFY(child<QLabel>(window, QStringLiteral("explore_eco")).isVisible());
         QCOMPARE(label(window, QStringLiteral("explore_summary")),
                  QStringLiteral("Black to move · 600 games by players rated 1600–1799 · the "
-                                "database's evaluation +0.3 at depth 36"));
+                                "database's evaluation +0.3 for White"));
         // Black to move: the score is still white's, 140 wins and 30 draws in 300 games.
         QCOMPARE(cell(window, 0, ExploreModel::score_column), QStringLiteral("51.7%"));
         QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("Book, Popular"));
@@ -392,6 +444,10 @@ class ExploreTest : public QObject {
                      (QStringList{QStringLiteral("Nf3"), QStringLiteral("Nc3")}));
         QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("Sicilian Defense"));
         QCOMPARE(label(window, QStringLiteral("explore_eco")), QStringLiteral("B20"));
+        // No tier-6 node after 1. e4 c5: no share to show, and the cell says why.
+        QCOMPARE(cell(window, 0, ExploreModel::top_tier_column), QStringLiteral("–"));
+        QCOMPARE(model(window).index(0, ExploreModel::top_tier_column).data(Qt::ToolTipRole),
+                 QVariant(QStringLiteral("No games by players rated 2200 and above here")));
         QTRY_VERIFY(!board.animating());
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("sicilian-light"));
     }
@@ -469,15 +525,15 @@ class ExploreTest : public QObject {
         click(board, "e6");
         QTRY_COMPARE(
             message(window),
-            QStringLiteral(
-                "No games at this rating after this move. The engine is your guide from here."));
+            QStringLiteral("You have left the known lines. Too few games by players at your rating "
+                           "reach this position."));
         QVERIFY(message_shown(window));
         QVERIFY(!child<QTableView>(window, QStringLiteral("explore_table")).isVisible());
         QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("King's Pawn Game"));
         QCOMPARE(label(window, QStringLiteral("explore_eco")), QStringLiteral("B00"));
         // The database has no row for 1. e4 e6, so neither its side to move nor an evaluation.
         QCOMPARE(label(window, QStringLiteral("explore_summary")),
-                 QStringLiteral("0 games by players rated 1600–1799"));
+                 QStringLiteral("Too few games by players rated 1600–1799 to show"));
         QTRY_VERIFY(!board.animating());
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("off-book"));
     }
@@ -504,7 +560,7 @@ class ExploreTest : public QObject {
         click(board, "g4");
         QTRY_COMPARE(label(window, QStringLiteral("explore_summary")),
                      QStringLiteral("Black to move · 10 games by players rated under 1200 · the "
-                                    "database's evaluation -M1 at depth 99"));
+                                    "database's evaluation mated in 1 for White"));
         QCOMPARE(bar.white_share(), std::optional(0.0));
         QVERIFY(bar.isVisible());
         // 1. Nf3 d5 has no evaluation: the bar empties, keeping its width beside the board.
@@ -514,7 +570,9 @@ class ExploreTest : public QObject {
         click(board, "d7");
         click(board, "d5");
         QTRY_COMPARE(label(window, QStringLiteral("explore_summary")),
-                     QStringLiteral("White to move · 0 games by players rated under 1200"));
+                     QStringLiteral("White to move · too few games by players rated under 1200 "
+                                    "to show"));
+        QVERIFY(child<QLabel>(window, QStringLiteral("explore_summary")).toolTip().isEmpty());
         QVERIFY(bar.isVisible());
         QCOMPARE(bar.width(), width);
         QCOMPARE(bar.white_share(), std::nullopt);

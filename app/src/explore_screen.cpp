@@ -53,16 +53,14 @@ constexpr int part_spacing = 10;
 constexpr int chip_spacing = 8;
 constexpr int head_spacing = 3;
 // The engine's panel: its padding, left and right then above and below; the space under its
-// head; the evaluation's column and the gap after it; a line's padding above and below; and the
-// lines it keeps room for, at least and at most (the Settings dialog's range).
+// head; the evaluation's column, at least, and the gap after it; and a line's padding above and
+// below.
 constexpr int panel_padding = 10;
 constexpr int panel_padding_vertical = 8;
 constexpr int panel_head_spacing = 4;
 constexpr int engine_score_width = 44;
 constexpr int engine_gap = 10;
 constexpr int engine_line_padding = 2;
-constexpr int engine_rows_least = 3;
-constexpr int engine_rows_most = 10;
 // The roles under which an engine line's item holds its score and its moves.
 constexpr int engine_score_role = Qt::UserRole;
 constexpr int engine_moves_role = Qt::UserRole + 1;
@@ -100,7 +98,7 @@ class MoveDelegate : public QStyledItemDelegate {
                const QModelIndex& index) const override {
         painter->save();
         painter->setClipRect(option.rect, Qt::IntersectClip);
-        paint_row(*painter, option, *palette_);
+        paint_row(*painter, option, index, *palette_);
         switch (index.column()) {
         case ExploreModel::badges_column:
             paint_badge_pills(*painter, option, badges_of(index), *palette_);
@@ -147,6 +145,15 @@ class MoveDelegate : public QStyledItemDelegate {
         return {width, row_height(option.font, device)};
     }
 
+    // Over a pill, its badge's sentence; elsewhere the cell's tooltip, if any.
+    bool helpEvent(QHelpEvent* event, QAbstractItemView* view, const QStyleOptionViewItem& option,
+                   const QModelIndex& index) override {
+        if (event != nullptr && view != nullptr && index.column() == ExploreModel::badges_column) {
+            return show_pill_tooltip(*event, *view, option, index);
+        }
+        return QStyledItemDelegate::helpEvent(event, view, option, index);
+    }
+
   private:
     [[nodiscard]] static Badges badges_of(const QModelIndex& index) {
         return Badges(static_cast<std::uint8_t>(index.data(ExploreModel::badges_role).toUInt()));
@@ -176,10 +183,12 @@ class EngineLineDelegate : public QStyledItemDelegate {
     void paint(QPainter* painter, const QStyleOptionViewItem& option,
                const QModelIndex& index) const override {
         const QRect line = option.rect.adjusted(0, engine_line_padding, 0, -engine_line_padding);
-        const QRect score(line.left(), line.top(), engine_score_width, line.height());
-        const QRect moves = line.adjusted(engine_score_width + engine_gap, 0, 0, 0);
+        const QFont bold = weighted(tabular(option.font), QFont::Bold);
+        const int width = score_width(bold, index);
+        const QRect score(line.left(), line.top(), width, line.height());
+        const QRect moves = line.adjusted(width + engine_gap, 0, 0, 0);
         painter->save();
-        painter->setFont(weighted(tabular(option.font), QFont::Bold));
+        painter->setFont(bold);
         painter->setPen(palette_->accent);
         painter->drawText(score, text_flags(Qt::AlignLeft | Qt::AlignVCenter),
                           index.data(engine_score_role).toString());
@@ -193,12 +202,18 @@ class EngineLineDelegate : public QStyledItemDelegate {
 
     [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
                                  const QModelIndex& index) const override {
-        return {engine_score_width + engine_gap +
+        return {score_width(weighted(tabular(option.font), QFont::Bold), index) + engine_gap +
                     option.fontMetrics.horizontalAdvance(index.data(engine_moves_role).toString()),
                 engine_line_height(option.font)};
     }
 
   private:
+    // The score's column: 44 px, or wider for a score that needs it, as a mate in words does.
+    [[nodiscard]] static int score_width(const QFont& bold, const QModelIndex& index) {
+        return std::max(engine_score_width, QFontMetrics(bold).horizontalAdvance(
+                                                index.data(engine_score_role).toString()));
+    }
+
     const StudyPalette* palette_;
 };
 
@@ -222,9 +237,9 @@ QString screen_style(const StudyPalette& palette) {
 // platform (Qt's own handling does not activate it on macOS), like a double-click. It asks for
 // its rows' height, so that the engine's panel sits right under them, and at least the width of
 // every column at its widest likely content (its header's label or a long sample), so that the
-// window makes room for the columns whatever the rows. Each column takes its content's width,
-// and the spare width goes to Badges, Games, Score for White and Top players in proportion to
-// theirs, so that no column holds a wide gap.
+// window makes room for the columns whatever the rows. Each column takes that width, and the spare
+// width goes to Badges, Games, Score for White and Top players in proportion to theirs, so that no
+// column holds a wide gap and none moves from one position to the next.
 class MoveTable : public QTableView {
   public:
     using QTableView::QTableView;
@@ -269,13 +284,16 @@ class MoveTable : public QTableView {
                column == ExploreModel::score_column || column == ExploreModel::top_tier_column;
     }
 
+    // Each column's base width, its header's label or its sample's, is fixed for the table's width,
+    // and so is each sharing column's part of the spare width, in proportion to its base: the
+    // columns stay put from one position to the next. A cell wider than that widens its column.
     void fit_columns() {
         QHeaderView& columns = *horizontalHeader();
         std::array<int, ExploreModel::column_count> widths{};
         int used = 0;
         int shared = 0;
         for (int column = 0; column < ExploreModel::column_count; ++column) {
-            const int width = std::max(columns.sectionSizeHint(column), sizeHintForColumn(column));
+            const int width = base_width(column);
             widths.at(static_cast<std::size_t>(column)) = width;
             used += width;
             shared += sharing(column) ? width : 0;
@@ -294,47 +312,54 @@ class MoveTable : public QTableView {
             widths.at(ExploreModel::top_tier_column) += spare - given;
         }
         for (int column = 0; column < ExploreModel::column_count; ++column) {
-            columns.resizeSection(column, widths.at(static_cast<std::size_t>(column)));
+            columns.resizeSection(column, std::max(widths.at(static_cast<std::size_t>(column)),
+                                                   sizeHintForColumn(column)));
         }
+    }
+
+    [[nodiscard]] int base_width(int column) const {
+        return std::max(horizontalHeader()->sectionSizeHint(column), widest(column));
     }
 
     [[nodiscard]] int least_width() const {
         int width = 2 * frameWidth();
         for (int column = 0; column < ExploreModel::column_count; ++column) {
-            width += std::max(horizontalHeader()->sectionSizeHint(column), widest(column));
+            width += base_width(column);
         }
         return width;
     }
 
-    // A column's widest likely content, as the move delegate paints it.
+    // A sample of a column's widest likely content, as the move delegate paints it.
     [[nodiscard]] int widest(int column) const {
         const auto text = [](const QFont& font, const QString& sample) {
             return QFontMetrics(font).horizontalAdvance(sample) + (2 * cell_padding);
         };
         switch (column) {
         case ExploreModel::move_column:
-            return text(weighted(font(), QFont::Bold), QStringLiteral("Qxe4+"));
+            return text(weighted(font(), QFont::Bold), QStringLiteral("exd8=Q+"));
         case ExploreModel::badges_column: {
-            Badges both;
-            both.set(Badge::popular);
-            both.set(Badge::dubious);
-            return badge_pills_width(both, font(), *this);
+            Badges all;
+            all.set(Badge::book);
+            all.set(Badge::popular);
+            all.set(Badge::dubious);
+            return badge_pills_width(all, font(), *this);
         }
         case ExploreModel::games_column:
-            return text(tabular(font()), QStringLiteral("999,999"));
+            return text(tabular(font()), QStringLiteral("99,999,999"));
         case ExploreModel::result_column:
             return results_bar_size.width() + (2 * cell_padding);
-        default:
+        case ExploreModel::score_column:
             return text(tabular(font()), QStringLiteral("100.0%"));
+        default:
+            return text(tabular(font()), QStringLiteral("100%"));
         }
     }
 };
 
 QString score_text(std::optional<qint64> cp, std::optional<qint64> mate) {
     if (mate) {
-        const qint64 moves = *mate;
-        return (moves < 0 ? QStringLiteral("-M") : QStringLiteral("M")) +
-               QString::number(moves < 0 ? -moves : moves);
+        return *mate < 0 ? ExploreScreen::tr("mated in %1").arg(-*mate)
+                         : ExploreScreen::tr("mate in %1").arg(*mate);
     }
     const double pawns = static_cast<double>(cp.value_or(0)) / 100.0;
     const QString text = QString::number(pawns, 'f', 1);
@@ -350,21 +375,27 @@ QString position_summary(const ExploreData& explore, const QString& band) {
                           : ExploreScreen::tr("Black to move"));
         }
     }
-    const qint64 games = explore.node ? explore.node->games : 0;
-    parts << counted(games, ExploreScreen::tr("%1 game by players rated %2"),
-                     ExploreScreen::tr("%1 games by players rated %2"))
-                 .arg(band);
+    // Off book there are games, too few to have been kept, so there is no count to give.
+    parts << (explore.node
+                  ? counted(explore.node->games, ExploreScreen::tr("%1 game by players rated %2"),
+                            ExploreScreen::tr("%1 games by players rated %2"))
+                        .arg(band)
+                  : ExploreScreen::tr("too few games by players rated %1 to show").arg(band));
     if (explore.position && explore.position->eval_depth) {
-        parts << ExploreScreen::tr("the database's evaluation %1 at depth %2")
-                     .arg(score_text(explore.position->eval_cp, explore.position->eval_mate),
-                          QString::number(*explore.position->eval_depth));
+        parts << ExploreScreen::tr("the database's evaluation %1 for White")
+                     .arg(score_text(explore.position->eval_cp, explore.position->eval_mate));
     }
-    return parts.join(QStringLiteral(" · "));
+    // A line without its side to move starts with the games, which may start in lower case.
+    QString summary = parts.join(QStringLiteral(" · "));
+    if (!summary.isEmpty()) {
+        summary.front() = summary.front().toUpper();
+    }
+    return summary;
 }
 
 QString engine_score_text(const EngineLine& line) {
     if (line.mated) {
-        return *line.mated == Color::white ? QStringLiteral("-M0") : QStringLiteral("M0");
+        return *line.mated == Color::white ? ExploreScreen::tr("mated") : ExploreScreen::tr("mate");
     }
     return score_text(line.cp ? std::optional<qint64>(*line.cp) : std::nullopt,
                       line.mate ? std::optional<qint64>(*line.mate) : std::nullopt);
@@ -380,7 +411,8 @@ ExploreScreen::ExploreScreen(QWidget* parent)
       eco_(new QLabel(this)), name_(new QLabel(this)), summary_(new QLabel(this)),
       content_(new QStackedWidget(this)), table_(new MoveTable(this)), message_(new QLabel(this)),
       engine_panel_(new QFrame(this)), engine_label_(new QLabel(engine_panel_)),
-      engine_detail_(new QLabel(engine_panel_)), engine_lines_(new QListWidget(engine_panel_)) {
+      engine_detail_(new QLabel(engine_panel_)), engine_message_(new QLabel(engine_panel_)),
+      engine_lines_(new QListWidget(engine_panel_)) {
     setObjectName(QStringLiteral("explore_screen"));
     eco_->setObjectName(QStringLiteral("explore_eco"));
     name_->setObjectName(QStringLiteral("explore_name"));
@@ -390,6 +422,7 @@ ExploreScreen::ExploreScreen(QWidget* parent)
     engine_panel_->setObjectName(QStringLiteral("engine_panel"));
     engine_label_->setObjectName(QStringLiteral("engine_label"));
     engine_detail_->setObjectName(QStringLiteral("engine_detail"));
+    engine_message_->setObjectName(QStringLiteral("engine_message"));
     engine_lines_->setObjectName(QStringLiteral("engine_lines"));
 
     // The type: the application's font, the name in Source Serif 4 where it is installed.
@@ -400,6 +433,7 @@ ExploreScreen::ExploreScreen(QWidget* parent)
     engine_label_->setFont(weighted(font(), QFont::DemiBold));
     summary_->setWordWrap(true);
     engine_detail_->setWordWrap(true);
+    engine_message_->setWordWrap(true);
     engine_detail_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     message_->setAlignment(Qt::AlignCenter);
     message_->setWordWrap(true);
@@ -438,6 +472,7 @@ ExploreScreen::ExploreScreen(QWidget* parent)
                                panel_padding_vertical);
     engine->setSpacing(panel_head_spacing);
     engine->addLayout(engine_head);
+    engine->addWidget(engine_message_);
     engine->addWidget(engine_lines_);
 
     content_->addWidget(table_);
@@ -471,7 +506,7 @@ ExploreScreen::ExploreScreen(QWidget* parent)
     column->addStretch(1);
     set_palette(StudyPalette::light());
     show_no_database();
-    show_engine_state(tr("not started"));
+    show_engine_state(EngineState::not_started, QString());
 }
 
 void ExploreScreen::set_palette(const StudyPalette& palette) {
@@ -490,13 +525,24 @@ void ExploreScreen::show_data(const ExploreData& explore, const QString& band) {
     const QString name = space >= 0 ? explore.name.mid(space + 1) : explore.name;
     eco_->setText(eco);
     eco_->setVisible(!eco.isEmpty());
-    name_->setText(name.isEmpty() ? tr("Unnamed") : name);
+    // A line with no named position is the start, or a position no opening names.
+    QString shown = name;
+    if (shown.isEmpty()) {
+        shown = explore.key == Position::start().key() ? tr("Starting position")
+                                                       : tr("No opening name");
+    }
+    name_->setText(shown);
     summary_->setText(position_summary(explore, band));
+    // The evaluation's depth, which the line leaves out.
+    summary_->setToolTip(explore.position && explore.position->eval_depth
+                             ? tr("The database's evaluation comes from a search to depth %1.")
+                                   .arg(*explore.position->eval_depth)
+                             : QString());
     if (!explore.node) {
         model_->set_moves({});
         table_->fit();
-        message_->setText(
-            tr("No games at this rating after this move. The engine is your guide from here."));
+        message_->setText(tr("You have left the known lines. Too few games by players at your "
+                             "rating reach this position."));
         content_->setCurrentWidget(message_);
         return;
     }
@@ -510,6 +556,7 @@ void ExploreScreen::show_no_database(const QString& message) {
     eco_->hide();
     name_->clear();
     summary_->clear();
+    summary_->setToolTip(QString());
     model_->set_moves({});
     table_->fit();
     message_->setText(message.isEmpty() ? tr("No opening database is open. Import one with File > "
@@ -523,8 +570,8 @@ QString ExploreScreen::engine_title() const {
 }
 
 void ExploreScreen::show_engine_lines(const QVector<EngineLine>& lines, bool cached) {
-    searching_ = false;
     engine_label_->setText(engine_title());
+    engine_message_->setVisible(failure_said_);
     engine_lines_->clear();
     for (const EngineLine& line : lines) {
         auto* item = new QListWidgetItem(engine_line_text(line), engine_lines_);
@@ -536,37 +583,38 @@ void ExploreScreen::show_engine_lines(const QVector<EngineLine>& lines, bool cac
     } else {
         const QString depth = QString::number(lines.front().depth);
         const QString count = lines.size() == 1 ? tr("1 line") : tr("%1 lines").arg(lines.size());
-        engine_detail_->setText(cached ? tr("depth %1 (cached) · %2").arg(depth, count)
-                                       : tr("depth %1 · %2").arg(depth, count));
+        engine_detail_->setText(cached
+                                    ? tr("depth %1 · %2 from an earlier search").arg(depth, count)
+                                    : tr("depth %1 · %2").arg(depth, count));
     }
     fit_engine_lines();
 }
 
-void ExploreScreen::show_engine_searching() {
-    searching_ = true;
+void ExploreScreen::show_engine_state(EngineState state, const QString& name) {
+    engine_name_ = name;
+    failure_said_ = false;
     engine_label_->setText(engine_title());
-    engine_detail_->setText(tr("thinking…"));
-    engine_lines_->clear();
+    say_in_engine_panel(engine_words(state, name, true));
 }
 
-void ExploreScreen::show_engine_state(const QString& text) {
-    // The state that ends a search is the engine's name; any other is said in the head.
-    if (searching_) {
-        searching_ = false;
-        engine_name_ = text;
-        engine_detail_->clear();
-    } else {
-        engine_detail_->setText(text);
-    }
-    engine_label_->setText(engine_title());
+void ExploreScreen::show_engine_failure(const QString& message) {
+    failure_said_ = true;
+    say_in_engine_panel(message);
+}
+
+void ExploreScreen::say_in_engine_panel(const QString& text) {
+    engine_detail_->clear();
+    engine_message_->setText(text);
+    engine_message_->show();
     engine_lines_->clear();
+    fit_engine_lines();
 }
 
 void ExploreScreen::fit_engine_lines() {
-    engine_rows_ = std::clamp(std::max(engine_rows_, engine_lines_->count()), engine_rows_least,
-                              engine_rows_most);
-    engine_lines_->setFixedHeight((engine_rows_ * engine_line_height(engine_lines_->font())) +
+    const int count = engine_lines_->count();
+    engine_lines_->setFixedHeight((count * engine_line_height(engine_lines_->font())) +
                                   (2 * engine_lines_->frameWidth()));
+    engine_lines_->setVisible(count > 0);
 }
 
 } // namespace chesscoach::app

@@ -1,8 +1,8 @@
 // How the app words the things its sentences hold (docs/reference/app.md, **Wording**): a rating
 // band, a count with its noun, a number with thousands separators, a move's loss by its two
-// evaluations, a day and the months an opening database holds, each written one way on every
-// screen, in English (QLocale::English) whatever the system's locale. Pure functions of their
-// arguments: no clock, no I/O.
+// evaluations, a day, the months an opening database holds and the engine's state, each written
+// one way on every screen, in English (QLocale::English) whatever the system's locale. Pure
+// functions of their arguments: no clock, no I/O.
 #pragma once
 
 #include <chesscoach/opening_store.hpp>
@@ -10,8 +10,11 @@
 
 #include <QString>
 #include <QtGlobal>
+#include <cstdint>
 
 namespace chesscoach::app {
+
+enum class EngineState : std::uint8_t; // engine_worker.hpp
 
 // The tier's rating band: "under 1200", "1200–1399" to "2000–2199", "2200 and above"; written to
 // read after "players rated" and in the Rating menu.
@@ -62,5 +65,11 @@ struct MoveEvaluations {
 // a year's last, when there are gaps: "January, March and April 2013", "November 2026, January and
 // March 2027". Empty for none, and as stored when one does not read as a month.
 [[nodiscard]] QString month_range(const QString& stored);
+
+// The engine's state, name being its own when it is ready or searching: "Stockfish 17 ready",
+// "Stockfish 17 thinking…", "Engine starting…", "Engine not started", "No engine found", "The
+// engine did not start". With the way forward, the last two say what to do: "No engine found.
+// Choose a Stockfish program in Settings."
+[[nodiscard]] QString engine_words(EngineState state, const QString& name, bool with_way_forward);
 
 } // namespace chesscoach::app

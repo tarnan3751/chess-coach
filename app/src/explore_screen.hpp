@@ -26,16 +26,17 @@ namespace chesscoach::app {
 class ExploreModel;
 class MoveTable;
 
-// A score from white's side as text: "+0.3" (centipawns as pawns), "M3" or "-M3" (a mate for
-// white or for black).
+// A score from white's side as text: "+0.3" (centipawns as pawns), "mate in 3" (white mates) or
+// "mated in 3" (white is mated).
 [[nodiscard]] QString score_text(std::optional<qint64> cp, std::optional<qint64> mate);
 // The line under the position's name, the tier named by its rating band (wording.hpp's
 // rating_band): "White to move · 1,000 games by players rated 1600–1799 · the database's
-// evaluation +0.2 at depth 40". The side to move is left out when the position has no stored
-// FEN, and the evaluation when it has none.
+// evaluation +0.2 for White", or off book "Black to move · too few games by players rated
+// 1600–1799 to show". The side to move is left out when the position has no stored FEN, and the
+// evaluation when it has none.
 [[nodiscard]] QString position_summary(const ExploreData& explore, const QString& band);
-// An engine line's score as score_text writes it; a checkmated side to move reads as a mate in 0
-// for the other side, "M0" when black is mated and "-M0" when white is.
+// An engine line's score as score_text writes it; a checkmated side to move reads "mate" when
+// black is mated and "mated" when white is.
 [[nodiscard]] QString engine_score_text(const EngineLine& line);
 // An engine line as the panel lists it, its score then its moves: "-0.3 Nc6 Bb5 Nf6".
 [[nodiscard]] QString engine_line_text(const EngineLine& line);
@@ -55,14 +56,15 @@ class ExploreScreen : public QWidget {
     // The empty state, without a database; message says why, else a plain one.
     void show_no_database(const QString& message = QString());
 
-    // The engine's panel: its lines, the head giving their depth and count, "(cached)" when they
-    // came from the cache; that it is thinking, which clears them; or another state ("not
-    // found", "failed to start") or a failure, in the head. The engine's name heads the panel:
-    // the worker reports it as the state that ends a search (EngineWorker::engine_state), the
-    // one that follows show_engine_searching; "Engine" until it has.
+    // The engine's panel, headed by the engine's name ("Engine" until it has given one). Its
+    // lines, the head giving their depth and count, "from an earlier search" when they came from
+    // the cache. The engine's state (EngineWorker::engine_state; name is the engine's own when it
+    // is ready or searching), said in the panel's body in wording.hpp's engine_words with the way
+    // forward, which clears the lines. A failure the worker reports, said in the body, and kept
+    // above the lines that follow until the next state.
     void show_engine_lines(const QVector<EngineLine>& lines, bool cached);
-    void show_engine_searching();
-    void show_engine_state(const QString& text);
+    void show_engine_state(EngineState state, const QString& name);
+    void show_engine_failure(const QString& message);
 
     [[nodiscard]] const ExploreModel& model() const { return *model_; }
 
@@ -71,9 +73,10 @@ class ExploreScreen : public QWidget {
 
   private:
     [[nodiscard]] QString engine_title() const;
-    // Keeps room in the engine's panel for the lines shown, three at least, never shrinking, so
-    // that the table above does not move while the engine thinks.
+    // Sizes the engine's list to the lines it holds, and hides it when there are none.
     void fit_engine_lines();
+    // Says a state or a failure in the engine's panel, in place of its lines.
+    void say_in_engine_panel(const QString& text);
 
     StudyPalette palette_;
     ExploreModel* model_;
@@ -86,10 +89,10 @@ class ExploreScreen : public QWidget {
     QFrame* engine_panel_;
     QLabel* engine_label_;
     QLabel* engine_detail_;
+    QLabel* engine_message_;
     QListWidget* engine_lines_;
     QString engine_name_;
-    bool searching_ = false;
-    int engine_rows_ = 0;
+    bool failure_said_ = false;
 };
 
 } // namespace chesscoach::app

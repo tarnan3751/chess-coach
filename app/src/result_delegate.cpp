@@ -3,15 +3,19 @@
 
 #include "tables.hpp"
 
+#include <QAbstractItemView>
 #include <QColor>
 #include <QCoreApplication>
 #include <QFontMetrics>
+#include <QHelpEvent>
 #include <QModelIndex>
 #include <QPaintDevice>
 #include <QPainter>
 #include <QRect>
 #include <QRectF>
+#include <QStringList>
 #include <QStyleOptionViewItem>
+#include <QToolTip>
 #include <QVariant>
 #include <array>
 #include <cstddef>
@@ -58,18 +62,82 @@ QRect content_of(const QRect& cell) { return cell.adjusted(cell_padding, 0, -cel
 
 QString none_mark() { return QStringLiteral("–"); }
 
+QString translate(const char* text) {
+    return QCoreApplication::translate("chesscoach::app::Badges", text);
+}
+
+Badges badges_of(const QModelIndex& index) {
+    return Badges(static_cast<std::uint8_t>(index.data(badges_role).toUInt()));
+}
+
 } // namespace
 
 QString badge_word(Badge badge) {
     switch (badge) {
     case Badge::book:
-        return QCoreApplication::translate("chesscoach::app::Badges", "Book");
+        return translate("Book");
     case Badge::popular:
-        return QCoreApplication::translate("chesscoach::app::Badges", "Popular");
+        return translate("Popular");
     case Badge::dubious:
-        return QCoreApplication::translate("chesscoach::app::Badges", "Dubious");
+        return translate("Dubious");
     }
     return {};
+}
+
+QString badge_sentence(Badge badge) {
+    switch (badge) {
+    case Badge::book:
+        return translate("Book: what strong players (2200 and above) choose.");
+    case Badge::popular:
+        return translate("Popular: what players at your rating often choose.");
+    case Badge::dubious:
+        return translate("Dubious: popular at your rating, but it loses ground.");
+    }
+    return {};
+}
+
+QString badges_explained() {
+    QStringList sentences;
+    for (const Badge badge : badge_order) {
+        sentences << badge_sentence(badge);
+    }
+    return sentences.join(QLatin1Char(' '));
+}
+
+QString results_note() { return translate("white · draw · black"); }
+
+std::vector<Pill> badge_pills(const QRect& cell, Badges badges, const QFont& font,
+                              const QPaintDevice& device) {
+    const QRect content = content_of(cell);
+    const QFontMetrics metrics(pill_font(font, device));
+    const int height = metrics.height() + (2 * pill_padding_vertical);
+    const int top = content.top() + ((content.height() - height) / 2);
+    std::vector<Pill> pills;
+    int left = content.left();
+    for (const Badge badge : badge_order) {
+        if (badges.has(badge)) {
+            const QRect rect(left, top,
+                             metrics.horizontalAdvance(badge_word(badge)) + (2 * pill_padding),
+                             height);
+            pills.push_back({.badge = badge, .rect = rect});
+            left += rect.width() + pill_gap;
+        }
+    }
+    return pills;
+}
+
+bool show_pill_tooltip(const QHelpEvent& event, const QAbstractItemView& view,
+                       const QStyleOptionViewItem& option, const QModelIndex& index) {
+    for (const Pill& pill :
+         badge_pills(option.rect, badges_of(index), option.font, *view.viewport())) {
+        if (pill.rect.contains(event.pos())) {
+            QToolTip::showText(event.globalPos(), badge_sentence(pill.badge), view.viewport(),
+                               pill.rect);
+            return true;
+        }
+    }
+    QToolTip::hideText();
+    return true;
 }
 
 void paint_results_bar(QPainter& painter, const QStyleOptionViewItem& option,
@@ -139,33 +207,24 @@ int badge_pills_width(Badges badges, const QFont& font, const QPaintDevice& devi
 
 void paint_badge_pills(QPainter& painter, const QStyleOptionViewItem& option, Badges badges,
                        const StudyPalette& palette) {
-    const QRect content = content_of(option.rect);
-    if (!badges.has(Badge::book) && !badges.has(Badge::popular) && !badges.has(Badge::dubious)) {
+    const std::vector<Pill> pills =
+        badge_pills(option.rect, badges, option.font, *painter.device());
+    if (pills.empty()) {
         painter.setFont(option.font);
         painter.setPen(palette.muted);
-        painter.drawText(content, text_flags(Qt::AlignLeft | Qt::AlignVCenter), none_mark());
+        painter.drawText(content_of(option.rect), text_flags(Qt::AlignLeft | Qt::AlignVCenter),
+                         none_mark());
         return;
     }
-    const QFont font = pill_font(option.font, *painter.device());
-    const QFontMetrics metrics(font);
-    const int height = metrics.height() + (2 * pill_padding_vertical);
-    const int top = content.top() + ((content.height() - height) / 2);
-    painter.setFont(font);
+    painter.setFont(pill_font(option.font, *painter.device()));
     painter.setRenderHint(QPainter::Antialiasing);
-    int left = content.left();
-    for (const Badge badge : badge_order) {
-        if (!badges.has(badge)) {
-            continue;
-        }
-        const QString word = badge_word(badge);
-        const QRect pill(left, top, metrics.horizontalAdvance(word) + (2 * pill_padding), height);
-        const PillColours colours = colours_of(badge, palette);
+    for (const Pill& pill : pills) {
+        const PillColours colours = colours_of(pill.badge, palette);
         painter.setPen(Qt::NoPen);
         painter.setBrush(colours.background);
-        painter.drawRoundedRect(QRectF(pill), corner_radius, corner_radius);
+        painter.drawRoundedRect(QRectF(pill.rect), corner_radius, corner_radius);
         painter.setPen(colours.text);
-        painter.drawText(pill, Qt::AlignCenter, word);
-        left += pill.width() + pill_gap;
+        painter.drawText(pill.rect, Qt::AlignCenter, badge_word(pill.badge));
     }
 }
 

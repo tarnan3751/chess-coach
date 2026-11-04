@@ -855,14 +855,9 @@ void MainWindow::request_evaluation() {
     emit evaluate_requested(position.key(), QString::fromStdString(position.fen()), request_id_);
 }
 
-void MainWindow::engine_state(EngineState state, const QString& name, const QString& detail) {
+void MainWindow::engine_state(EngineState state, const QString& name, const QString& /*detail*/) {
     engine_label_->setText(engine_status(state, name));
-    // Explore's engine panel keeps the worker's words; a start in progress leaves it as it is.
-    if (state == EngineState::searching) {
-        explore_->show_engine_searching();
-    } else if (state != EngineState::starting) {
-        explore_->show_engine_state(detail);
-    }
+    explore_->show_engine_state(state, name);
 }
 
 QString MainWindow::engine_status(EngineState state, const QString& name) {
@@ -901,7 +896,7 @@ void MainWindow::lines_ready(quint64 key, int request_id, const QVector<EngineLi
     update_eval_bar();
 }
 
-void MainWindow::engine_failed(const QString& message) { explore_->show_engine_state(message); }
+void MainWindow::engine_failed(const QString& message) { explore_->show_engine_failure(message); }
 
 void MainWindow::update_eval_bar() {
     if (screen_ != Screen::explore) {

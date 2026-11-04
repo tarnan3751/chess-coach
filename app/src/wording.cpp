@@ -1,8 +1,11 @@
-// How the app words ratings, counts, numbers, pawns, days and months (wording.hpp).
+// How the app words ratings, counts, numbers, pawns, days, months and the engine's state
+// (wording.hpp).
 #include "wording.hpp"
 
 #include <chesscoach/score.hpp>
 #include <chesscoach/tier.hpp>
+
+#include "engine_worker.hpp"
 
 #include <QCoreApplication>
 #include <QDate>
@@ -158,6 +161,29 @@ QString month_range(const QString& stored) {
     }
     const QString last = names.takeLast();
     return translate("%1 and %2").arg(names.join(QStringLiteral(", ")), last);
+}
+
+QString engine_words(EngineState state, const QString& name, bool with_way_forward) {
+    switch (state) {
+    case EngineState::not_started:
+        return translate("Engine not started");
+    case EngineState::starting:
+        return translate("Engine starting…");
+    case EngineState::ready:
+        return translate("%1 ready").arg(name);
+    case EngineState::searching:
+        return translate("%1 thinking…").arg(name);
+    case EngineState::not_found:
+        return with_way_forward
+                   ? translate("No engine found. Choose a Stockfish program in Settings.")
+                   : translate("No engine found");
+    case EngineState::failed:
+        return with_way_forward
+                   ? translate(
+                         "The engine did not start. Choose another engine program in Settings.")
+                   : translate("The engine did not start");
+    }
+    return {};
 }
 
 } // namespace chesscoach::app

@@ -14,6 +14,7 @@
 #include <QStringList>
 #include <QtGlobal>
 
+class QModelIndex;
 class QPaintDevice;
 class QPainter;
 class QRect;
@@ -47,8 +48,9 @@ inline constexpr int cell_padding_vertical = 5;
 }
 
 // Paints a cell's part of its row: the selection's fill when the row is selected, and the rule
-// under the row. The painter's pen changes.
-void paint_row(QPainter& painter, const QStyleOptionViewItem& option, const StudyPalette& palette);
+// under the row but the last, whose edge is the table's frame. The painter's pen changes.
+void paint_row(QPainter& painter, const QStyleOptionViewItem& option, const QModelIndex& index,
+               const StudyPalette& palette);
 
 // A header section's note, which TableHeader paints after the label in the regular weight.
 inline constexpr int header_note_role = Qt::UserRole + 3;

@@ -102,8 +102,10 @@ QVariant ExploreModel::data(const QModelIndex& index, int role) const {
     if (role == Qt::TextAlignmentRole && numeric(index.column())) {
         return QVariant::fromValue(Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
     }
-    if (role == Qt::ToolTipRole && index.column() == badges_column) {
-        return badge_names(move.badges);
+    // The pills say what each badge means (MoveDelegate); without a tier-6 node there is no
+    // share to show.
+    if (role == Qt::ToolTipRole && index.column() == top_tier_column && !move.top_share) {
+        return translate("No games by players rated 2200 and above here");
     }
     if (role != Qt::DisplayRole) {
         return {};
@@ -140,16 +142,19 @@ QVariant ExploreModel::headerData(int section, Qt::Orientation orientation, int 
             Qt::Alignment((numeric(section) ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter));
     }
     if (role == header_note_role) {
-        return section == result_column ? translate("white · draw · black") : QVariant();
+        return section == result_column ? results_note() : QVariant();
     }
     if (role == Qt::ToolTipRole) {
         switch (section) {
+        case badges_column:
+            return badges_explained();
         case games_column:
-            return translate("How many games at this rating reached this move");
+            return translate("How many games by players at this rating played this move here.");
         case result_column:
             return translate("White wins · draws · Black wins, as a share of the games");
         case score_column:
-            return translate("Wins plus half the draws, for White");
+            return translate("The share of the points White scored here: a win counts 1, a draw "
+                             "½.");
         case top_tier_column:
             return translate("How often players rated 2200 and above choose this move");
         default:

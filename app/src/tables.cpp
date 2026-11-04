@@ -7,6 +7,7 @@
 #include <QAbstractItemView>
 #include <QFontMetrics>
 #include <QHeaderView>
+#include <QModelIndex>
 #include <QPaintDevice>
 #include <QPainter>
 #include <QRect>
@@ -56,12 +57,15 @@ QFont tabular(QFont font) {
     return font;
 }
 
-void paint_row(QPainter& painter, const QStyleOptionViewItem& option, const StudyPalette& palette) {
+void paint_row(QPainter& painter, const QStyleOptionViewItem& option, const QModelIndex& index,
+               const StudyPalette& palette) {
     if (option.state.testFlag(QStyle::State_Selected)) {
         painter.fillRect(option.rect, palette.selection);
     }
-    painter.setPen(palette.row_line);
-    painter.drawLine(option.rect.bottomLeft(), option.rect.bottomRight());
+    if (index.row() + 1 < index.model()->rowCount(index.parent())) {
+        painter.setPen(palette.row_line);
+        painter.drawLine(option.rect.bottomLeft(), option.rect.bottomRight());
+    }
 }
 
 TableHeader::TableHeader(const StudyPalette* palette, QWidget* parent)

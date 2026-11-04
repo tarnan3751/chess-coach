@@ -1,12 +1,14 @@
 // Unit tests of the app's wording (app; unit; wording.hpp): the rating bands from core's bounds,
 // numbers with separators and counts with their nouns, the pawns rounded in integers and the cases
-// of a loss by its two evaluations, a depth in moves, a day, and a database's months as one month,
-// a run, a list with gaps or as stored when one does not read. Pure functions: no application
-// object is needed.
+// of a loss by its two evaluations, a depth in moves, a day, a database's months as one month, a
+// run, a list with gaps or as stored when one does not read, and the engine's state, short and
+// with the way forward. Pure functions: no application object is needed.
 #include "wording.hpp"
 
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
+
+#include "engine_worker.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -17,6 +19,8 @@
 
 using chesscoach::app::counted;
 using chesscoach::app::day;
+using chesscoach::app::engine_words;
+using chesscoach::app::EngineState;
 using chesscoach::app::loss_cell;
 using chesscoach::app::loss_sentence;
 using chesscoach::app::month_range;
@@ -130,4 +134,26 @@ TEST_CASE("A database's months are one, a run, or a list", "[wording]") {
     // A month that does not read leaves the text as meta stores it.
     CHECK(month_range(QStringLiteral("2013-01,junk")) == QStringLiteral("2013-01,junk"));
     CHECK(month_range(QStringLiteral("2013-13")) == QStringLiteral("2013-13"));
+}
+
+TEST_CASE("The engine's state reads short, or with the way forward", "[wording]") {
+    const QString name = QStringLiteral("Stockfish 17");
+    for (const bool forward : {false, true}) {
+        CHECK(engine_words(EngineState::ready, name, forward) ==
+              QStringLiteral("Stockfish 17 ready"));
+        CHECK(engine_words(EngineState::searching, name, forward) ==
+              QStringLiteral("Stockfish 17 thinking…"));
+        CHECK(engine_words(EngineState::starting, QString(), forward) ==
+              QStringLiteral("Engine starting…"));
+        CHECK(engine_words(EngineState::not_started, QString(), forward) ==
+              QStringLiteral("Engine not started"));
+    }
+    CHECK(engine_words(EngineState::not_found, QString(), false) ==
+          QStringLiteral("No engine found"));
+    CHECK(engine_words(EngineState::not_found, QString(), true) ==
+          QStringLiteral("No engine found. Choose a Stockfish program in Settings."));
+    CHECK(engine_words(EngineState::failed, QString(), false) ==
+          QStringLiteral("The engine did not start"));
+    CHECK(engine_words(EngineState::failed, QString(), true) ==
+          QStringLiteral("The engine did not start. Choose another engine program in Settings."));
 }
