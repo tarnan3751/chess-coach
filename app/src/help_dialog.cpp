@@ -51,11 +51,10 @@ QString HelpDialog::text() {
            "engine plays the coach's moves."),
         tr("Repertoire"),
         tr("Your repertoire is the set of moves you will play, one for each position you meet, "
-           "kept "
-           "separately for White and for Black. Play your move on the board to save it, and play "
-           "the opponent's replies to go on. Coverage shows how much of what opponents at your "
-           "rating play you have an answer "
-           "to. The positions with no answer yet show what to prepare next."),
+           "kept separately for White and for Black. Play your move on the board to save it, and "
+           "play the opponent's replies to go on. Coverage shows how much of what opponents at "
+           "your rating play you have an answer to. The positions with no answer yet show what to "
+           "prepare next."),
         tr("Drill"),
         tr("Every move in your repertoire becomes a card. Press Start the drill, then play your "
            "move in each position the cards show, and after a right answer say how hard it was to "
