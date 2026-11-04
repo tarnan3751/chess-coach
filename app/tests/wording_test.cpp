@@ -160,4 +160,10 @@ TEST_CASE("The engine's state reads short, or with the way forward", "[wording]"
           QStringLiteral("The engine did not start"));
     CHECK(engine_words(EngineState::failed, QString(), true) ==
           QStringLiteral("The engine did not start. Choose another engine program in Settings."));
+    // A search that failed names its engine.
+    CHECK(engine_words(EngineState::failed, QStringLiteral("Stockfish 17"), false) ==
+          QStringLiteral("Stockfish 17 did not answer"));
+    CHECK(
+        engine_words(EngineState::failed, QStringLiteral("Stockfish 17"), true) ==
+        QStringLiteral("Stockfish 17 did not answer. chess-coach tries again at your next move."));
 }

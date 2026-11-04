@@ -127,9 +127,9 @@ resources.
   "Engine not started" until then, "Engine starting…", "<name> ready" when idle ("Stockfish 17
   ready"), "<name> thinking…" while it searches, "No engine found", "The engine did not start"
   for a binary that does not answer the handshake, or "<name> did not answer" for a search that
-  failed (it timed out, or the engine died). Explore's engine panel says the same state with the
-  way forward (**Explore**, `engine_words`); the worker's `detail` is no longer shown. The three
-  labels share the status bar's muted 12 px type.
+  failed (it timed out, or the engine died), in `engine_words`' short form; Explore's engine panel
+  says the same state with the way forward (**Explore**); the worker's `detail` is no longer shown.
+  The three labels share the status bar's muted 12 px type.
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
 every position along them. On Explore, a move on the board (`move_played`) appends to it (on the
@@ -651,10 +651,12 @@ under 5 centipawns, however large the loss, so a move from +12 to +4 is "about 8
 (`month_range`, from `meta`'s `YYYY-MM` list): "October 2026", a run of months one after another
 as "October 2026 to March 2027", and months with gaps listed with the year after each year's last,
 "January, March and April 2013"; and the engine's state (`engine_words`), "Stockfish 17 ready",
-"Stockfish 17 thinking…", "Engine starting…", "Engine not started", "No engine found" and "The
-engine did not start", the last two with the way forward when asked for it ("No engine found.
-Choose a Stockfish program in Settings.", "The engine did not start. Choose another engine program
-in Settings."), which Explore's engine panel says. `app_wording_test` checks each.
+"Stockfish 17 thinking…", "Engine starting…", "Engine not started", "No engine found", "The engine
+did not start" and, for a search that failed, "Stockfish 17 did not answer", the last three with
+the way forward when asked for it ("No engine found. Choose a Stockfish program in Settings.", "The
+engine did not start. Choose another engine program in Settings.", "Stockfish 17 did not answer.
+chess-coach tries again at your next move."), which Explore's engine panel says, and in the short
+form the status bar's. `app_wording_test` checks each.
 
 ## Themes
 

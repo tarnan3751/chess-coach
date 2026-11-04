@@ -195,8 +195,6 @@ class MainWindow : public QMainWindow {
     void request_query();
     void request_evaluation();
     void engine_state(EngineState state, const QString& name, const QString& detail);
-    // The status bar's words for the engine's state: "Stockfish 17 ready".
-    [[nodiscard]] static QString engine_status(EngineState state, const QString& name);
     void lines_ready(quint64 key, int request_id, const QVector<EngineLine>& lines, bool cached);
     void engine_failed(const QString& message);
     void update_eval_bar();

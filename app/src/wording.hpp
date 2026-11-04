@@ -68,9 +68,10 @@ struct MoveEvaluations {
 // March 2027". Empty for none, and as stored when one does not read as a month.
 [[nodiscard]] QString month_range(const QString& stored);
 
-// The engine's state, name being its own when it is ready or searching: "Stockfish 17 ready",
-// "Stockfish 17 thinking…", "Engine starting…", "Engine not started", "No engine found", "The
-// engine did not start". With the way forward, the last two say what to do: "No engine found.
+// The engine's state, name being its own when it is ready or searching, or failed after a search:
+// "Stockfish 17 ready", "Stockfish 17 thinking…", "Engine starting…", "Engine not started", "No
+// engine found", "The engine did not start" (failed with no name), "Stockfish 17 did not answer"
+// (a search that failed). With the way forward, the last three say what to do: "No engine found.
 // Choose a Stockfish program in Settings."
 [[nodiscard]] QString engine_words(EngineState state, const QString& name, bool with_way_forward);
 

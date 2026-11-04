@@ -183,6 +183,13 @@ QString engine_words(EngineState state, const QString& name, bool with_way_forwa
                    ? translate("No engine found. Choose a Stockfish program in Settings.")
                    : translate("No engine found");
     case EngineState::failed:
+        // A binary that did not start has no name; a search that failed names its engine.
+        if (!name.isEmpty()) {
+            return with_way_forward
+                       ? translate("%1 did not answer. chess-coach tries again at your next move.")
+                             .arg(name)
+                       : translate("%1 did not answer").arg(name);
+        }
         return with_way_forward
                    ? translate(
                          "The engine did not start. Choose another engine program in Settings.")

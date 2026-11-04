@@ -501,7 +501,7 @@ void MainWindow::build_status_bar() {
     show_database_label();
     message_label_ = new QLabel();
     message_label_->setObjectName(QStringLiteral("message_status"));
-    engine_label_ = new QLabel(engine_status(EngineState::not_started, QString()));
+    engine_label_ = new QLabel(engine_words(EngineState::not_started, QString(), false));
     engine_label_->setObjectName(QStringLiteral("engine_status"));
     statusBar()->setContentsMargins(8, 0, 8, 0);
     statusBar()->setSizeGripEnabled(false);
@@ -685,27 +685,8 @@ void MainWindow::request_evaluation() {
 }
 
 void MainWindow::engine_state(EngineState state, const QString& name, const QString& /*detail*/) {
-    engine_label_->setText(engine_status(state, name));
+    engine_label_->setText(engine_words(state, name, false));
     explore_->show_engine_state(state, name);
-}
-
-QString MainWindow::engine_status(EngineState state, const QString& name) {
-    switch (state) {
-    case EngineState::not_started:
-        return tr("Engine not started");
-    case EngineState::starting:
-        return tr("Engine starting\u2026");
-    case EngineState::ready:
-        return tr("%1 ready").arg(name);
-    case EngineState::searching:
-        return tr("%1 thinking\u2026").arg(name);
-    case EngineState::not_found:
-        return tr("No engine found");
-    case EngineState::failed:
-        // A binary that did not start has no name; a search that failed names its engine.
-        return name.isEmpty() ? tr("The engine did not start") : tr("%1 did not answer").arg(name);
-    }
-    return {};
 }
 
 void MainWindow::lines_ready(quint64 key, int request_id, const QVector<EngineLine>& lines,
