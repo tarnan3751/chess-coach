@@ -11,7 +11,7 @@ name.
 
 ## Status
 
-As of 4 November 2026: pre-release, version 0.1.0. The pipeline builds the tiered database from
+As of 4 November 2026: version 1.0.0, awaiting its tag. The pipeline builds the tiered database from
 the Lichess dumps and the CLI queries it; the app has its four screens, Explore, Spar, Repertoire
 and Drill, and exports and imports its profile as one file. The first release database, data
 version 1 from the rated games of October 2026, is built, verified reproducible and published
