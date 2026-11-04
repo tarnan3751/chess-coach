@@ -89,7 +89,6 @@ ExploreData explore(const OpeningStore& store, const QVector<quint64>& line_keys
     // SAN needs the position, rebuilt from its stored FEN; a node's key always has a positions
     // row (docs/database.md §6.2), and a move that is not legal there keeps its UCI.
     const auto position = Position::from_fen(fen);
-    const bool white_to_move = position.has_value() && position->side_to_move() == Color::white;
     for (const MoveRow& row : store.moves(data.key, tier)) {
         ExploreMove move;
         move.uci = QString::fromStdString(row.move);
@@ -103,11 +102,6 @@ ExploreData explore(const OpeningStore& store, const QVector<quint64>& line_keys
         move.white = row.white;
         move.draws = row.draws;
         move.black = row.black;
-        if (move.total > 0) {
-            const auto wins = static_cast<double>(white_to_move ? row.white : row.black);
-            move.score_percent = 100.0 * (wins + (static_cast<double>(row.draws) / 2)) /
-                                 static_cast<double>(move.total);
-        }
         if (top_sum.has_value()) {
             const auto played = std::ranges::find(top, row.move, &MoveRow::move);
             const qint64 total = played != top.end() ? played->total() : 0;
@@ -115,7 +109,6 @@ ExploreData explore(const OpeningStore& store, const QVector<quint64>& line_keys
             move.top_share =
                 sum > 0 ? 100.0 * static_cast<double>(total) / static_cast<double>(sum) : 0.0;
         }
-        move.child_in_book = store.node(row.child, tier).has_value();
         data.moves.append(move);
     }
     std::ranges::sort(data.moves, [](const ExploreMove& a, const ExploreMove& b) {

@@ -1,8 +1,8 @@
 // What the database worker answers for one position at one tier, as the Explore screen shows it
 // (docs/reference/app.md, **Explore**): the stored rows, the deepest name along the line, and
-// one entry per move with its SAN, badges, results, score, top-tier share and whether it stays
-// in book. Plain values, copied across the queued connection from the worker's thread to the
-// GUI thread, so both are registered metatypes (register_explore_types).
+// one entry per move with its SAN, badges, results and top-tier share. Plain values, copied across
+// the queued connection from the worker's thread to the GUI thread, so both are registered
+// metatypes (register_explore_types).
 #pragma once
 
 #include <chesscoach/badges.hpp>
@@ -24,13 +24,9 @@ struct ExploreMove {
     qint64 white = 0;
     qint64 draws = 0;
     qint64 black = 0;
-    // (wins + draws / 2) / total for the side to move, as a percentage.
-    double score_percent = 0;
     // The move's share of the plays from the position at tier 6 (docs/database.md §7.2), as a
     // percentage; nullopt when the position has no tier-6 node.
     std::optional<double> top_share;
-    // The child has a nodes row at the tier (§7.3).
-    bool child_in_book = false;
 };
 
 struct ExploreData {
