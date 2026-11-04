@@ -28,7 +28,7 @@ struct DatabaseChoice {
 find_opening_database(const QString& db, const QString& data_dir,
                       const std::optional<std::filesystem::path>& resources);
 
-// What the app says when it finds no opening database: the three places, and the import.
+// What the app says when it finds no opening database: the import, and the three places.
 [[nodiscard]] QString no_database_text(const QString& data_dir);
 
 } // namespace chesscoach::app

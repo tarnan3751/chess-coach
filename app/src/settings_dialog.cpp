@@ -32,12 +32,13 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     const EngineSettings defaults;
     const auto found = find_engine_binary(defaults, resources);
     binary_->setPlaceholderText(
-        found ? tr("Default: %1").arg(QString::fromStdString(found->string()))
-              : tr("None found: CHESS_COACH_STOCKFISH, stockfish on the PATH or the app bundle's"));
+        found ? tr("Leave empty to use %1").arg(QString::fromStdString(found->string()))
+              : tr("No engine found. Choose a Stockfish program with Browse…"));
     auto* browse = new QPushButton(tr("Browse…"), this);
     browse->setObjectName(QStringLiteral("engine_browse"));
     connect(browse, &QPushButton::clicked, this, [this, &files] {
-        const QString chosen = choose_file_to_open(this, files, tr("The engine"), {});
+        const QString chosen =
+            choose_file_to_open(this, files, tr("Choose the engine program"), {});
         if (!chosen.isEmpty()) {
             binary_->setText(chosen);
         }
@@ -57,7 +58,7 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     seconds_->setRange(0.1, 60.0);
     seconds_->setDecimals(1);
     seconds_->setSingleStep(0.1);
-    seconds_->setSuffix(tr(" s"));
+    seconds_->setSuffix(tr(" seconds"));
     seconds_->setValue(engine.seconds);
     lines_->setObjectName(QStringLiteral("engine_lines_setting"));
     lines_->setRange(1, 10);
@@ -69,22 +70,22 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     spar_seconds_->setRange(0.1, 60.0);
     spar_seconds_->setDecimals(1);
     spar_seconds_->setSingleStep(0.1);
-    spar_seconds_->setSuffix(tr(" s"));
+    spar_seconds_->setSuffix(tr(" seconds"));
     spar_seconds_->setValue(spar.seconds);
     repertoire_depth_->setObjectName(QStringLiteral("repertoire_depth"));
     repertoire_depth_->setRange(2, 40);
-    repertoire_depth_->setSuffix(tr(" plies"));
+    repertoire_depth_->setSuffix(tr(" half-moves"));
     repertoire_depth_->setValue(repertoire_depth);
 
     auto* form = new QFormLayout();
-    form->addRow(tr("Engine"), binary_row);
-    form->addRow(tr("Threads"), threads_);
-    form->addRow(tr("Hash"), hash_mb_);
-    form->addRow(tr("Seconds per search"), seconds_);
-    form->addRow(tr("Lines"), lines_);
-    form->addRow(tr("Spar ends at move"), spar_end_move_);
-    form->addRow(tr("Seconds per spar reply"), spar_seconds_);
-    form->addRow(tr("Coverage depth"), repertoire_depth_);
+    form->addRow(tr("Engine program"), binary_row);
+    form->addRow(tr("Processor cores to use"), threads_);
+    form->addRow(tr("Engine memory"), hash_mb_);
+    form->addRow(tr("Thinking time per position"), seconds_);
+    form->addRow(tr("Lines to show"), lines_);
+    form->addRow(tr("Practice games end at move"), spar_end_move_);
+    form->addRow(tr("Thinking time per practice reply"), spar_seconds_);
+    form->addRow(tr("Check coverage up to"), repertoire_depth_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);

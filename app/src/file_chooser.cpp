@@ -115,7 +115,7 @@ void FileChooser::go_to(const QString& typed) {
     }
     const QModelIndex index = model_->index(QFileInfo(path).absoluteFilePath());
     if (!index.isValid()) {
-        message_->setText(tr("%1 is not there.").arg(path));
+        message_->setText(tr("There is no file or folder at %1. Check the path.").arg(path));
         message_->show();
         return;
     }
@@ -147,7 +147,7 @@ void FileChooser::accept() {
     if (mode_ == Mode::open) {
         const QFileInfo chosen(expanded(path_->text()));
         if (!chosen.isFile()) {
-            message_->setText(tr("Choose a file."));
+            message_->setText(tr("Choose a file in the list, then press Open."));
             message_->show();
             return;
         }
@@ -169,25 +169,26 @@ void FileChooser::accept() {
                 name = typed.fileName();
             }
         } else {
-            message_->setText(tr("%1 is not there.").arg(path_->text()));
+            message_->setText(tr("There is no folder at %1. Check the path.").arg(path_->text()));
             message_->show();
             return;
         }
     }
     if (name.isEmpty()) {
-        message_->setText(tr("Give the file a name."));
+        message_->setText(tr("Type a name for the file."));
         message_->show();
         return;
     }
     if (name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\'))) {
-        message_->setText(tr("A file name cannot hold a slash: give the folder in the path line."));
+        message_->setText(
+            tr("A file name cannot contain a slash. Type the folder in the line at the top."));
         message_->show();
         return;
     }
     const QString target = QDir(directory).filePath(name);
     if (QFileInfo::exists(target)) {
         // An export never replaces a file (docs/database.md §12.5).
-        message_->setText(tr("%1 exists: choose another name.").arg(name));
+        message_->setText(tr("%1 exists already. Type another name.").arg(name));
         message_->show();
         return;
     }

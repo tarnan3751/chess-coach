@@ -30,14 +30,15 @@ int main(int argc, char* argv[]) {
     parser.addVersionOption();
     const QCommandLineOption data_dir_option(
         QStringList{QStringLiteral("data-dir")},
-        QCoreApplication::translate("main", "The directory for profiles, repertoires and the "
-                                            "engine cache (default: the application data "
-                                            "location)."),
-        QCoreApplication::translate("main", "dir"));
+        QCoreApplication::translate("main", "The folder for your repertoires, cards, practice "
+                                            "games and settings. Without it, chess-coach uses "
+                                            "its usual data folder."),
+        QCoreApplication::translate("main", "folder"));
     const QCommandLineOption db_option(
         QStringList{QStringLiteral("db")},
-        QCoreApplication::translate("main", "The opening database file (default: openings.db in "
-                                            "the data directory, then in the app bundle)."),
+        QCoreApplication::translate("main", "The opening database to open. Without it, "
+                                            "chess-coach opens openings.db from its data folder, "
+                                            "else the one inside the app."),
         QCoreApplication::translate("main", "file"));
     parser.addOption(data_dir_option);
     parser.addOption(db_option);

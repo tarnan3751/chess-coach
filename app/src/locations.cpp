@@ -54,9 +54,9 @@ find_opening_database(const QString& db, const QString& data_dir,
 }
 
 QString no_database_text(const QString& data_dir) {
-    return translate("No opening database. The app looks for the file --db names, then for "
-                     "openings.db in the data directory (%1), then in the app bundle. Import one "
-                     "with File > Import database…")
+    return translate("No opening database is open. Import one with File > Import database. "
+                     "chess-coach looks for the file given with --db, then for openings.db in its "
+                     "data folder (%1), then inside the app.")
         .arg(QDir::toNativeSeparators(data_dir));
 }
 

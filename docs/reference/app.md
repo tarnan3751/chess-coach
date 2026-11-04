@@ -105,10 +105,13 @@ exists of `<data-dir>/openings.db` and the app bundle's `Contents/Resources/open
 worker to open it, and hands its path to the spar and profile workers, which open it when they first
 need it. The status bar names it and where it was found, "openings.db (data directory)", "(--db)" or
 "(app bundle)", with the full path as its tooltip, and once it is open shows its data version. When
-it does not open, a non-blocking message box (`database_error`) says why, the status bar says "No
-database", and Explore's empty state names the file: "There is no opening database at …, the file
---db names" for a missing `--db`, or that it did not open; the board still plays. When there is
-none, Explore's empty state names the three places and File > Import database….
+it does not open, a non-blocking message box (`database_error`) says why in a sentence ("The
+opening database … could not be opened. It is not a database file, or it is damaged. Import one
+with File > Import database."), the status bar says "No database", and Explore's empty state names
+the file: "There is no opening database at …. Check the file given with --db." for a missing
+`--db`, or that it could not be opened, with the import; the board still plays. When there is
+none, Explore's empty state says to import one with File > Import database and names the three
+places it looks, "inside the app" being the bundle.
 
 **The bundle.** The bundle's resources are `<the executable's folder>/../Resources` when the
 executable runs inside a `.app`, else there are none (`bundle_resources`). The window works them out
@@ -130,8 +133,10 @@ reads, a newer schema, the data directory's own `openings.db` and any other file
 directory. On success the worker answers `database_imported` and opens the new file, which refreshes
 Explore, the status bar and About; the spar and profile workers read it from then on (a session
 running keeps reading the file it started on until it ends), and a message box (`database_imported`)
-gives its data version and the months it holds. On failure it answers `database_import_failed`, a
-message box (`database_error`) says why, and the worker opens the old file again, when there was
+gives its data version and the months it holds: "The new opening database is ready (data version
+7). It holds games from January 2013." On failure it answers `database_import_failed`, a message
+box (`database_error`) says why, "junk.db was not imported. It is not a database file, or it is
+damaged.", and the worker opens the old file again, when there was
 one: after a `--db` that named no file it stays without a store, and the failure is the one box.
 
 The names in parentheses are the widgets' object names, which the UI tests find them by. Every
@@ -453,11 +458,13 @@ a session), `spar/seconds` (0.5, 0.1 to 60: each off-book reply's search) and `s
 each session's seed is the clock's seconds; set, every session uses it), and Repertoire's
 `repertoire/depth` (20, 2 to 40: the coverage depth in plies), and `files/last_dir`, the folder the
 file chooser last chose in (**Files**), each at its default when unset or out of range. *Edit >
-Settings…* (`SettingsDialog`, `settings_dialog`) edits the engine's (the binary with a Browse
-button, which opens the file chooser, and, while it is empty, the default binary's path as its
-placeholder, "Default: /opt/homebrew/bin/stockfish", or that none is found; the threads, the hash,
-the seconds and the lines), Spar's move limit and seconds per reply (`spar_end_move`,
-`spar_seconds`) and the coverage depth (`repertoire_depth`); accepting saves them, sends them to the
+Settings…* (`SettingsDialog`, `settings_dialog`) edits, under plain names, the engine's (Engine
+program, the binary with a Browse button, which opens the file chooser, and, while it is empty,
+the default binary's path as its placeholder, "Leave empty to use /opt/homebrew/bin/stockfish", or
+that none is found; Processor cores to use, the threads; Engine memory, the hash; Thinking time per
+position, the seconds; Lines to show), Practice's move limit and seconds per reply (Practice games
+end at move, `spar_end_move`; Thinking time per practice reply, `spar_seconds`) and the coverage
+depth in half-moves (Check coverage up to, `repertoire_depth`); accepting saves them, sends them to the
 engine worker and the spar worker, which restart their engines with them at the next search,
 evaluates the position again and, on Repertoire, computes the coverage again. A new move limit
 applies from the next session. Reading does not create anything; the first write, when the theme or
@@ -506,7 +513,8 @@ Theme* switches and saves the choice; the window applies the saved one at start.
 ## About
 
 *Help > About chess-coach* opens `AboutDialog` (`about_dialog`, non-blocking): the app's version,
-the open database's data version, and the attributions of `NOTICE` in plain text without links:
+the open database's data version ("Opening database, data version 1"), a line on what the app is,
+and the attributions of `NOTICE` in plain text without links:
 Qt under the LGPL, chess-library under MIT, the cburnett pieces by Colin M.L. Burnett from
 Wikimedia Commons under CC BY-SA 3.0, the Lichess data under CC0, SQLite in the public domain, and
 the other libraries with their licences. *About Qt* is Qt's own dialog.

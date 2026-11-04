@@ -20,22 +20,23 @@ QString translate(const char* text) {
     return QCoreApplication::translate("chesscoach::app::EngineWorker", text);
 }
 
-QString describe(EngineError error) {
+// What happened to the engine, a sentence naming it.
+QString describe(const QString& engine, EngineError error) {
     switch (error) {
     case EngineError::start_failed:
-        return translate("did not start");
+        return translate("%1 did not start.").arg(engine);
     case EngineError::timeout:
-        return translate("did not answer in time");
+        return translate("%1 did not answer in time.").arg(engine);
     case EngineError::died:
-        return translate("died");
+        return translate("%1 stopped working.").arg(engine);
     case EngineError::busy:
-        return translate("was busy");
+        return translate("%1 was busy.").arg(engine);
     case EngineError::unsupported:
-        return translate("does not support the request");
+        return translate("%1 cannot do what chess-coach asked.").arg(engine);
     case EngineError::invalid_request:
-        return translate("was given an invalid request");
+        return translate("%1 could not read what chess-coach asked.").arg(engine);
     }
-    return translate("failed");
+    return translate("%1 failed.").arg(engine);
 }
 
 std::optional<std::filesystem::path> existing(const QString& path) {
@@ -144,7 +145,8 @@ ProfileStore* EngineWorker::open_profiles(bool create) {
     }
     auto profiles = ProfileStore::open(data_dir_);
     if (!profiles) {
-        emit engine_failed(tr("The engine cache in %1 cannot be opened")
+        emit engine_failed(tr("The engine's saved results in %1 could not be opened. Check that "
+                              "chess-coach can write there.")
                                .arg(QString::fromStdString(data_dir_.string())));
         return nullptr;
     }
@@ -177,9 +179,10 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
                 return;
             }
         }
-    } catch (const std::exception& error) {
+    } catch (const std::exception&) {
         profiles_.reset();
-        emit engine_failed(tr("The engine cache could not be read: %1").arg(error.what()));
+        emit engine_failed(tr("The engine's saved results could not be read, so it works this "
+                              "position out again."));
     }
 
     const auto path = find_engine_binary(settings_, resources_);
@@ -197,8 +200,9 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
         if (!started) {
             emit engine_state(tr("failed to start"));
             emit engine_failed(
-                tr("The engine %1 %2")
-                    .arg(QString::fromStdString(path->string()), describe(started.error())));
+                describe(tr("The engine at %1").arg(QString::fromStdString(path->string())),
+                         started.error()) +
+                QLatin1Char(' ') + tr("Choose another engine in Settings."));
             return;
         }
         const std::scoped_lock lock(engine_mutex_);
@@ -215,7 +219,8 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
         *position, {.lines = lines, .seconds = settings_.seconds, .generation = request_id});
     emit engine_state(name);
     if (!result) {
-        emit engine_failed(tr("The engine %1 %2").arg(name, describe(result.error())));
+        emit engine_failed(describe(name, result.error()) + QLatin1Char(' ') +
+                           tr("chess-coach tries again at your next move."));
         if (!engine.is_alive()) {
             drop_engine(); // the next search starts a new one
         }
@@ -230,7 +235,8 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
         if (stored) {
             found = stored->lines;
         } else {
-            emit engine_failed(tr("The engine cache could not be written"));
+            emit engine_failed(tr("This result could not be saved, so the engine works this "
+                                  "position out again next time."));
         }
     }
     emit lines_ready(key, request_id, white_side_lines(*position, found), false);

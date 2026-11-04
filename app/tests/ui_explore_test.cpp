@@ -333,7 +333,8 @@ class ExploreTest : public QObject {
         QTRY_VERIFY(window.findChild<QMessageBox*>(QStringLiteral("database_error")) != nullptr);
         auto& box = child<QMessageBox>(window, QStringLiteral("database_error"));
         QVERIFY(box.text().contains(broken));
-        QVERIFY(box.text().contains(QStringLiteral("not a readable SQLite database")));
+        QVERIFY(
+            box.text().contains(QStringLiteral("It is not a database file, or it is damaged.")));
         QCOMPARE(child<QLabel>(window, QStringLiteral("database_status")).text(),
                  QStringLiteral("No database"));
         QVERIFY(!child<QLabel>(window, QStringLiteral("data_version_status")).isVisible());

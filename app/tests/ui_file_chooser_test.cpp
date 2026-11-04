@@ -99,7 +99,7 @@ class FileChooserTest : public QObject {
         child<QPushButton>(chooser, QStringLiteral("file_chooser_accept")).click();
         QVERIFY(chooser.isVisible());
         QCOMPARE(child<QLabel>(chooser, QStringLiteral("file_chooser_message")).text(),
-                 QStringLiteral("Choose a file."));
+                 QStringLiteral("Choose a file in the list, then press Open."));
 
         tree.setCurrentIndex(model->index(0, 0, listing));
         save_screenshot(chooser, QStringLiteral("file-chooser"), QStringLiteral("open"));
@@ -120,7 +120,7 @@ class FileChooserTest : public QObject {
         child<QPushButton>(chooser, QStringLiteral("file_chooser_accept")).click();
         QVERIFY(chooser.isVisible());
         QCOMPARE(child<QLabel>(chooser, QStringLiteral("file_chooser_message")).text(),
-                 QStringLiteral("profile.db exists: choose another name."));
+                 QStringLiteral("profile.db exists already. Type another name."));
         child<QLineEdit>(chooser, QStringLiteral("file_chooser_name"))
             .setText(QStringLiteral("other.db"));
         child<QPushButton>(chooser, QStringLiteral("file_chooser_accept")).click();
@@ -172,7 +172,7 @@ class FileChooserTest : public QObject {
         QVERIFY(chooser.isVisible());
         QVERIFY(child<QLabel>(chooser, QStringLiteral("file_chooser_message"))
                     .text()
-                    .startsWith(QStringLiteral("A file name cannot hold a slash")));
+                    .startsWith(QStringLiteral("A file name cannot contain a slash.")));
         // A full path in the path line gives the folder and the name.
         const QString typed = QDir(folder.path()).filePath(QStringLiteral("inner/mine.db"));
         path.setText(typed);

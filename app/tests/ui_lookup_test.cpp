@@ -164,7 +164,7 @@ class LookupTest : public QObject {
             const QString message = text(window, QStringLiteral("explore_message"));
             QVERIFY2(message.contains(QStringLiteral("--db")) &&
                          message.contains(QDir::toNativeSeparators(places.data_dir)) &&
-                         message.contains(QStringLiteral("app bundle")) &&
+                         message.contains(QStringLiteral("inside the app")) &&
                          message.contains(QStringLiteral("File > Import database")),
                      qPrintable(message));
             save_screenshot(window, QStringLiteral("lookup"), QStringLiteral("no-database"));
@@ -208,8 +208,8 @@ class LookupTest : public QObject {
         QVERIFY(busy->isVisible());
         QTRY_VERIFY(window.findChild<QMessageBox*>(QStringLiteral("database_imported")) != nullptr);
         auto* done = window.findChild<QMessageBox*>(QStringLiteral("database_imported"));
-        QCOMPARE(done->text(),
-                 QStringLiteral("Imported the opening database: data version 7, months 2013-01."));
+        QCOMPARE(done->text(), QStringLiteral("The new opening database is ready (data version 7). "
+                                              "It holds games from January 2013."));
         QTRY_COMPARE(text(window, QStringLiteral("data_version_status")),
                      QStringLiteral("Data version 7"));
         QCOMPARE(text(window, QStringLiteral("database_status")),
@@ -264,7 +264,7 @@ class LookupTest : public QObject {
             child<QAction>(window, QStringLiteral("settings_action")).trigger();
             auto& dialog = child<QDialog>(window, QStringLiteral("settings_dialog"));
             QCOMPARE(child<QLineEdit>(dialog, QStringLiteral("engine_binary")).placeholderText(),
-                     QStringLiteral("Default: %1").arg(engine));
+                     QStringLiteral("Leave empty to use %1").arg(engine));
             dialog.reject();
         }
     }

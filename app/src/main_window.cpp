@@ -360,8 +360,8 @@ void MainWindow::build_menus() {
     import_database_action_ = file->addAction(tr("Import &database…"));
     import_database_action_->setObjectName(QStringLiteral("import_database_action"));
     connect(import_database_action_, &QAction::triggered, this, [this] {
-        const QString path = choose_file_to_open(this, settings_, tr("Import an opening database"),
-                                                 {QStringLiteral("*.db")});
+        const QString path = choose_file_to_open(
+            this, settings_, tr("Choose an opening database to import"), {QStringLiteral("*.db")});
         if (!path.isEmpty()) {
             import_database(path);
         }
@@ -525,16 +525,15 @@ void MainWindow::database_failed(const QString& message) {
         const QString file =
             QDir::toNativeSeparators(QString::fromStdString(located_->path.string()));
         empty = QFileInfo::exists(file)
-                    ? tr("The opening database %1 did not open. Import another with File > "
-                         "Import database…")
+                    ? tr("The opening database %1 could not be opened. Import another one with "
+                         "File > Import database.")
                           .arg(file)
-                    : tr("There is no opening database at %1, the file --db names. Import one with "
-                         "File > Import database…, or start without --db.")
+                    : tr("There is no opening database at %1. Check the file given with --db.")
                           .arg(file);
     }
     explore_->show_no_database(empty);
     eval_bar_->set_evaluation(std::nullopt, std::nullopt);
-    auto* box = new QMessageBox(QMessageBox::Warning, tr("Opening database failed"), message,
+    auto* box = new QMessageBox(QMessageBox::Warning, tr("Opening database"), message,
                                 QMessageBox::Ok, this);
     box->setObjectName(QStringLiteral("database_error"));
     box->setAttribute(Qt::WA_DeleteOnClose);
@@ -729,10 +728,13 @@ void MainWindow::database_imported(const QString& path, qint64 data_version,
     if (screen_ == Screen::repertoire) {
         repertoire_refresh();
     }
-    auto* box = new QMessageBox(QMessageBox::Information, tr("Database imported"),
-                                tr("Imported the opening database: data version %1, months %2.")
-                                    .arg(data_version)
-                                    .arg(months),
+    // "It holds games from October 2026." when meta names its months.
+    const QString held = month_range(months);
+    QString text = tr("The new opening database is ready (data version %1).").arg(data_version);
+    if (!held.isEmpty()) {
+        text += QLatin1Char(' ') + tr("It holds games from %1.").arg(held);
+    }
+    auto* box = new QMessageBox(QMessageBox::Information, tr("Opening database imported"), text,
                                 QMessageBox::Ok, this);
     box->setObjectName(QStringLiteral("database_imported"));
     box->setAttribute(Qt::WA_DeleteOnClose);
@@ -741,7 +743,7 @@ void MainWindow::database_imported(const QString& path, qint64 data_version,
 
 void MainWindow::database_import_failed(const QString& message) {
     end_import();
-    auto* box = new QMessageBox(QMessageBox::Warning, tr("Importing database failed"), message,
+    auto* box = new QMessageBox(QMessageBox::Warning, tr("Opening database not imported"), message,
                                 QMessageBox::Ok, this);
     box->setObjectName(QStringLiteral("database_error"));
     box->setAttribute(Qt::WA_DeleteOnClose);

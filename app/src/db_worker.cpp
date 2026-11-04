@@ -5,7 +5,6 @@
 #include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 
-#include <QCoreApplication>
 #include <QFileInfo>
 #include <QList>
 #include <algorithm>
@@ -20,42 +19,39 @@ namespace chesscoach::app {
 
 namespace {
 
+// Why a file did not open, as a sentence.
 QString describe(StoreError error) {
     switch (error) {
     case StoreError::missing_file:
-        return QCoreApplication::translate("chesscoach::app::DbWorker", "no such file");
+        return DbWorker::tr("The file is not there.");
     case StoreError::unreadable:
-        return QCoreApplication::translate("chesscoach::app::DbWorker",
-                                           "not a readable SQLite database");
+        return DbWorker::tr("It is not a database file, or it is damaged.");
     case StoreError::no_meta:
-        return QCoreApplication::translate("chesscoach::app::DbWorker",
-                                           "no meta table or schema_version");
-    case StoreError::wrong_version:
-        return QCoreApplication::translate("chesscoach::app::DbWorker",
-                                           "a schema_version this build does not read");
     case StoreError::schema_mismatch:
-        return QCoreApplication::translate("chesscoach::app::DbWorker",
-                                           "its tables do not match the schema");
+        return DbWorker::tr("It is not a chess-coach opening database.");
+    case StoreError::wrong_version:
+        return DbWorker::tr("It was made for another version of chess-coach.");
     }
-    return QCoreApplication::translate("chesscoach::app::DbWorker", "cannot open");
+    return DbWorker::tr("It could not be opened.");
 }
 
+// Why an import was refused, as a sentence or two, the second the way forward when there is one.
 QString describe(const ImportError& error) {
     switch (error.reason) {
     case ImportError::Reason::missing_source:
-        return DbWorker::tr("the file is not there");
+        return DbWorker::tr("The file is not there.");
     case ImportError::Reason::not_openings:
-        return DbWorker::tr("it is not an opening database chess-coach reads (%1)")
-            .arg(describe(error.store_error));
+        return describe(error.store_error);
     case ImportError::Reason::newer_version:
-        return DbWorker::tr("it is at schema version %1, newer than this chess-coach reads")
-            .arg(error.source_version);
+        return DbWorker::tr("It was made for a newer chess-coach. Update chess-coach to use it.");
     case ImportError::Reason::already_in_place:
-        return DbWorker::tr("it is the data directory's database already");
+        return DbWorker::tr("It is the opening database chess-coach uses already.");
     case ImportError::Reason::inside_data_dir:
-        return DbWorker::tr("it lies inside the data directory");
+        return DbWorker::tr("It is inside chess-coach's own data folder. Move it somewhere else, "
+                            "then import it.");
     case ImportError::Reason::unwritable:
-        return DbWorker::tr("the data directory cannot be written");
+        return DbWorker::tr("chess-coach cannot write to its data folder. Check that the disk has "
+                            "free space.");
     }
     return {};
 }
@@ -142,7 +138,9 @@ void DbWorker::open_database(const QString& path) {
     store_.reset();
     auto store = OpeningStore::open(std::filesystem::path(path.toStdString()));
     if (!store) {
-        emit database_failed(tr("Cannot open %1: %2").arg(path, describe(store.error())));
+        emit database_failed(tr("The opening database %1 could not be opened. %2 Import one with "
+                                "File > Import database.")
+                                 .arg(path, describe(store.error())));
         return;
     }
     const std::string* version = store->meta().find("data_version");
@@ -158,7 +156,7 @@ void DbWorker::import_database(const QString& data_dir, const QString& source,
                                                   std::filesystem::path(source.toStdString()));
     if (!imported) {
         emit database_import_failed(
-            tr("%1 was not imported: %2.")
+            tr("%1 was not imported. %2")
                 .arg(QFileInfo(source).fileName(), describe(imported.error())));
         // The database it had, as it was; a --db that named no file stays without a store, and
         // the failure is all there is to report.
@@ -179,11 +177,12 @@ void DbWorker::query(const QVector<quint64>& line_keys, int tier) {
     }
     try {
         emit position_ready(explore(*store_, line_keys, *at));
-    } catch (const std::exception& error) {
+    } catch (const std::exception&) {
         // The store throws only when the file fails after a successful open (an I/O error, a
         // file corrupted on disk); the database is then closed.
         store_.reset();
-        emit database_failed(tr("Reading the database failed: %1").arg(error.what()));
+        emit database_failed(tr("The opening database could not be read. It may be damaged. "
+                                "Import it again with File > Import database."));
     }
 }
 
