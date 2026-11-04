@@ -108,7 +108,7 @@ SparScreen::SparScreen(QWidget* parent)
     played_->setWordWrap(true);
     summary_text_->setWordWrap(true);
     summary_text_->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    better_->setItemDelegateForColumn(3, new ResultDelegate(better_));
+    better_->setItemDelegateForColumn(3, new ResultDelegate(better_, &palette_));
     better_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     for (QFrame* frame : {interruption_, summary_}) {
         frame->setFrameShape(QFrame::StyledPanel);
@@ -176,6 +176,11 @@ SparScreen::SparScreen(QWidget* parent)
     end_replay();
     show_message(tr("Choose your colour and press Start a practice game. The coach plays like "
                     "the players at the rating in the Rating menu."));
+}
+
+void SparScreen::set_palette(const StudyPalette& palette) {
+    palette_ = palette;
+    better_->viewport()->update();
 }
 
 bool SparScreen::user_white() const { return white_->isChecked(); }

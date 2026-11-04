@@ -15,20 +15,24 @@
 #include "main_window.hpp"
 #include "settings.hpp"
 #include "spar_screen.hpp"
+#include "study_palette.hpp"
 #include "ui_harness.hpp"
 
 #include <QAbstractButton>
 #include <QAction>
+#include <QColor>
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
 #include <QFile>
 #include <QFrame>
+#include <QImage>
 #include <QLabel>
 #include <QListWidget>
 #include <QObject>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QRect>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTabBar>
@@ -116,6 +120,23 @@ void press(const MainWindow& window, const QString& name) {
     child<QAbstractButton>(window, name).click();
 }
 
+// Whether a pixel of a cell of the table, as it paints, has the colour.
+bool painted(const MainWindow& window, const QString& table, int row, int column,
+             const QColor& colour) {
+    const auto& widget = child<QTableWidget>(window, table);
+    const QImage image = widget.viewport()->grab().toImage();
+    const QRect cell = widget.visualRect(widget.model()->index(row, column));
+    const qreal ratio = image.devicePixelRatio();
+    for (int y = qRound(cell.top() * ratio); y < qRound((cell.bottom() + 1) * ratio); ++y) {
+        for (int x = qRound(cell.left() * ratio); x < qRound((cell.right() + 1) * ratio); ++x) {
+            if (image.pixelColor(x, y).rgb() == colour.rgb()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // The session's steps, each a test helper: a failed check returns from the helper, which its
 // caller reads from QTest::currentTestFailed().
 
@@ -138,6 +159,14 @@ void meet_a_dubious_move(MainWindow& window, const BoardView& board) {
     QVERIFY(!board.isEnabled()); // until Continue
     QTRY_VERIFY(!board.animating());
     save_screenshot(window, QStringLiteral("spar"), QStringLiteral("interruption"));
+    // The results bar's frame follows the theme.
+    using chesscoach::app::StudyPalette;
+    const QString better = QStringLiteral("spar_better");
+    QVERIFY(painted(window, better, 0, 3, StudyPalette::light().border));
+    child<QAction>(window, QStringLiteral("theme_dark")).trigger();
+    QVERIFY(painted(window, better, 0, 3, StudyPalette::dark().border));
+    QVERIFY(!painted(window, better, 0, 3, StudyPalette::light().border));
+    child<QAction>(window, QStringLiteral("theme_light")).trigger();
     press(window, QStringLiteral("spar_continue"));
     QVERIFY(!interruption_shown(window));
     QVERIFY(board.isEnabled());

@@ -319,8 +319,8 @@ The Study look's parts for a table that paints itself (`tables.{hpp,cpp}`,
   frame round white wins, draws and black wins in the results colours, with the white and black
   percentages inside their segments in 10 px bold, and the draws' only in a segment 18 px wide or
   more (in the white segment's text colour); a percentage that does not fit its segment is left
-  out. `ResultDelegate` paints it over the style's cell for Spar's better choices, in the light
-  palette (Spar has none of its own yet).
+  out. `ResultDelegate` paints it over the style's cell for Spar's better choices, in the palette
+  the window hands the Spar screen when it applies a theme (`SparScreen::set_palette`).
 
 ## Spar
 
@@ -769,7 +769,8 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
 - `ui_spar_test`, on the fixture database's tier-4 tree (the start position's e4, a Dubious a3
   and d4, black's e5 after 1. a3, and white's Nf3 alone after 1. a3 e5) with the fake engine's
   `legal` script as the coach off book, a fixed seed and a move limit of four: a session as white
-  interrupted on 1. a3 with its better choices, Continue, interrupted again on 2. h4 off book and
+  interrupted on 1. a3 with its better choices, their results bar repainted in the dark palette,
+  Continue, interrupted again on 2. h4 off book and
   answered by the engine, ended at its move limit with the summary and the saved session listed,
   and replayed with the interruptions at plies one and three; a session as black, where the
   coach moves first and the board turns; End the game saving a stopped session, and closing the

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "spar_data.hpp"
+#include "study_palette.hpp"
 
 #include <QString>
 #include <QVector>
@@ -27,6 +28,9 @@ class SparScreen : public QWidget {
 
   public:
     explicit SparScreen(QWidget* parent = nullptr);
+
+    // The theme's colours, in which the better choices' results bar repaints.
+    void set_palette(const StudyPalette& palette);
 
     // Whether the user chose white.
     [[nodiscard]] bool user_white() const;
@@ -71,6 +75,7 @@ class SparScreen : public QWidget {
     QPushButton* previous_;
     QPushButton* next_;
     QLabel* replay_position_;
+    StudyPalette palette_ = StudyPalette::light();
 };
 
 } // namespace chesscoach::app
