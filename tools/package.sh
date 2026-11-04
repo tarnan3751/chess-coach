@@ -9,9 +9,18 @@
 #     outside the bundle but the system's (DYLD_PRINT_LIBRARIES), so a Homebrew Qt on the
 #     machine cannot hide a missing one;
 #   - the bundled Stockfish answers `uci` with `uciok`, with COPYING and SOURCE.txt beside it;
+#   - with --db, Contents/Resources/openings.db is that file, byte for byte; without, there is
+#     none;
 # then unmounts the image and prints its path and size. Exits non-zero on the first failure.
 #
-#   tools/package.sh
+#   tools/package.sh [--db <file>]
+#
+# --db bundles the opening database at <file> (the release preset's CHESS_COACH_BUNDLE_DB), a
+# relative <file> being the caller's. It is refused when it is not a readable file, before the
+# configure, and when the release build's own chess-coach-cli does not read it as an opening
+# database (`stats --db <file>`), before the package is made. Without --db the package holds no
+# database, whatever an earlier configure cached. The release workflow passes the published
+# database that data/release/bundled.txt names.
 #
 # macOS only. Needs what the release build needs (README.md, **Building and running**) and the
 # Stockfish to bundle: CHESS_COACH_STOCKFISH, else stockfish on the PATH. Not part of the gate,
@@ -19,9 +28,18 @@
 # tag. Writes build/release/ in the tree it runs in, and a scratch directory under $TMPDIR that it
 # removes; the app it starts never sees the user's data directory.
 set -uo pipefail
-cd "$(dirname "$0")/.."
 
-[ $# -eq 0 ] || { echo "usage: tools/package.sh" >&2; exit 2; }
+usage() {
+  echo "usage: tools/package.sh [--db <file>]" >&2
+  exit 2
+}
+db=""
+case $# in
+  0) ;;
+  2) [ "$1" = --db ] && [ -n "$2" ] || usage
+     db="$2" ;;
+  *) usage ;;
+esac
 [ "$(uname -s)" = Darwin ] || { echo "package: macOS only" >&2; exit 2; }
 
 fail() {
@@ -29,8 +47,20 @@ fail() {
   exit 1
 }
 
-cmake --preset release >/dev/null || fail "configure"
+# The --db file is the caller's, so its path is made absolute before the move to the root.
+if [ -n "$db" ]; then
+  [ -f "$db" ] && [ -r "$db" ] || fail "--db $db is not a readable file"
+  db="$(cd "$(dirname "$db")" && pwd -P)/$(basename "$db")"
+fi
+cd "$(dirname "$0")/.."
+
+# An empty CHESS_COACH_BUNDLE_DB clears one an earlier configure cached.
+cmake --preset release -DCHESS_COACH_BUNDLE_DB="$db" >/dev/null || fail "configure"
 cmake --build --preset release || fail "build"
+if [ -n "$db" ]; then
+  build/release/cli/chess-coach-cli stats --db "$db" >/dev/null ||
+    fail "--db $db is not an opening database this build reads"
+fi
 cmake --build --preset release --target package || fail "the package target"
 
 name=$(sed -n 's/^set(CPACK_PACKAGE_FILE_NAME "\(.*\)")$/\1/p' build/release/CPackConfig.cmake)
@@ -101,6 +131,16 @@ printf 'uci\nquit\n' | "$engine/stockfish" | grep -qx uciok ||
   fail "no COPYING or SOURCE.txt beside the engine"
 echo "package: the bundled Stockfish answered uciok; SOURCE.txt:"
 sed 's/^/  /' "$engine/SOURCE.txt"
+
+# The opening database.
+bundled="$app/Contents/Resources/openings.db"
+if [ -n "$db" ]; then
+  cmp -s "$db" "$bundled" || fail "Contents/Resources/openings.db is not $db"
+  echo "package: Contents/Resources/openings.db is $db ($(stat -f %z "$bundled") bytes)"
+else
+  [ ! -e "$bundled" ] || fail "Contents/Resources/openings.db is there without --db"
+  echo "package: no opening database bundled"
+fi
 
 hdiutil detach "$mnt" -quiet || fail "hdiutil detach"
 echo "package: $dmg, $(du -h "$dmg" | cut -f1 | tr -d ' ') ($(stat -f %z "$dmg") bytes)"
