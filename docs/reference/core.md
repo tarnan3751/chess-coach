@@ -692,6 +692,9 @@ reached by its line, the order, the same answer twice); `pgn_import_test` (a han
 with nested variations, a NAG, a conflict, a move that does not play, a `[FEN]` game and a bad
 one, for white and black; an empty stream; a broken header). The property tests' random games
 (`random_games.hpp`) start from the start position or from positions that soon castle, promote or
-meet en passant, and pick moves by index into the sorted legal moves. The tests that write files,
-`core`'s and the CLI's, do so in a `ScratchDir` (`core/tests/support/scratch_dir.hpp`, the
-`core_test_support` target), emptied when it is made and removed when the test case ends.
+meet en passant, and pick moves by index into the sorted legal moves. The tests that need a scratch
+directory of their own, `file_swap_test`, `names_test`, `opening_locator_test` and
+`opening_store_test` here and the CLI's `cli_database_command_test`, `cli_engine_commands_test`,
+`cli_repertoire_commands_test` and `cli_spar_test`, make it a `ScratchDir`
+(`core/tests/support/scratch_dir.hpp`, the `core_test_support` target), emptied when it is made
+and removed when the test case ends.
