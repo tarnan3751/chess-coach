@@ -39,7 +39,7 @@ inline constexpr int cell_padding_vertical = 5;
                                const QPaintDevice& device);
 // The font with tabular figures, so that numbers in a column line up. Qt asks the font for them
 // from 6.7 (QFont::setFeature); before that the font's own figures stay.
-[[nodiscard]] QFont tabular(QFont font);
+[[nodiscard]] QFont tabular(const QFont& font);
 
 // An alignment as QPainter::drawText's flags.
 [[nodiscard]] inline int text_flags(Qt::Alignment alignment) {

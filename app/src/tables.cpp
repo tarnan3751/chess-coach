@@ -49,11 +49,12 @@ QFont sized_font(QFont font, qreal pixels, QFont::Weight weight, const QPaintDev
     return font;
 }
 
-QFont tabular(QFont font) {
+QFont tabular(const QFont& font) {
+    QFont result = font;
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-    font.setFeature(QFont::Tag("tnum"), 1);
+    result.setFeature(QFont::Tag("tnum"), 1);
 #endif
-    return font;
+    return result;
 }
 
 void paint_row(QPainter& painter, const QStyleOptionViewItem& option, const StudyPalette& palette) {
