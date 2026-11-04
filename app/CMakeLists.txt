@@ -2,8 +2,8 @@
 # docs/reference/app.md). The only module that finds or links Qt, which comes from the system
 # through CMAKE_PREFIX_PATH, never from vcpkg. The window, the board and the screens are app_lib,
 # which the executable and the UI tests link; main.cpp only parses the command line. The piece
-# set, the stylesheets and the fonts are compiled in as Qt resources, so the app needs no files
-# beside it, nor any font on the system, to draw itself.
+# set, the stylesheets, the fonts and the icons are compiled in as Qt resources, so the app needs
+# no files beside it, nor any font on the system, to draw itself.
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Svg SvgWidgets Test)
 set(CMAKE_AUTOMOC ON)
 
@@ -37,6 +37,8 @@ add_library(app_lib STATIC
   src/fonts.hpp
   src/help_dialog.cpp
   src/help_dialog.hpp
+  src/icons.cpp
+  src/icons.hpp
   src/locations.cpp
   src/locations.hpp
   src/main_window.cpp
@@ -88,12 +90,21 @@ qt_add_resources(app_lib "themes"
   PREFIX "/themes"
   BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
   FILES resources/light.qss resources/dark.qss)
-# The Study look's fonts, static TTFs from Adobe's releases under the OFL (NOTICE).
+# The Study look's fonts, static TTFs from Adobe's releases under the OFL (NOTICE), and its icons,
+# one SVG each drawn in #000000, which icons.cpp recolours per theme.
 qt_add_resources(app_lib "fonts"
   PREFIX "/fonts"
   BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts"
   FILES resources/fonts/SourceSerif4-Semibold.ttf resources/fonts/SourceSans3-Regular.ttf
         resources/fonts/SourceSans3-Semibold.ttf resources/fonts/SourceSans3-Bold.ttf)
+set(chesscoach_icons plus back flip chevron-down gear sound-on sound-off explore spar repertoire
+                     drill)
+list(TRANSFORM chesscoach_icons PREPEND "resources/icons/")
+list(TRANSFORM chesscoach_icons APPEND ".svg")
+qt_add_resources(app_lib "icons"
+  PREFIX "/icons"
+  BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
+  FILES ${chesscoach_icons})
 
 add_executable(app
   src/main.cpp)
@@ -110,7 +121,7 @@ if(BUILD_TESTING)
   target_link_libraries(app_test_fixture PUBLIC chesscoach::core PRIVATE SQLiteCpp
                                                                           chesscoach::warnings)
 
-  # The bundled fonts, on an offscreen QGuiApplication of the test's own.
+  # The bundled fonts and the themed icons, on an offscreen QGuiApplication of the test's own.
   chesscoach_add_test(app_resources_test MODULE app KIND unit
                       SOURCES tests/resources_test.cpp
                       LIBS chesscoach::app_lib)

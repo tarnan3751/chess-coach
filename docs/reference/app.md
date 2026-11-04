@@ -48,6 +48,7 @@ state (**Files**).
 | `locations.{hpp,cpp}` | The app bundle's resources, the opening database the window opens, the message when there is none (**The database**) |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
 | `fonts.{hpp,cpp}` | `install_fonts`, the bundled fonts registered and the application font set (**Themes**) |
+| `icons.{hpp,cpp}` | `themed_icon` and `tinted_icon`, the toolbar's icons in a theme's colours (**Themes**) |
 | `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
 | `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings (**Settings**) |
 | `about_dialog.{hpp,cpp}` | `AboutDialog`, the versions and the attributions (**About**) |
@@ -62,8 +63,8 @@ state (**Files**).
 
 All but `main.cpp` are the static library `app_lib` (namespace `chesscoach::app`, `AUTOMOC`),
 which the executable and the UI tests link. The piece set, the two stylesheets
-(`app/resources/light.qss`, `dark.qss`) and the fonts (`app/resources/fonts/`) are compiled into
-it as Qt resources.
+(`app/resources/light.qss`, `dark.qss`), the fonts (`app/resources/fonts/`) and the icons
+(`app/resources/icons/`) are compiled into it as Qt resources.
 
 ## Shell
 
@@ -527,6 +528,13 @@ Sans 3 Regular, SemiBold and Bold 3.052, compiled in under `:/fonts/`. `install_
 window calls at start, registers them with `QFontDatabase` once and makes Source Sans 3 at 13 px
 the application font, so the app needs no font on the system (`app_resources_test` checks both
 families register).
+
+The icons are our own, `app/resources/icons/<name>.svg` under `:/icons/`: 16 by 16, a 1.6 px
+stroke with round caps and joins, no fills, drawn in `#000000` (`plus`, `back`, `flip`,
+`chevron-down`, `gear`, `sound-on`, `sound-off`, `explore`, `spar`, `repertoire`, `drill`).
+`themed_icon(name, palette)` replaces `#000000` with the palette's text colour, and its muted
+colour for the disabled pixmaps, and renders them with `QSvgRenderer` at 16 and 32 px, so one file
+serves both themes; `tinted_icon(name, normal, disabled)` takes the two colours directly.
 
 ## Help
 
