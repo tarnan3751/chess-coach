@@ -18,6 +18,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QFileInfo>
+#include <QFontDatabase>
 #include <QLabel>
 #include <QListWidget>
 #include <QObject>
@@ -165,8 +166,22 @@ class MainWindowTest : public QObject {
         for (const QString& heading : headings) {
             QVERIFY2(text.contains(heading), qPrintable(heading));
         }
-        QVERIFY(text.contains(QStringLiteral("Book (the move strong players choose)")));
-        QVERIFY(text.contains(QStringLiteral("nothing you do leaves it")));
+        // Each word explained where it first appears, and what the screens' numbers mean.
+        for (const QString& said : {
+                 QStringLiteral("White wins, draws and Black wins"),
+                 QStringLiteral("plus when White is better and minus when Black is"),
+                 QStringLiteral("The known lines are the moves played often enough"),
+                 QStringLiteral("a Dubious move, one that players at your rating often choose"),
+                 QStringLiteral("Book (what strong players, rated 2200 and above, choose)"),
+                 QStringLiteral("comes back tomorrow"),
+                 QStringLiteral("nothing you do leaves it"),
+                 QStringLiteral("File > Back up your work saves everything"),
+             }) {
+            QVERIFY2(text.contains(said), qPrintable(said));
+        }
+        // The headings in the spec's serif, which the window registered.
+        QVERIFY(QFontDatabase::hasFamily(QStringLiteral("Source Serif 4")));
+        QVERIFY(browser.toHtml().contains(QStringLiteral("Source Serif 4")));
         // Nothing links out of the app, and the house style has no semicolons.
         QVERIFY(!browser.toHtml().contains(QStringLiteral("href")));
         QVERIFY(!text.contains(QLatin1Char(';')));

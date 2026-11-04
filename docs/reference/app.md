@@ -651,16 +651,21 @@ themes keep their names, *Light* and *Dark*, and their setting values, `light` a
 ## Help
 
 *Help > How to use chess-coach* opens `HelpDialog` (`help_dialog`, non-blocking): a `QTextBrowser`
-(`help_text`) of five short sections in rich text, a heading and two to four sentences each:
-Explore, Practice, Repertoire, Drill, and "The database and the engine" (the games the database is
-built from, what a rating band is, Book, Popular and Dubious each in a few words, and that nothing
-leaves the computer). The text holds no link, and the browser opens none (`setOpenLinks(false)`).
+(`help_text`, 640 × 720, scrolling when the text is longer) of five short sections in rich text,
+a heading in Source Serif 4 SemiBold (the document's font when the family is not registered) and
+three to four sentences each: Explore (the results bar's three parts, White wins, draws and Black
+wins, and the engine's score in pawns, plus when White is better and minus when Black is),
+Practice (the known lines, and Dubious where it first appears), Repertoire, Drill (grading a
+right answer, and a missed card coming back tomorrow), and "The database and the engine" (the
+games the database is built from, what a rating band is, Book, Popular and Dubious each in a few
+words, that nothing leaves the computer, and that File > Back up your work saves everything). The
+text holds no link, and the browser opens none (`setOpenLinks(false)`).
 
 The toolbar's buttons and the Rating menu each carry a one-sentence tooltip: *New game* "Go back
 to the starting position.", *Back* "Take back the last move.", *Flip board* "Turn the board
 around." and the tier selector "Choose the rating of the players whose games you see."
-(`add_toolbar_tooltips`, which finds them by their object names and which the toolbar's setup
-calls once).
+(`add_toolbar_tooltips`, which finds them by their object names, passes over one it does not
+find, and which the toolbar's setup calls once).
 
 ## About
 
