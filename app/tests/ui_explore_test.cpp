@@ -19,6 +19,7 @@
 #include "study_palette.hpp"
 #include "tables.hpp"
 #include "ui_harness.hpp"
+#include "wording.hpp"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -249,9 +250,8 @@ class ExploreTest : public QObject {
                  QVariant(QStringLiteral("white · draw · black")));
         QCOMPARE(header(window, ExploreModel::badges_column, Qt::ToolTipRole),
                  QVariant(QStringLiteral(
-                     "Book: what strong players (2200 and above) choose. Popular: what players at "
-                     "your rating often choose. Dubious: popular at your rating, but it loses "
-                     "ground.")));
+                     "Book is what strong players (2200 and above) choose. Popular is often chosen "
+                     "at your rating. Dubious is popular at your rating, but it loses ground.")));
         QCOMPARE(header(window, ExploreModel::games_column, Qt::ToolTipRole),
                  QVariant(QStringLiteral(
                      "How many games by players at this rating played this move here.")));
@@ -397,7 +397,7 @@ class ExploreTest : public QObject {
             QTRY_COMPARE(QToolTip::text(), chesscoach::app::badge_sentence(badge));
         }
         QCOMPARE(chesscoach::app::badge_sentence(pills.back().badge),
-                 QStringLiteral("Dubious: popular at your rating, but it loses ground."));
+                 QStringLiteral("Dubious is popular at your rating, but it loses ground."));
     }
 
     void switching_tiers_changes_the_table() {

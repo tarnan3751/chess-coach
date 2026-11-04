@@ -147,7 +147,7 @@ QVariant ExploreModel::headerData(int section, Qt::Orientation orientation, int 
     if (role == Qt::ToolTipRole) {
         switch (section) {
         case badges_column:
-            return badges_explained();
+            return badges_tooltip();
         case games_column:
             return translate("How many games by players at this rating played this move here.");
         case result_column:

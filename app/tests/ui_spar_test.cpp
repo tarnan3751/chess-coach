@@ -21,6 +21,7 @@
 #include "study_palette.hpp"
 #include "tables.hpp"
 #include "ui_harness.hpp"
+#include "wording.hpp"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -170,6 +171,7 @@ void meet_a_dubious_move(MainWindow& window, const BoardView& board) {
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 1, 1), QStringLiteral("Book"));
     // The badges and the results explained where the headers name them.
     const auto& choices = child<QTableWidget>(window, QStringLiteral("spar_better"));
+    QCOMPARE(choices.horizontalHeaderItem(1)->toolTip(), chesscoach::app::badges_tooltip());
     QVERIFY(choices.horizontalHeaderItem(1)->toolTip().contains(QStringLiteral("Dubious is")));
     QCOMPARE(choices.horizontalHeaderItem(3)->toolTip(),
              QStringLiteral("White wins · draws · Black wins, as a share of the games"));

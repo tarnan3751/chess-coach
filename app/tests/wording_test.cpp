@@ -1,8 +1,8 @@
 // Unit tests of the app's wording (app; unit; wording.hpp): the rating bands from core's bounds,
 // numbers with separators and counts with their nouns, the pawns rounded in integers and the cases
 // of a loss by its two evaluations, a depth in moves, a day, a database's months as one month, a
-// run, a list with gaps or as stored when one does not read, and the engine's state, short and
-// with the way forward. Pure functions: no application object is needed.
+// run, a list with gaps or as stored when one does not read, the engine's state, short and with
+// the way forward, and what the badges mean. Pure functions: no application object is needed.
 #include "wording.hpp"
 
 #include <chesscoach/opening_store.hpp>
@@ -17,6 +17,8 @@
 #include <QString>
 #include <QTime>
 
+using chesscoach::app::badge_sentence;
+using chesscoach::app::badges_tooltip;
 using chesscoach::app::counted;
 using chesscoach::app::day;
 using chesscoach::app::engine_words;
@@ -166,4 +168,18 @@ TEST_CASE("The engine's state reads short, or with the way forward", "[wording]"
     CHECK(
         engine_words(EngineState::failed, QStringLiteral("Stockfish 17"), true) ==
         QStringLiteral("Stockfish 17 did not answer. chess-coach tries again at your next move."));
+}
+
+TEST_CASE("The badges mean one thing, in one wording, on every screen", "[wording]") {
+    using chesscoach::Badge;
+    CHECK(badge_sentence(Badge::book) ==
+          QStringLiteral("Book is what strong players (2200 and above) choose."));
+    CHECK(badge_sentence(Badge::popular) ==
+          QStringLiteral("Popular is often chosen at your rating."));
+    CHECK(badge_sentence(Badge::dubious) ==
+          QStringLiteral("Dubious is popular at your rating, but it loses ground."));
+    CHECK(badges_tooltip() ==
+          QStringLiteral("Book is what strong players (2200 and above) choose. Popular is often "
+                         "chosen at your rating. Dubious is popular at your rating, but it loses "
+                         "ground."));
 }

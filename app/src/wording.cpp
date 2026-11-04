@@ -1,5 +1,5 @@
-// How the app words ratings, counts, numbers, pawns, days, months and the engine's state
-// (wording.hpp).
+// How the app words ratings, counts, numbers, pawns, days, months, the engine's state and the
+// badges (wording.hpp).
 #include "wording.hpp"
 
 #include <chesscoach/score.hpp>
@@ -196,6 +196,27 @@ QString engine_words(EngineState state, const QString& name, bool with_way_forwa
                    : translate("The engine did not start");
     }
     return {};
+}
+
+QString badge_sentence(Badge badge) {
+    switch (badge) {
+    case Badge::book:
+        return translate("Book is what strong players (2200 and above) choose.");
+    case Badge::popular:
+        return translate("Popular is often chosen at your rating.");
+    case Badge::dubious:
+        return translate("Dubious is popular at your rating, but it loses ground.");
+    }
+    return {};
+}
+
+QString badges_tooltip() {
+    return QStringList{
+        badge_sentence(Badge::book),
+        badge_sentence(Badge::popular),
+        badge_sentence(Badge::dubious),
+    }
+        .join(QLatin1Char(' '));
 }
 
 } // namespace chesscoach::app

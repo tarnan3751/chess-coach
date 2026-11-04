@@ -1,10 +1,11 @@
 // How the app words the things its sentences hold (docs/reference/app.md, **Wording**): a rating
 // band, a count with its noun, a number with thousands separators, a move's loss by its two
-// evaluations, a day, the months an opening database holds and the engine's state, each written
-// one way on every screen, in English (QLocale::English) whatever the system's locale. Pure
-// functions of their arguments: no clock, no I/O.
+// evaluations, a day, the months an opening database holds, the engine's state and what the
+// badges mean, each written one way on every screen, in English (QLocale::English) whatever the
+// system's locale. Pure functions of their arguments: no clock, no I/O.
 #pragma once
 
+#include <chesscoach/badges.hpp>
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
 
@@ -74,5 +75,12 @@ struct MoveEvaluations {
 // (a search that failed). With the way forward, the last three say what to do: "No engine found.
 // Choose a Stockfish program in Settings."
 [[nodiscard]] QString engine_words(EngineState state, const QString& name, bool with_way_forward);
+
+// What a badge means, as its pill's tooltip says it: "Book is what strong players (2200 and above)
+// choose.", "Popular is often chosen at your rating.", "Dubious is popular at your rating, but it
+// loses ground."
+[[nodiscard]] QString badge_sentence(Badge badge);
+// The three in that order, a Badges header's tooltip on every screen.
+[[nodiscard]] QString badges_tooltip();
 
 } // namespace chesscoach::app

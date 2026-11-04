@@ -286,9 +286,8 @@ theme (the light one until then):
   whichever side is to move); and Top players (the move's share of the plays at tier 6, rounded,
   "0%" when they never play it, or "–" without a tier-6 node, with the tooltip "No games by players
   rated 2200 and above here"). The numbers are right-aligned in tabular figures. The headers carry
-  tooltips in plain words: Badges "Book: what strong players (2200 and above) choose. Popular: what
-  players at your rating often choose. Dubious: popular at your rating, but it loses ground."
-  (Explore is where the badges first appear), Games "How many games by players at this rating
+  tooltips in plain words: Badges `badges_tooltip` (**Wording**), the badges' three sentences, as
+  Practice's says them (Explore is where the badges first appear), Games "How many games by players at this rating
   played this move here.", Results "White wins · draws · Black wins, as a share of the games",
   Score for White "The share of the points White scored here: a win counts 1, a draw ½.", and Top
   players "How often players rated 2200 and above choose this move". The rows keep the worker's
@@ -345,8 +344,8 @@ The Study look's parts for a table that paints itself (`tables.{hpp,cpp}`,
   figures where Qt can ask the font for them (6.7 and later, `tabular`).
 - **The pills** (`badge_pills`, `paint_badge_pills`): Book, Popular and Dubious in that order,
   each in its badge's colours, 11.5 px semibold, 1 px by 7 px of padding, 2 px corners, 4 px
-  apart; a pill's tooltip is its badge's sentence (`badge_sentence`, `show_pill_tooltip`), and
-  `badges_explained` joins the three for a Badges header.
+  apart; a pill's tooltip is its badge's sentence (**Wording**'s `badge_sentence`,
+  `show_pill_tooltip`).
 - **The results bar** (`paint_results_bar`): 150 × 16 px after the cell's padding, a hairline
   frame round white wins, draws and black wins in the results colours, with the white and black
   percentages inside their segments in 10 px bold, and the draws' only in a segment 18 px wide or
@@ -433,8 +432,8 @@ replay's up to its ply, and clicking a row does nothing on Spar.
   evaluation for it), never its badges, which beside "too few games" would read as a
   contradiction; the better choices (`spar_better`: Move, Badges by name, "Book,
   Popular", painted as pills, Games and Results, with the result bar, under the Study header with
-  the Results note, as **Tables** says, the Badges and Results headers each with a tooltip saying
-  what the three badges and the bar's three parts are); and *Keep playing*
+  the Results note, as **Tables** says, the Badges header's tooltip `badges_tooltip` and the Results
+  header's saying what the bar's three parts are); and *Keep playing*
   (`spar_continue`). The move stands; Keep
   playing closes the panel and gives the board back;
 - **the summary** (`spar_summary`, `spar_summary_text`), when a session ends: how it ended ("You
@@ -644,19 +643,22 @@ store's rows through core's `evaluation_value`), not by their difference, since 
 about ±99,999: a mate against the mover after the move, "The engine says it loses by force."; a mate
 for the mover both before and after it, however much slower, "The engine says it keeps the forced
 win."; a mate for the mover before it and none after, "The engine says it misses a forced win.";
-else the loss in pawns, "… gives away about 1.1 pawns." or "about 1 pawn", or "almost nothing"
-under 5 centipawns, however large the loss, so a move from +12 to +4 is "about 8.0 pawns"
+else the loss in pawns, "… gives away about 1.1 pawns." or "about 1 pawn", or "almost nothing" under
+5 centipawns, however large the loss, so a move from +12 to +4 is "about 8.0 pawns"
 (`loss_sentence`, and `loss_cell` for a table: "loses by force", "keeps the win", "misses a win",
 "1.1", "almost none"); a day as "4 November 2026" (`day`); and the months an opening database holds
-(`month_range`, from `meta`'s `YYYY-MM` list): "October 2026", a run of months one after another
-as "October 2026 to March 2027", and months with gaps listed with the year after each year's last,
+(`month_range`, from `meta`'s `YYYY-MM` list): "October 2026", a run of months one after another as
+"October 2026 to March 2027", and months with gaps listed with the year after each year's last,
 "January, March and April 2013"; and the engine's state (`engine_words`), "Stockfish 17 ready",
 "Stockfish 17 thinking…", "Engine starting…", "Engine not started", "No engine found", "The engine
 did not start" and, for a search that failed, "Stockfish 17 did not answer", the last three with
 the way forward when asked for it ("No engine found. Choose a Stockfish program in Settings.", "The
 engine did not start. Choose another engine program in Settings.", "Stockfish 17 did not answer.
 chess-coach tries again at your next move."), which Explore's engine panel says, and in the short
-form the status bar's. `app_wording_test` checks each.
+form the status bar's; and what the badges mean, a sentence each (`badge_sentence`: "Book is what
+strong players (2200 and above) choose.", "Popular is often chosen at your rating.", "Dubious is
+popular at your rating, but it loses ground."), and the three for a Badges header on every screen
+(`badges_tooltip`). `app_wording_test` checks each.
 
 ## Themes
 

@@ -116,9 +116,7 @@ SparScreen::SparScreen(QWidget* parent)
     better_->setItemDelegateForColumn(1, new BadgeDelegate(better_, &palette_));
     better_->setItemDelegateForColumn(3, new ResultDelegate(better_, &palette_));
     better_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-    better_->horizontalHeaderItem(1)->setToolTip(
-        tr("Book is what strong players (2200 and above) choose. Popular is often chosen at your "
-           "rating. Dubious is popular at your rating, but it loses ground."));
+    better_->horizontalHeaderItem(1)->setToolTip(badges_tooltip());
     better_->horizontalHeaderItem(3)->setToolTip(
         tr("White wins · draws · Black wins, as a share of the games"));
     for (QFrame* frame : {interruption_, summary_}) {

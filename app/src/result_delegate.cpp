@@ -2,6 +2,7 @@
 #include "result_delegate.hpp"
 
 #include "tables.hpp"
+#include "wording.hpp"
 
 #include <QAbstractItemView>
 #include <QApplication>
@@ -14,7 +15,6 @@
 #include <QPainter>
 #include <QRect>
 #include <QRectF>
-#include <QStringList>
 #include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QToolTip>
@@ -84,26 +84,6 @@ QString badge_word(Badge badge) {
         return translate("Dubious");
     }
     return {};
-}
-
-QString badge_sentence(Badge badge) {
-    switch (badge) {
-    case Badge::book:
-        return translate("Book: what strong players (2200 and above) choose.");
-    case Badge::popular:
-        return translate("Popular: what players at your rating often choose.");
-    case Badge::dubious:
-        return translate("Dubious: popular at your rating, but it loses ground.");
-    }
-    return {};
-}
-
-QString badges_explained() {
-    QStringList sentences;
-    for (const Badge badge : badge_order) {
-        sentences << badge_sentence(badge);
-    }
-    return sentences.join(QLatin1Char(' '));
 }
 
 QString results_note() { return translate("white · draw · black"); }
