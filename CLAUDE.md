@@ -21,9 +21,10 @@ heading of this file or of a doc.
 
 ## Status
 
-**Phases 0 to 4 are complete and Phase 5's `core`, CLI and app screens have landed; Phase 6's
-release remains.** The skeleton (presets, the gate, the boundary
-check, CI on macOS and Ubuntu; `docs/reference/testing-tools.md`); the data contract
+**Phases 0 to 6 are complete and version 1.0.0 is on `main`, untagged on purpose; Phase 7, the
+UI/UX pass, landed on 2026-11-04 and Phase 8, performance and cleanup, is next; the `v1.0.0` tag
+waits for it.** The skeleton (presets, the gate, the
+boundary check, CI on macOS and Ubuntu; `docs/reference/testing-tools.md`); the data contract
 (`docs/database.md`); `core` (the position key, `Position` over chess-library, tiers, badges,
 names, the read-only opening store and the canonical dump, the recommendation score, the UCI
 engine client with its fake engine, the profile store with the engine cache, spar sessions,
@@ -31,24 +32,26 @@ repertoires, cards and reviews across `profiles.db` versions 1 to 3, the sampler
 session, the engine reply provider, the SM-2 scheduler, repertoire coverage, PGN import, profile
 export and import, the opening database's locator and import; `docs/reference/core.md`); the
 pipeline (`chess-coach-pipeline build`, two passes with a count-min sketch, the evaluation merge,
-badges, names, the sample corpus and its golden dump, the benchmark; `docs/reference/pipeline.md`);
-the CLI (`dump`, `stats`, `explore` with `--score` and `--engine`, `name`, `eval`, `spar`,
-`repertoire`, `drill`, `profile`, `database`, with `--db` optional beside `--data-dir`;
-`docs/reference/cli.md`); the app (the board, the shell, Explore on a database worker with the
-engine worker's lines and cancellation, the Spar screen on a spar worker, the Repertoire and
-Drill screens on a profile worker with profile export and import, the opening database found
-through `--db`, the data directory and the app bundle and imported with File > Import database…,
-the bundled Stockfish found by itself, themes, settings in `<data-dir>/settings.ini`, About, the
-UI harness with screenshots; `docs/reference/app.md`);
-and the macOS package with Qt, Stockfish and the published opening database inside (the one
-`data/release/bundled.txt` names), the licence texts in `legal/`, `tools/package.sh` and the
-tag-triggered release workflow (`docs/reference/testing-tools.md`);
+badges, names, the sample corpus and its golden dump, the benchmark, `trim`;
+`docs/reference/pipeline.md`); the CLI (`dump`, `stats`, `explore` with `--score` and `--engine`,
+`name`, `eval`, `spar`, `repertoire`, `drill`, `profile`, `database`, with `--db` optional beside
+`--data-dir`; `docs/reference/cli.md`); the app (the board, the shell, Explore on a database
+worker with the engine worker's lines and cancellation, the Practice screen (the Spar screen's
+label in the app) on a spar worker, the Repertoire and Drill screens on a profile worker with
+backup and restore, the opening database found through `--db`, the data directory and the app
+bundle and imported with File > Import database, the bundled Stockfish found by itself, the
+**Study** look (paper and night themes from `app/src/study_palette.hpp` and the stylesheets,
+Source Serif 4 and Source Sans 3 bundled, our own icons, Fusion on every platform), plain
+language throughout with Help > How to use chess-coach, sounds through our own `NSSound` backend
+with a toggle, settings in `<data-dir>/settings.ini`, About, the UI harness with screenshots;
+`docs/reference/app.md`); the macOS package with Qt, Stockfish and the published opening database
+inside (the one `data/release/bundled.txt` names), the licence texts in `legal/`,
+`tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`);
 and the release-database tooling, `tools/build_release_db.sh` and `tools/verify_db.sh`
-(`docs/reference/pipeline.md`, **Release database**; `data/release/README.md`). In progress: the
-review folds, the public-milestone files, and the release database (a recent month builds on the
-owner's machine). `PLAN.md` §7 lists the seven phases with their sizes, §6
-the data, §9 the process, §11 the decisions, §12 the resolved questions and §14 the deferred
-path.
+(`docs/reference/pipeline.md`, **Release database**; `data/release/README.md`), with data
+version 1 (October 2026) published as the `data-v1` release. `PLAN.md` §7 lists the phases with
+their sizes (Phases 7 and 8 at the end), §6 the data, §9 the process, §11 the decisions, §12 the
+resolved questions and §14 the deferred path.
 
 ## Stack (pinned)
 
