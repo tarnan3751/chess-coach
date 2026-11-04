@@ -213,18 +213,18 @@ fi
 # 7. Module boundary and the no-network rule ---------------------------------------------
 # core, pipeline and cli must not include or link Qt, and nothing may include or link a network
 # library; the CMake build enforces this too, this is the belt to its braces and runs even when
-# the build above failed.
+# the build above failed. The sources are C++ and Objective-C++, an include #include or #import.
 : >"$scratch/boundary.txt"
 for d in core pipeline cli; do
   [ -d "$d" ] || continue
-  grep -rnE '^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"](Q[A-Z][A-Za-z0-9]*|Qt[A-Za-z]*/)' "$d" \
-    --include='*.cpp' --include='*.hpp' --include='*.h' >>"$scratch/boundary.txt" || true
+  grep -rnE '^[[:space:]]*#[[:space:]]*(include|import)[[:space:]]*[<"](Q[A-Z][A-Za-z0-9]*|Qt[A-Za-z]*/)' "$d" \
+    --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.mm' >>"$scratch/boundary.txt" || true
   grep -rnE 'Qt6?::' "$d" --include='CMakeLists.txt' --include='*.cmake' >>"$scratch/boundary.txt" || true
 done
 for d in core pipeline cli app cmake; do
   [ -d "$d" ] || continue
-  grep -rnE '^[[:space:]]*#[[:space:]]*include[[:space:]]*[<"](curl/|httplib|boost/asio|boost/beast|sys/socket\.h|netinet/|arpa/inet|winsock|QtNetwork/|QNetwork|QTcp|QUdp|QSsl)' "$d" \
-    --include='*.cpp' --include='*.hpp' --include='*.h' >>"$scratch/boundary.txt" || true
+  grep -rnE '^[[:space:]]*#[[:space:]]*(include|import)[[:space:]]*[<"](curl/|httplib|boost/asio|boost/beast|sys/socket\.h|netinet/|arpa/inet|winsock|QtNetwork/|QNetwork|QTcp|QUdp|QSsl)' "$d" \
+    --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.mm' >>"$scratch/boundary.txt" || true
   grep -rnE 'Qt6?::Network|CURL::|libcurl|httplib|Boost::asio|Boost::beast|OpenSSL::' "$d" \
     --include='CMakeLists.txt' --include='*.cmake' >>"$scratch/boundary.txt" || true
 done

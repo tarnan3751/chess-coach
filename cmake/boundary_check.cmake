@@ -3,14 +3,15 @@
 #   cmake -DCHESSCOACH_SOURCE_DIR=<root> -P cmake/boundary_check.cmake
 # It applies the patterns of tools/gates.sh's boundary step to the same files, line by line, and
 # fails listing every match:
-#   - no Qt include in a C++ source, and no Qt target in a CMakeLists.txt or *.cmake, under core/,
+#   - no Qt include in a source, and no Qt target in a CMakeLists.txt or *.cmake, under core/,
 #     pipeline/ or cli/;
-#   - no network include in a C++ source, and no network target in a CMakeLists.txt or *.cmake,
-#     under core/, pipeline/, cli/, app/ or cmake/;
+#   - no network include in a source, and no network target in a CMakeLists.txt or *.cmake, under
+#     core/, pipeline/, cli/, app/ or cmake/;
 #   - no network port in vcpkg.json.
 # CMake's regular expressions have no [[:space:]] class, so the patterns spell it [ \t]; the
 # network names are written with one letter bracketed (lib[c]url), which matches the same text,
-# so that this file, under cmake/, does not match the gate's own grep.
+# so that this file, under cmake/, does not match the gate's own grep. A source is C++ (*.cpp,
+# *.hpp, *.h) or Objective-C++ (*.mm), and an include is an #include or an #import.
 cmake_minimum_required(VERSION 3.28)
 
 if(NOT CHESSCOACH_SOURCE_DIR)
@@ -18,14 +19,14 @@ if(NOT CHESSCOACH_SOURCE_DIR)
 endif()
 
 set(space "[ \t]")
-set(include_start "^${space}*#${space}*include${space}*[<\"]")
+set(include_start "^${space}*#${space}*(include|import)${space}*[<\"]")
 set(qt_include "${include_start}(Q[A-Z][A-Za-z0-9]*|Qt[A-Za-z]*/)")
 set(qt_target "Qt6?::")
 set(network_include "${include_start}(curl/|http[l]ib|boost/asio|boost/beast|sys/socket\\.h|netinet/|arpa/inet|winsock|QtNetwork/|QNetwork|QTcp|QUdp|QSsl)")
 set(network_target "Qt6?::Network|CURL[:]:|lib[c]url|http[l]ib|Boost::[a]sio|Boost::[b]east|OpenSSL[:]:")
 set(network_port "\"(curl|cpp-http[l]ib|boost-asio|boost-beast|openssl|qtnetwork|qtbase)\"")
 
-set(sources "*.cpp" "*.hpp" "*.h")
+set(sources "*.cpp" "*.hpp" "*.h" "*.mm")
 set(build_files "CMakeLists.txt" "*.cmake")
 set(findings "")
 

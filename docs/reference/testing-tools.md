@@ -109,8 +109,9 @@ library (`CLAUDE.md`, **Module boundaries**). Three checks hold it:
    on every target in `core/`, `pipeline/` and `cli/`, walks the target's link closure at the
    end of the configure and fails it on a Qt target (`Qt6::...`) or a Qt library file.
 2. **The `boundary` ctest test** (labels `cmake;unit`, so the quick gate runs it too) runs
-   `cmake -P cmake/boundary_check.cmake` over the sources: no Qt include (`#include <Q...>` or
-   `<Qt.../...>`) in a C++ source and no `Qt6::` in a `CMakeLists.txt` or `*.cmake` under
+   `cmake -P cmake/boundary_check.cmake` over the sources, C++ (`*.cpp`, `*.hpp`, `*.h`) and
+   Objective-C++ (`*.mm`): no Qt include (`#include` or `#import` of `<Q...>` or `<Qt.../...>`) in
+   a source and no `Qt6::` in a `CMakeLists.txt` or `*.cmake` under
    `core/`, `pipeline/` or `cli/`; no network include (curl, httplib, Boost.Asio or Beast,
    sockets, `QtNetwork` and its classes) and no network target anywhere under the four modules
    and `cmake/`; no network port in `vcpkg.json`. It lists every offending line.
