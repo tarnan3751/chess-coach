@@ -28,13 +28,14 @@ QString translate(const char* text) {
     return QCoreApplication::translate("chesscoach::app::SparWorker", text);
 }
 
-// What the status line says of the game while it runs, after its move number.
+// What the status line says of the game while it runs, after its move number. The positions with
+// a node at the tier are "the known lines", never "the book", which is the Book badge's word.
 QString phase_text(Phase phase) {
     switch (phase) {
     case Phase::book:
-        return translate("You are in the book.");
+        return translate("You are still in the known lines.");
     case Phase::off_book:
-        return translate("You have left the book, so the engine replies.");
+        return translate("You have left the known lines, so the engine replies.");
     case Phase::ended:
         return translate("The practice game is over.");
     }
@@ -44,12 +45,12 @@ QString phase_text(Phase phase) {
 // What the summary says of how far the game went.
 QString reached_text(Phase phase) {
     return phase == Phase::off_book
-               ? translate("You left the book, and the engine played the rest.")
-               : translate("You stayed in the book.");
+               ? translate("You left the known lines, and the engine played the rest.")
+               : translate("You stayed in the known lines.");
 }
 
-// The badges' names, "Book", "Popular" and "Dubious", joined by separator.
-QString badge_words(Badges badges, const QString& separator) {
+// The badges' names for a table: "Book, Popular".
+QString badge_words(Badges badges) {
     QStringList words;
     if (badges.has(Badge::book)) {
         words << translate("Book");
@@ -60,28 +61,42 @@ QString badge_words(Badges badges, const QString& separator) {
     if (badges.has(Badge::dubious)) {
         words << translate("Dubious");
     }
-    return words.join(separator);
+    return words.join(QStringLiteral(", "));
+}
+
+// The badges said of a move, a sentence each, the name in parentheses.
+QString badge_sentences(Badges badges) {
+    QStringList said;
+    if (badges.has(Badge::book)) {
+        said << translate("Strong players choose it (Book).");
+    }
+    if (badges.has(Badge::dubious)) {
+        said << translate("Players at your rating often choose it, but it loses ground (Dubious).");
+    } else if (badges.has(Badge::popular)) {
+        said << translate("Players at your rating often choose it (Popular).");
+    }
+    return said.join(QLatin1Char(' '));
 }
 
 // The interruption as the window shows it; played_san is the move's SAN where it was played.
 SparInterruption converted(const Interruption& interruption, const QString& played_san) {
     SparInterruption out;
     out.dubious = interruption.reason == Interruption::Reason::dubious;
-    out.reason =
-        out.dubious
-            ? translate("%1 is Dubious (popular here, but it loses ground).").arg(played_san)
-            : translate("%1 leaves the book. The database has too few games at this rating after "
-                        "it.")
-                  .arg(played_san);
+    out.reason = out.dubious ? translate("Players at your rating often choose %1, but it loses "
+                                         "ground (Dubious).")
+                                   .arg(played_san)
+                             : translate("%1 leaves the known lines. Too few games at your rating "
+                                         "follow it, so the engine replies from here.")
+                                   .arg(played_san);
     out.played_san = played_san;
     out.played_uci = QString::fromStdString(interruption.played);
-    out.badges = badge_words(interruption.badges, translate(" and "));
+    out.badges = badge_sentences(interruption.badges);
     out.loss = interruption.loss;
     for (const BetterChoice& choice : interruption.better) {
         out.better.append(SparChoice{
             .san = QString::fromStdString(choice.san),
             .uci = QString::fromStdString(choice.row.move),
-            .badges = badge_words(choice.row.badges, QStringLiteral(", ")),
+            .badges = badge_words(choice.row.badges),
             .total = choice.row.total(),
             .white = choice.row.white,
             .draws = choice.row.draws,
@@ -280,7 +295,8 @@ void SparWorker::start(int tier, bool user_white, quint64 seed, int end_move) {
                                           seed, SparConfig{.end_move = end_move, .sampler = {}});
         if (!started) {
             emit session_failed(
-                tr("The practice game could not start. Check the move limit in Settings."));
+                tr("The practice game could not start. Check Practice games end at move in "
+                   "Settings."));
             return;
         }
         session_.emplace(std::move(*started));

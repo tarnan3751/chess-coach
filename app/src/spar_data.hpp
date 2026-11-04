@@ -27,16 +27,16 @@ struct SparChoice {
 
 struct SparInterruption {
     bool dubious = false; // else the move left the book
-    QString reason;       // why, as a sentence: "a3 is Dubious (…)."
+    QString reason;       // why, as a sentence: "Players at your rating often choose a3, …"
     QString played_san;
     QString played_uci;
-    QString badges;             // the played move's names, "Popular and Dubious", or empty
+    QString badges;             // the played move's, a sentence each, or empty
     std::optional<qint64> loss; // centipawns, when defined
     QVector<SparChoice> better;
 };
 
 struct SparState {
-    QString phase;       // "You are in the book.", "You have left the book, so …" or "The … over."
+    QString phase;       // "You are still in the known lines.", "You have left …" or "The … over."
     int move_number = 1; // 1 at the start, one more after each black move
     bool user_to_move = false;
     bool ended = false;
@@ -46,7 +46,7 @@ struct SparSummary {
     quint64 seed = 0;
     QStringList moves_san;
     int interruptions = 0;
-    QString phase_reached; // "You stayed in the book." or "You left the book, and …"
+    QString phase_reached; // "You stayed in the known lines." or "You left the known lines, …"
     QString result;        // "1-0", "0-1", "1/2-1/2", or empty when it ended at its move limit
     bool ended = false;    // false when stopped by End the game
     qint64 saved_id = 0;   // the saved session's id, 0 when it could not be saved

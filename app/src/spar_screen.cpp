@@ -11,7 +11,6 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QList>
-#include <QLocale>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QStringList>
@@ -110,6 +109,11 @@ SparScreen::SparScreen(QWidget* parent)
     summary_text_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     better_->setItemDelegateForColumn(3, new ResultDelegate(better_, &palette_));
     better_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    better_->horizontalHeaderItem(1)->setToolTip(
+        tr("Book is what strong players (2200 and above) choose. Popular is often chosen at your "
+           "rating. Dubious is popular at your rating, but it loses ground."));
+    better_->horizontalHeaderItem(3)->setToolTip(
+        tr("White wins · draws · Black wins, as a share of the games"));
     for (QFrame* frame : {interruption_, summary_}) {
         frame->setFrameShape(QFrame::StyledPanel);
         frame->hide();
@@ -142,8 +146,9 @@ SparScreen::SparScreen(QWidget* parent)
     // What the screen is for and the first step, in the muted colour (the stylesheets'
     // QLabel[muted="true"]).
     auto* description = new QLabel(
-        tr("Play an opening against the database. The coach stops you when you leave the "
-           "book and shows the better choices."),
+        tr("Play an opening against the coach. It follows what players at your rating play, "
+           "stops you when you play a dubious move or leave the known lines, and shows better "
+           "choices."),
         this);
     description->setObjectName(QStringLiteral("spar_description"));
     description->setWordWrap(true);
@@ -208,11 +213,10 @@ void SparScreen::show_message(const QString& text) { status_->setText(text); }
 
 void SparScreen::show_interruption(const SparInterruption& interruption, bool continue_button) {
     reason_->setText(interruption.reason);
-    // A Dubious move is always Popular too, which the reason has said; another move's badges are
-    // news.
+    // A Dubious move's reason has said its badges; another move's are news.
     QStringList said;
     if (!interruption.dubious && !interruption.badges.isEmpty()) {
-        said << tr("At this rating it is marked %1.").arg(interruption.badges);
+        said << interruption.badges;
     }
     said << (interruption.loss ? loss_sentence(*interruption.loss)
                                : tr("The database has no engine evaluation for it."));
@@ -260,9 +264,9 @@ void SparScreen::show_sessions(const QVector<SparSessionInfo>& sessions) {
     for (const SparSessionInfo& session : sessions) {
         const int row = sessions_->rowCount();
         sessions_->insertRow(row);
-        auto* date = table_item(QLocale(QLocale::English)
-                                    .toString(QDateTime::fromSecsSinceEpoch(session.started_at),
-                                              QStringLiteral("d MMMM yyyy, HH:mm")));
+        auto* date = table_item(tr("%1, %2").arg(
+            day(session.started_at),
+            QDateTime::fromSecsSinceEpoch(session.started_at).toString(QStringLiteral("HH:mm"))));
         date->setData(Qt::UserRole, QVariant::fromValue(session.id));
         sessions_->setItem(row, 0, date);
         sessions_->setItem(row, 1, table_item(rating_band(session.tier)));
@@ -288,7 +292,7 @@ void SparScreen::show_replay(int ply, int count,
     replay_position_->setVisible(true);
     previous_->setEnabled(ply > 0);
     next_->setEnabled(ply < count);
-    replay_position_->setText(tr("Step %1 of %2").arg(ply).arg(count));
+    replay_position_->setText(tr("Position %1 of %2").arg(ply).arg(count));
     if (interruption) {
         show_interruption(*interruption, false);
     } else {

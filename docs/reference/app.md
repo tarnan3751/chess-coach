@@ -344,9 +344,11 @@ engine processes run, Explore's idle. Its slots, reached by queued connection:
 | `list_sessions()` | `sessions_ready(sessions)`: the Default profile's saved sessions, newest first |
 | `replay_session(id)` | `replay_ready(SparReplay)`: a saved session played again from its seed, with each interruption at its ply |
 
-`SparState` carries the phase as a sentence ("You are in the book.", "You have left the book, so
-the engine replies.", "The practice game is over."), the move number, whose turn it is, and whether the session ended. The coach's reply comes from the sampler in
-book and from the engine off book: the engine starts at the first off-book reply, with Threads and
+`SparState` carries the phase as a sentence ("You are still in the known lines.", "You have left
+the known lines, so the engine replies.", "The practice game is over."), the move number, whose
+turn it is, and whether the session ended. The app calls the positions in book at the tier "the
+known lines" and keeps "book" for the Book badge. The coach's reply comes from the sampler in book
+and from the engine off book: the engine starts at the first off-book reply, with Threads and
 Hash from the engine settings and the binary found as the engine worker finds it, and searches
 through `EngineReplyProvider` at the session's tier (`ProviderConfig{seconds, elo_offset = 100}`),
 again after it dies; each session after the first sends the running engine `ucinewgame`
@@ -382,30 +384,34 @@ replay's up to its ply, and clicking a row does nothing on Spar.
 **The screen.** `SparScreen` holds:
 
 - its description (`spar_description`), in the muted colour (**Themes**): "Play an opening against
-  the database. The coach stops you when you leave the book and shows the better choices.";
+  the coach. It follows what players at your rating play, stops you when you play a dubious move
+  or leave the known lines, and shows better choices.";
 - the colour, *Play White* and *Play Black* (`spar_white`, `spar_black`), *Start a practice game*
   (`spar_start`) and *End the game* (`spar_end`), and the status line (`spar_status`): "Move 3.
-  You are in the book.", "Move 5. You have left the book, so the engine replies.", "The practice
-  game is over.", or a message;
+  You are still in the known lines.", "Move 5. You have left the known lines, so the engine
+  replies.", "The practice game is over.", or a message;
 - **the interruption panel** (`spar_interruption`), shown when the coach interrupts a move: the
-  reason, a sentence naming the move (`spar_reason`, "a3 is Dubious (popular here, but it loses
-  ground)." or "h4 leaves the book. The database has too few games at this rating after it."),
-  the move's badges when the reason has not named them, and its loss in pawns (`spar_played`,
-  "The engine says it gives away about 1.1 pawns.", or that the database has no evaluation for
-  it), the better choices (`spar_better`: Move, Badges by name, "Book, Popular", Games and
-  Results, with the result bar), and *Keep playing* (`spar_continue`). The move stands; Keep
+  reason, a sentence naming the move (`spar_reason`, "Players at your rating often choose a3, but
+  it loses ground (Dubious)." or "h4 leaves the known lines. Too few games at your rating follow
+  it, so the engine replies from here."); the move's badges when the reason has not named them,
+  a sentence each ("Strong players choose it (Book).", "Players at your rating often choose it
+  (Popular)."), and its loss (`spar_played`, `loss_sentence`, **Wording**, or that the database
+  has no evaluation for it); the better choices (`spar_better`: Move, Badges by name, "Book,
+  Popular", Games and Results, with the result bar, the Badges and Results headers each with a
+  tooltip saying what the three badges and the bar's three parts are); and *Keep playing*
+  (`spar_continue`). The move stands; Keep
   playing closes the panel and gives the board back;
 - **the summary** (`spar_summary`, `spar_summary_text`), when a session ends: how it ended ("You
   ended this practice game early.", "The practice game reached its move limit.", "White won the
   practice game."), how often the coach stopped the user ("The coach stopped you twice."), how far
-  it went ("You left the book, and the engine played the rest."), and the moves;
+  it went ("You left the known lines, and the engine played the rest."), and the moves;
 - **the saved sessions** (`spar_sessions`, under "Your saved practice games"): Date ("4 November
-  2026, 14:05"), Rating (its band), You played, Moves (white's and black's together, so six plies
+  2026, 14:05", the day through `day`), Rating (its band), You played, Moves (white's and black's together, so six plies
   are three), Stops and Result ("Ended early" for one ended early, else "White won", "Black won"
   or "Draw" when the game has a result, else "Move limit"), newest first, and *Replay this game*
   (`spar_replay`), which plays the selected one again: *Previous move* and *Next move*
   (`spar_previous`, `spar_next`) step through it one ply at a time with the position
-  (`spar_replay_position`, "Step 3 of 6") on the board, and each interruption is shown read-only,
+  (`spar_replay_position`, "Position 3 of 6") on the board, and each interruption is shown read-only,
   without Keep playing, after the move it interrupted. *Start a practice game* ends the replay.
 
 ## Profile worker
@@ -776,13 +782,14 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   and d4, black's e5 after 1. a3, and white's Nf3 alone after 1. a3 e5) with the fake engine's
   `legal` script as the coach off book, a fixed seed and a move limit of four: a session as white
   interrupted on 1. a3 with its better choices, their results bar repainted in the dark palette,
-  Continue, interrupted again on 2. h4 off book and
+  Keep playing, interrupted again on 2. h4 off book and
   answered by the engine, ended at its move limit with the summary and the saved session listed,
   and replayed with the interruptions at plies one and three; a session as black, where the
   coach moves first and the board turns; End the game saving a stopped session, and closing the
   window saving one; a second session sending the coach's engine `ucinewgame`, read from the fake's
-  log; the Settings dialog's spar entries ending the next session at the new limit;
-  and Explore's line and tier untouched by a session, the tier selector disabled only on Spar.
+  log; the Settings dialog's spar entries ending the next session at the new limit; the summary's
+  wording for a win, a draw and a stopped game and for none, one, two and three stops; and
+  Explore's line and tier untouched by a session, the tier selector disabled only on Spar.
   Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
 - `ui_repertoire_test`, on the same tier-4 tree: 1. e4 chosen by a board move and shown in the tree,
   then replaced by 1. a3, each time with the coverage equal to core's `compute_coverage` on the same

@@ -188,8 +188,9 @@ class MainWindowTest : public QObject {
     void every_screen_says_what_it_is_for() const {
         const MainWindow window(data_dir_, QString());
         const QStringList descriptions{
-            QStringLiteral("Play an opening against the database. The coach stops you when you "
-                           "leave the book and shows the better choices."),
+            QStringLiteral("Play an opening against the coach. It follows what players at your "
+                           "rating play, stops you when you play a dubious move or leave the known "
+                           "lines, and shows better choices."),
             QStringLiteral("Choose the move you will play in each position. Coverage shows how "
                            "much of what your opponents play you have an answer to."),
             QStringLiteral(
