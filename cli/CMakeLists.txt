@@ -52,25 +52,25 @@ if(BUILD_TESTING)
                       LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt SQLiteCpp)
   chesscoach_assert_no_qt(cli_commands_test)
 
-  # eval and explore --engine against core's fake engine, through tests/fake-stockfish.sh.
+  # eval and explore --engine against core's fake engine, through its wrapper in core's tests.
   chesscoach_add_test(cli_engine_commands_test MODULE cli KIND unit
                       SOURCES tests/engine_commands_test.cpp
                       LIBS chesscoach::cli_commands cli_test_fixture core_test_support fmt::fmt)
   add_dependencies(cli_engine_commands_test fake-uci)
   target_compile_definitions(cli_engine_commands_test PRIVATE
                              CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
-                             CHESSCOACH_FAKE_STOCKFISH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fake-stockfish.sh"
+                             CHESSCOACH_FAKE_STOCKFISH="${PROJECT_SOURCE_DIR}/core/tests/support/fake-stockfish.sh"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_assert_no_qt(cli_engine_commands_test)
 
-  # spar against core's fake engine, through tests/fake-stockfish-legal.sh.
+  # spar against core's fake engine and its legal script, through the same wrapper.
   chesscoach_add_test(cli_spar_test MODULE cli KIND unit
                       SOURCES tests/spar_command_test.cpp
                       LIBS chesscoach::cli_commands cli_test_fixture core_test_support fmt::fmt)
   add_dependencies(cli_spar_test fake-uci)
   target_compile_definitions(cli_spar_test PRIVATE
                              CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
-                             CHESSCOACH_FAKE_STOCKFISH_LEGAL="${CMAKE_CURRENT_SOURCE_DIR}/tests/fake-stockfish-legal.sh"
+                             CHESSCOACH_FAKE_STOCKFISH="${PROJECT_SOURCE_DIR}/core/tests/support/fake-stockfish.sh"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_assert_no_qt(cli_spar_test)
 

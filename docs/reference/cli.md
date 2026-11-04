@@ -351,19 +351,20 @@ commands are the `cli_commands` library, which the executable and the tests link
   position, the `--score` columns with their numbers worked out by hand, and every error a
   command returns.
 - `cli_engine_commands_test` (labels `cli;unit`) runs `eval` and `explore --engine` against
-  `core`'s fake engine through `cli/tests/fake-stockfish.sh`, which execs the `fake-uci` the
-  build names in `CHESSCOACH_FAKE_UCI`: a miss searches and stores; a repeat is served from the
-  cache with the binary pointed at a path that does not exist and the fake's log never written; a
-  minimum depth above the cached one searches again; a line count is its own entry; `--db` adds
+  `core`'s fake engine through `core/tests/support/fake-stockfish.sh`, which execs the `fake-uci`
+  the build names in `CHESSCOACH_FAKE_UCI` with the script `CHESSCOACH_FAKE_UCI_SCRIPT` names
+  (`normal` here): a miss searches and stores; a repeat is served from the cache with the binary
+  pointed at a path that does not exist and the fake's log never written; a minimum depth above
+  the cached one searches again; a line count is its own entry; `--db` adds
   the stored evaluation; a missing engine, `--lines 0` and a bad move are errors; the data
   directory holds `profiles.db` and nothing else. The engine's lines vary, so there are no golden
   queries for them.
 - `cli_spar_test` (labels `cli;unit`) runs `spar` on the fixture database with `core`'s fake
-  engine answering the first legal move (`cli/tests/fake-stockfish-legal.sh`, the fake's `legal`
-  script): a scripted session meets a Dubious interruption with its better choices, leaves the
-  book, ends at its move and is saved, listed and replayed to the same summary; moves read from
-  an input stream are refused when illegal and the session stops when the input ends; the errors
-  come before any file is opened or created.
+  engine answering the first legal move (the same wrapper with the fake's `legal` script): a
+  scripted session meets a Dubious interruption with its better choices, leaves the book, ends at
+  its move and is saved, listed and replayed to the same summary; moves read from an input stream
+  are refused when illegal and the session stops when the input ends; the errors come before any
+  file is opened or created.
 - `cli_database_command_test` (labels `cli;unit`) checks `resolve_db`'s order, an explicit `--db`
   that is not there as an error rather than a fall back, its errors, a command reading
   `--data-dir`'s `openings.db` as it reads `--db`, `database info`, and `database import`'s round

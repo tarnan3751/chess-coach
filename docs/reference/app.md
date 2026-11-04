@@ -896,10 +896,11 @@ the UI tests run silent on every platform, their sounds going to the null backen
   `explore-start-tier3`, `explore-fitted-tier3`, `explore-pills-tier4`, `explore-sicilian-light`,
   `explore-off-book`, `explore-light`, `explore-dark`, `about-dialog`.
 - `ui_engine_test`, with core's fake engine (`fake-uci`) set as the binary through
-  `app/tests/fake-stockfish.sh`, its script, delay and log chosen by environment variables: the
-  lines after a request, white to move and black to move, and the evaluation bar following the first
-  line where nothing is stored; a cache seeded through `ProfileStore` served without starting the
-  engine; a 30 s search stopped by a move while a timer keeps firing, and the window closing at
+  `core/tests/support/fake-stockfish.sh`, its script, delay and log chosen by environment
+  variables, as the CLI's engine tests use it: the lines after a request, white to move and black
+  to move, and the evaluation bar following the first line where nothing is stored; a cache
+  seeded through `ProfileStore` served without starting the engine; a 30 s search stopped by a
+  move while a timer keeps firing, and the window closing at
   once; a missing binary, one that fails the handshake, and one that dies mid-search, reported
   failed, never ready; a checkmated side to move, white's and black's, read from the fake's mate 0; the engine panel's head and body for each state, a cached
   search and a failure; the Settings dialog saving and applying its values, and a new window

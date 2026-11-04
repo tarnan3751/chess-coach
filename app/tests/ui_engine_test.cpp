@@ -1,9 +1,9 @@
 // UI tests of the engine worker and Explore's engine lines (app; ui), with core's fake engine set
-// as the binary through tests/fake-stockfish.sh: lines after a request, with scores from white's
-// side and the evaluation bar following the first line where nothing is stored; a request served
-// from the engine cache; a long search cancelled by moving on while the window keeps processing
-// events; a missing binary; the Settings dialog and its values surviving a new window; with
-// screenshots (ui_harness.hpp, fixture_db.hpp).
+// as the binary through core/tests/support/fake-stockfish.sh: lines after a request, with scores
+// from white's side and the evaluation bar following the first line where nothing is stored; a
+// request served from the engine cache; a long search cancelled by moving on while the window keeps
+// processing events; a missing binary; the Settings dialog and its values surviving a new window;
+// with screenshots (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/engine.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>

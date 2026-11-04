@@ -1,9 +1,9 @@
 // Unit tests of the CLI's engine commands (cli; unit): eval and explore --engine against core's
-// fake engine through cli/tests/fake-stockfish.sh, with their whole expected output. A first
-// eval searches and stores; a second of the same position is served from the engine cache without
-// the engine (its binary is then a path that does not exist, and the fake's log is not written);
-// a minimum depth above the cached one searches again; a missing binary is an error; the data
-// directory gets profiles.db and nothing else.
+// fake engine through core/tests/support/fake-stockfish.sh, with their whole expected output. A
+// first eval searches and stores; a second of the same position is served from the engine cache
+// without the engine (its binary is then a path that does not exist, and the fake's log is not
+// written); a minimum depth above the cached one searches again; a missing binary is an error; the
+// data directory gets profiles.db and nothing else.
 #include "commands/eval.hpp"
 #include "commands/explore.hpp"
 #include "fixture.hpp"
@@ -31,11 +31,13 @@ namespace {
 
 constexpr std::string_view start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 
-// The fake engine's environment, set before any engine starts: core's fake-uci, which the wrapper
-// script reads, logging every line it receives to fake.log in the scratch directory.
+// The fake engine's environment, set before any engine starts: core's fake-uci and its normal
+// script, which the wrapper script reads, logging every line it receives to fake.log in the
+// scratch directory.
 void use_fake_engine(const std::filesystem::path& scratch) {
     // NOLINTBEGIN(concurrency-mt-unsafe): one test at a time
     setenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI, 1);
+    setenv("CHESSCOACH_FAKE_UCI_SCRIPT", "normal", 1);
     setenv("CHESSCOACH_FAKE_UCI_LOG", (scratch / "fake.log").c_str(), 1);
     // NOLINTEND(concurrency-mt-unsafe)
 }

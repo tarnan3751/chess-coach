@@ -184,11 +184,12 @@ if(BUILD_TESTING)
     target_compile_definitions(app_${test}
                                PRIVATE "CHESSCOACH_UI_SCREENSHOT_DIR=\"${chesscoach_screenshots}\"")
   endforeach()
-  # The engine tests drive core's fake engine through tests/fake-stockfish.sh, set as the binary.
+  # The engine tests drive core's fake engine through its wrapper in core's tests, set as the
+  # binary.
   foreach(test IN ITEMS ui_engine_test ui_spar_test ui_lookup_test)
     add_dependencies(app_${test} fake-uci)
     target_compile_definitions(app_${test}
                                PRIVATE CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
-                                       CHESSCOACH_FAKE_STOCKFISH="${CMAKE_CURRENT_SOURCE_DIR}/tests/fake-stockfish.sh")
+                                       CHESSCOACH_FAKE_STOCKFISH="${PROJECT_SOURCE_DIR}/core/tests/support/fake-stockfish.sh")
   endforeach()
 endif()

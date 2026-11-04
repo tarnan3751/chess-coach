@@ -1,8 +1,8 @@
 // Unit tests of chess-coach-cli spar (cli; unit) on the fixture database, with core's fake engine
-// answering the first legal move once off book (cli/tests/fake-stockfish-legal.sh): a scripted
-// session meeting a Dubious interruption with its better choices, leaving the book, ending at its
-// move, saved, listed and replayed to the same summary; the moves read from stdin until it ends;
-// and the errors the command returns before it opens a file.
+// answering the first legal move once off book (core/tests/support/fake-stockfish.sh, the fake's
+// legal script): a scripted session meeting a Dubious interruption with its better choices,
+// leaving the book, ending at its move, saved, listed and replayed to the same summary; the moves
+// read from stdin until it ends; and the errors the command returns before it opens a file.
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/sampler.hpp>
 
@@ -28,11 +28,13 @@ using chesscoach::testing::ScratchDir;
 
 namespace {
 
-// The fake engine's environment, set before any engine starts: core's fake-uci, which the wrapper
-// script reads, logging every line it receives to fake.log in the scratch directory.
+// The fake engine's environment, set before any engine starts: core's fake-uci and its legal
+// script, which the wrapper script reads, logging every line it receives to fake.log in the
+// scratch directory.
 void use_fake_engine(const std::filesystem::path& scratch) {
     // NOLINTBEGIN(concurrency-mt-unsafe): one test at a time
     setenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI, 1);
+    setenv("CHESSCOACH_FAKE_UCI_SCRIPT", "legal", 1);
     setenv("CHESSCOACH_FAKE_UCI_LOG", (scratch / "fake.log").c_str(), 1);
     // NOLINTEND(concurrency-mt-unsafe)
 }
@@ -59,7 +61,7 @@ SparOptions session(const FixtureDb& db, const ScratchDir& scratch, std::uint64_
     options.colour = "black";
     options.seed = seed;
     options.end_move = 3;
-    options.engine.stockfish = CHESSCOACH_FAKE_STOCKFISH_LEGAL;
+    options.engine.stockfish = CHESSCOACH_FAKE_STOCKFISH;
     options.seconds = 0.01;
     return options;
 }

@@ -1,11 +1,11 @@
 // UI tests of the Spar screen, labelled Practice (app; ui) on the fixture database's tier-4 tree,
-// with core's fake engine and its legal script as the coach off book (tests/fake-stockfish.sh): a
-// session as white meeting an interruption on a Dubious move and another on an off-book move, the
-// hand-off to the engine, the end at the move limit with the summary and the saved session listed,
-// its replay with the interruptions at their plies, each live interruption sounding once and the
-// replay's not at all; a session as black, where the coach moves
-// first; End the game saving a stopped session, and closing the window saving one too; the tier
-// selector disabled only on Spar while a session runs; and the Settings dialog's spar entries.
+// with core's fake engine and its legal script as the coach off book
+// (core/tests/support/fake-stockfish.sh): a session as white meeting an interruption on a Dubious
+// move and another on an off-book move, the hand-off to the engine, the end at the move limit with
+// the summary and the saved session listed, its replay with the interruptions at their plies, each
+// live interruption sounding once and the replay's not at all; a session as black, where the coach
+// moves first; End the game saving a stopped session, and closing the window saving one too; the
+// tier selector disabled only on Spar while a session runs; and the Settings dialog's spar entries.
 // Screenshots of the interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
