@@ -1,7 +1,8 @@
 // Unit tests of the app's sounds (app; unit): the SAN rule; the null backend, which
 // CHESS_COACH_SILENT chooses, playing only while enabled; the five WAVs in the resource, 16-bit
 // 44.1 kHz mono, each under 300 ms with its peak at -12 dBFS; and on macOS the NSSound backend
-// decoding all five, which is not to say they were heard.
+// decoding all five, which is not to say they were heard, and draining a run of silent plays when
+// it is destroyed at once.
 #include "sounds.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -117,6 +118,19 @@ TEST_CASE("Each sound is a short 16-bit 44.1 kHz mono WAV peaking at -12 dBFS", 
 TEST_CASE("On macOS NSSound decodes the five sounds", "[sounds]") {
     const chesscoach::app::MacSoundBackend backend;
     CHECK(backend.decoded() == static_cast<int>(sound_event_count));
+}
+
+TEST_CASE("On macOS a run of plays is drained when the backend goes at once", "[sounds]") {
+    // Five plays posted in a row and the backend destroyed straight after, at volume 0, so that
+    // nothing is heard: the queue runs the blocks, which hold the backend's sounds, before the
+    // destructor returns, and ASan watches the gate's run of it.
+    {
+        chesscoach::app::MacSoundBackend backend(0.0F);
+        for (std::size_t index = 0; index < sound_event_count; ++index) {
+            backend.play(static_cast<SoundEvent>(index));
+        }
+    }
+    SUCCEED("the backend drained its queue and went");
 }
 
 TEST_CASE("On macOS, without CHESS_COACH_SILENT, the sounds go to NSSound", "[sounds]") {

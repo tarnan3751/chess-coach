@@ -21,7 +21,7 @@ struct MacSoundBackend::Players {
     std::array<NSSound*, sound_event_count> sounds{}; // on the queue only; nil where no decode
 };
 
-MacSoundBackend::MacSoundBackend() : players_(std::make_unique<Players>()) {
+MacSoundBackend::MacSoundBackend(float volume) : players_(std::make_unique<Players>()) {
     // The WAVs are read from the Qt resource here; NSSound decodes them on the queue.
     std::array<QByteArray, sound_event_count> wavs;
     for (std::size_t index = 0; index < sound_event_count; ++index) {
@@ -43,11 +43,12 @@ MacSoundBackend::MacSoundBackend() : players_(std::make_unique<Players>()) {
           // The first play in a process opens the output and takes several times as long as the
           // others: it is spent here, at volume 0, before any move.
           NSSound* const first = players->sounds.at(0);
-          const float volume = first.volume;
           first.volume = 0.0F;
           [first play];
           [first stop];
-          first.volume = volume;
+          for (NSSound* const& sound : players->sounds) {
+              sound.volume = volume;
+          }
       }
     });
 }

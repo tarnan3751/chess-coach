@@ -785,7 +785,9 @@ the toggle's icon in its colours.
 
 `app_sounds_test`, a unit test, checks the SAN rule, the null backend playing only while enabled,
 the five files' format, length and peak, and on macOS that `NSSound` decodes all five, which it
-does not play.
+does not play, and that five plays posted in a row, at volume 0 (`MacSoundBackend(0.0F)`, every
+sound's volume, the app's being 1), are drained by the backend's destructor when it goes at once,
+which the gate's run checks under ASan.
 
 ## Board
 

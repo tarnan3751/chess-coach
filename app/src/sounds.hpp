@@ -59,7 +59,8 @@ class NullSoundBackend final : public SoundBackend {
 // fast sequence drops none. decoded() and the destructor wait for the queue.
 class MacSoundBackend final : public SoundBackend {
   public:
-    MacSoundBackend();
+    // volume, 0 to 1, is every sound's: the app's 1, the tests' 0, which plays them silently.
+    explicit MacSoundBackend(float volume = 1.0F);
     ~MacSoundBackend() override;
     MacSoundBackend(const MacSoundBackend&) = delete;
     MacSoundBackend& operator=(const MacSoundBackend&) = delete;
