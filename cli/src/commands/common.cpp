@@ -37,7 +37,8 @@ std::string_view describe(MoveError error) {
     return "not a move";
 }
 
-// The words of text separated by spaces, tabs or line ends.
+} // namespace
+
 std::vector<std::string_view> words(std::string_view text) {
     std::vector<std::string_view> result;
     constexpr std::string_view separators = " \t\r\n";
@@ -52,8 +53,6 @@ std::vector<std::string_view> words(std::string_view text) {
     }
     return result;
 }
-
-} // namespace
 
 std::string_view describe(StoreError error) {
     switch (error) {

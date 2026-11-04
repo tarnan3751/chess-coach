@@ -1,6 +1,7 @@
-// What the CLI's commands share (docs/reference/cli.md): the error a command returns, finding and
-// opening the opening database, resolving --fen or --moves to a position and the path of keys that
-// reached it, the deepest name along that path, and the number formats of the output. Reads the
+// What the CLI's commands share (docs/reference/cli.md): the error a command returns, the words of
+// a line, finding and opening the opening database, resolving --fen or --moves to a position and
+// the path of keys that reached it, the deepest name along that path, and the number formats of the
+// output. Reads the
 // database only through core's OpeningStore; chess rules only through core's Position.
 #pragma once
 
@@ -32,6 +33,9 @@ template <typename T> using Result = tl::expected<T, CommandError>;
 
 // What an OpeningStore error says after "cannot open the opening database <path>: ".
 [[nodiscard]] std::string_view describe(StoreError error);
+
+// The words of text separated by spaces, tabs or line ends; views into text.
+[[nodiscard]] std::vector<std::string_view> words(std::string_view text);
 
 // Opens the opening database read-only through core's store.
 [[nodiscard]] Result<OpeningStore> open_store(const std::string& path);

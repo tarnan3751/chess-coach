@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
-#include <sstream>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -208,15 +207,6 @@ Result<void> replay_session(const OpeningStore& store, const ProfileStore& profi
     return {};
 }
 
-std::vector<std::string> words(const std::string& text) {
-    std::istringstream stream(text);
-    std::vector<std::string> list;
-    for (std::string word; stream >> word;) {
-        list.push_back(word);
-    }
-    return list;
-}
-
 } // namespace
 
 Result<void> run_spar(const SparOptions& options, std::istream& in, std::ostream& out,
@@ -269,8 +259,8 @@ Result<void> run_spar(const SparOptions& options, std::istream& in, std::ostream
     const std::int64_t started_at = clock();
     out << fmt::format("seed: {}\n", seed);
     LazyEngine engine(options.engine, *tier, options.seconds);
-    const std::vector<std::string> script =
-        options.script ? words(*options.script) : std::vector<std::string>{};
+    const std::vector<std::string_view> script =
+        options.script ? words(*options.script) : std::vector<std::string_view>{};
     std::size_t next = 0;
     std::vector<std::string> sans;
     bool announced = false; // the move out of book, said once
