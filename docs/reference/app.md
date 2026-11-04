@@ -96,14 +96,16 @@ resources.
   *Dark* (`theme_light`, `theme_dark`), and *Help* with *How to use chess-coach* (`help_action`,
   **Help**), *About chess-coach* (`about_action`) and *About Qt* (`about_qt_action`).
 - **The evaluation bar** (`eval_bar`, 14 px wide) and **the board** (`board`, a `BoardView`) on
-  the left, 8 px apart at the top of the column, the board square and the bar always exactly its
-  height; below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
-  `1. e4 e5`, which a delegate paints with the move number muted in a column of its own and the
-  last move, the board's, marked in the selection colour. The window opens at 1200 × 780, its
-  content 14 px from its edges and the two columns 14 px apart. The board column is as wide as the
-  board the window's height allows, leaving the screen column at least 700 px, which takes the
-  rest; the board is never less than 300 px, and the window's minimum width is what the two
-  columns' minimums need, so nothing clips. At the default size the board is 436 px.
+  the left, at the top of the column (`BoardRow`): the board square and drawn edge to edge in its
+  widget (**Board**), the bar the same height and 8 px from it; below them **the move list**
+  (`move_list`, a `QListWidget`) with one row per move pair, `1. e4 e5`, which a delegate
+  (`MoveListDelegate`) paints with the move number muted in a column of its own and the last move,
+  the board's, marked in the selection colour. The window opens at 1200 × 780, its content
+  (`Columns`) 14 px from its edges and the two columns 14 px apart. The board column is as wide as
+  the board the window's height allows, leaving the screen column at least 700 px, which takes
+  the rest; the board is never less than 300 px, and the window's minimum width is what the two
+  columns' minimums need, so nothing clips. At the default size the board is 436 px
+  (`app_layout_test` pins the split, the floor and the bar against the board as drawn).
 - **The screen switcher** on the right: a `QTabBar` (`screen_tabs`) over a `QStackedWidget`
   (`screens`) with Explore (**Explore**), Practice (**Spar**), Repertoire (**Repertoire**) and Drill
   (**Drill**), the names in Source Serif 4, the current one over a rule in the accent which covers
@@ -806,9 +808,11 @@ bottom-right corners, rank digits in the left column's top-left corners, each in
 shade's colour, moved by the flip), one `QGraphicsSvgItem` per piece, and the highlights: the last
 move's from and to squares, the picked square, a red glow on the king of the side to move when it
 is in check, and the hints. Stacking: squares, highlights, coordinates, pieces, hints, then a
-dragged piece above everything. The view fits the scene in its viewport keeping the aspect
-ratio, so squares stay square at any size. The pieces are rebuilt from the position's placement
-(read from the first field of its FEN, for display only) after every move.
+dragged piece above everything. The view scales the scene to the largest square its viewport
+holds, edge to edge and centred in the longer side (not `fitInView`, which keeps 2 px of margin),
+so squares stay square at any size and the board drawn is the widget's square. The pieces are
+rebuilt from the position's placement (read from the first field of its FEN, for display only)
+after every move.
 
 **Animation.** A clicked move slides the moving piece from its square to its target over
 `BoardView::animation_ms` (150 ms), a `QVariantAnimation` on the item's position with an out-cubic

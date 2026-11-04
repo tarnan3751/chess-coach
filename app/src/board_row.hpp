@@ -1,6 +1,6 @@
 // The evaluation bar and the board side by side at the top of the board column
-// (docs/reference/app.md, **Shell**): the board's widget square, the bar 14 px wide, its height and
-// 8 px from it.
+// (docs/reference/app.md, **Shell**): the board square, drawn edge to edge in its widget
+// (BoardView::resizeEvent), the bar 14 px wide, exactly the board's height and 8 px from it.
 // Columns sets the side the row asks for; the row is as tall as it is wide, less the bar and the
 // gap, so that the move list below takes the rest of the column. GUI thread only.
 #pragma once

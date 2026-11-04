@@ -1,9 +1,10 @@
 // Unit tests of the Study look's resources (app; unit): the bundled fonts register from the Qt
 // resource and become the application font, each stylesheet carries its palette's colours, and a
-// themed icon is drawn in the palette's colours, on an offscreen QGuiApplication, so no display
+// themed icon is drawn in the palette's colours, on an offscreen application, so no display
 // and no system font is needed.
 #include "fonts.hpp"
 #include "icons.hpp"
+#include "offscreen_application.hpp"
 #include "study_palette.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -20,28 +21,14 @@
 #include <QPixmap>
 #include <QSize>
 #include <QString>
-#include <QtGlobal>
-#include <array>
 #include <utility>
 
 using chesscoach::app::install_fonts;
 using chesscoach::app::StudyPalette;
 using chesscoach::app::themed_icon;
+using chesscoach::app::test::offscreen_application;
 
 namespace {
-
-// The process's application, offscreen, made once and never destroyed: Qt allows one per
-// process, and one destroyed after main returns, when Qt's own statics are gone, crashes.
-QGuiApplication& application() {
-    static int argc = 1;
-    static std::array<char, 15> name{"resources_test"};
-    static std::array<char*, 2> argv{name.data(), nullptr};
-    static QGuiApplication* const app = [] {
-        qputenv("QT_QPA_PLATFORM", "offscreen");
-        return new QGuiApplication(argc, argv.data());
-    }();
-    return *app;
-}
 
 // Whether the image holds a pixel of exactly this colour, opaque.
 bool holds(const QImage& image, const QColor& colour) {
@@ -58,7 +45,7 @@ bool holds(const QImage& image, const QColor& colour) {
 } // namespace
 
 TEST_CASE("The bundled fonts register and Source Sans 3 is the application font", "[fonts]") {
-    static_cast<void>(application());
+    static_cast<void>(offscreen_application());
     install_fonts();
     CHECK(QFontDatabase::hasFamily(chesscoach::app::serif_family));
     CHECK(QFontDatabase::hasFamily(chesscoach::app::sans_family));
@@ -103,7 +90,7 @@ TEST_CASE("Each stylesheet carries its palette's colours", "[themes]") {
 }
 
 TEST_CASE("A themed icon is drawn in the palette's text, and muted when disabled", "[icons]") {
-    static_cast<void>(application());
+    static_cast<void>(offscreen_application());
     for (const StudyPalette* palette : {&StudyPalette::light(), &StudyPalette::dark()}) {
         const QIcon icon = themed_icon(QStringLiteral("plus"), *palette);
         REQUIRE(!icon.isNull());

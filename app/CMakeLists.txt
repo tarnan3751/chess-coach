@@ -156,9 +156,13 @@ if(BUILD_TESTING)
   target_link_libraries(app_test_fixture PUBLIC chesscoach::core PRIVATE SQLiteCpp
                                                                           chesscoach::warnings)
 
-  # The bundled fonts and the themed icons, on an offscreen QGuiApplication of the test's own.
+  # The bundled fonts, the stylesheets and the themed icons; the window's column split; each on
+  # an offscreen application of the test's own (tests/offscreen_application.hpp).
   chesscoach_add_test(app_resources_test MODULE app KIND unit
-                      SOURCES tests/resources_test.cpp
+                      SOURCES tests/resources_test.cpp tests/offscreen_application.hpp
+                      LIBS chesscoach::app_lib)
+  chesscoach_add_test(app_layout_test MODULE app KIND unit
+                      SOURCES tests/layout_test.cpp tests/offscreen_application.hpp
                       LIBS chesscoach::app_lib)
   # The wording of numbers, ratings, losses, days and months (wording.hpp).
   chesscoach_add_test(app_wording_test MODULE app KIND unit

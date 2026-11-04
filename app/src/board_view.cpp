@@ -12,6 +12,7 @@
 #include <QPainter>
 #include <QRectF>
 #include <QResizeEvent>
+#include <QTransform>
 #include <QVariantAnimation>
 #include <algorithm>
 #include <cstddef>
@@ -303,7 +304,14 @@ void BoardView::mouseReleaseEvent(QMouseEvent* event) {
 
 void BoardView::resizeEvent(QResizeEvent* event) {
     QGraphicsView::resizeEvent(event);
-    fitInView(scene_->sceneRect(), Qt::KeepAspectRatio);
+    // The board fills the largest square the viewport holds, edge to edge, centred in the longer
+    // side: fitInView would keep 2 px of the viewport clear, short of the widget the window lays
+    // out beside the evaluation bar.
+    const QRectF board = scene_->sceneRect();
+    const qreal scale =
+        std::min(viewport()->width() / board.width(), viewport()->height() / board.height());
+    setTransform(QTransform::fromScale(scale, scale));
+    centerOn(board.center());
 }
 
 } // namespace chesscoach::app
