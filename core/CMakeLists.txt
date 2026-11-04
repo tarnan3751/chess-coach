@@ -62,6 +62,11 @@ if(BUILD_TESTING)
   target_link_libraries(fake-uci PRIVATE chesscoach::core chesscoach::warnings)
   chesscoach_assert_no_qt(fake-uci)
 
+  # What any module's tests share (tests/support/): the scratch directory. A test target that
+  # links it defines CHESSCOACH_TEST_SCRATCH_DIR.
+  add_library(core_test_support INTERFACE tests/support/scratch_dir.hpp)
+  target_include_directories(core_test_support INTERFACE tests/support)
+
   chesscoach_add_test(core_badges_test MODULE core KIND unit
                       SOURCES tests/badges_test.cpp
                       LIBS chesscoach::core)
@@ -84,7 +89,7 @@ if(BUILD_TESTING)
                       LIBS chesscoach::core)
   chesscoach_add_test(core_file_swap_test MODULE core KIND unit
                       SOURCES tests/file_swap_test.cpp
-                      LIBS chesscoach::core)
+                      LIBS chesscoach::core core_test_support)
   target_compile_definitions(core_file_swap_test PRIVATE
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_key_test MODULE core KIND unit
@@ -98,18 +103,18 @@ if(BUILD_TESTING)
                              "${CHESSCOACH_CHESS_LIBRARY_INCLUDE_DIR}")
   chesscoach_add_test(core_names_test MODULE core KIND unit
                       SOURCES tests/names_test.cpp
-                      LIBS chesscoach::core)
+                      LIBS chesscoach::core core_test_support)
   target_compile_definitions(core_names_test PRIVATE
                              CHESSCOACH_DATA_DIR="${PROJECT_SOURCE_DIR}/data"
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_opening_locator_test MODULE core KIND unit
                       SOURCES tests/opening_locator_test.cpp
-                      LIBS chesscoach::core SQLiteCpp)
+                      LIBS chesscoach::core core_test_support SQLiteCpp)
   target_compile_definitions(core_opening_locator_test PRIVATE
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_opening_store_test MODULE core KIND unit
                       SOURCES tests/opening_store_test.cpp
-                      LIBS chesscoach::core SQLiteCpp)
+                      LIBS chesscoach::core core_test_support SQLiteCpp)
   target_compile_definitions(core_opening_store_test PRIVATE
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_add_test(core_pgn_import_test MODULE core KIND unit

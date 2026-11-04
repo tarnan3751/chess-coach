@@ -8,6 +8,7 @@
 
 #include "commands/spar.hpp"
 #include "fixture.hpp"
+#include "scratch_dir.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <fmt/format.h>
@@ -18,45 +19,23 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 using chesscoach::cli::run_spar;
 using chesscoach::cli::SparOptions;
 using chesscoach::cli::test::FixtureDb;
+using chesscoach::testing::ScratchDir;
 
 namespace {
 
-// A data directory and the fake engine's log for one test, under the build directory; the fake
-// is found through CHESSCOACH_FAKE_UCI, which the wrapper script reads.
-class Scratch {
-  public:
-    explicit Scratch(std::string_view name)
-        : root_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "spar" / name),
-          data_(root_ / "data"), log_(root_ / "fake.log") {
-        std::filesystem::remove_all(root_);
-        std::filesystem::create_directories(root_);
-        // NOLINTBEGIN(concurrency-mt-unsafe): set before any engine starts, one test at a time
-        setenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI, 1);
-        setenv("CHESSCOACH_FAKE_UCI_LOG", log_.c_str(), 1);
-        // NOLINTEND(concurrency-mt-unsafe)
-    }
-    Scratch(const Scratch&) = delete;
-    Scratch& operator=(const Scratch&) = delete;
-    Scratch(Scratch&&) = delete;
-    Scratch& operator=(Scratch&&) = delete;
-    ~Scratch() {
-        std::error_code ignored;
-        std::filesystem::remove_all(root_, ignored);
-    }
-    [[nodiscard]] std::string data() const { return data_.string(); }
-    [[nodiscard]] bool engine_ran() const { return std::filesystem::exists(log_); }
-
-  private:
-    std::filesystem::path root_;
-    std::filesystem::path data_;
-    std::filesystem::path log_;
-};
+// The fake engine's environment, set before any engine starts: core's fake-uci, which the wrapper
+// script reads, logging every line it receives to fake.log in the scratch directory.
+void use_fake_engine(const std::filesystem::path& scratch) {
+    // NOLINTBEGIN(concurrency-mt-unsafe): one test at a time
+    setenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI, 1);
+    setenv("CHESSCOACH_FAKE_UCI_LOG", (scratch / "fake.log").c_str(), 1);
+    // NOLINTEND(concurrency-mt-unsafe)
+}
 
 // A seed whose first draw at the start position, tier 3, is 1. e4.
 std::uint64_t seed_drawing_e4(const FixtureDb& db) {
@@ -72,10 +51,10 @@ std::uint64_t seed_drawing_e4(const FixtureDb& db) {
     }
 }
 
-SparOptions session(const FixtureDb& db, const Scratch& scratch, std::uint64_t seed) {
+SparOptions session(const FixtureDb& db, const ScratchDir& scratch, std::uint64_t seed) {
     SparOptions options;
     options.db = db.path();
-    options.data_dir = scratch.data();
+    options.data_dir = scratch.path("data").string();
     options.tier = 3;
     options.colour = "black";
     options.seed = seed;
@@ -103,7 +82,7 @@ std::string from(const std::string& text, std::string_view prefix) {
 
 TEST_CASE("spar --script meets a Dubious move, leaves the book, ends and is saved", "[cli]") {
     const FixtureDb db;
-    const Scratch scratch("scripted");
+    const ScratchDir scratch("spar", "scripted", use_fake_engine);
     const std::uint64_t seed = seed_drawing_e4(db);
     SparOptions options = session(db, scratch, seed);
     options.script = "e6 a6";
@@ -119,7 +98,7 @@ TEST_CASE("spar --script meets a Dubious move, leaves the book, ends and is save
                                          "from here\n"
                                          "coach: ",
                                          seed)));
-    CHECK(scratch.engine_ran());
+    CHECK(std::filesystem::exists(scratch.path("fake.log")));
     CHECK(output.find("you: a6 (a7a6)\n") != std::string::npos);
     CHECK(output.find("session ended at move 3\n") != std::string::npos);
     CHECK(output.find("summary: 5 moves, 1 interruptions, reached off book, result none\n") !=
@@ -127,14 +106,14 @@ TEST_CASE("spar --script meets a Dubious move, leaves the book, ends and is save
     CHECK(output.ends_with("saved: session 1 under Default\n"));
 
     SparOptions list;
-    list.data_dir = scratch.data();
+    list.data_dir = scratch.path("data").string();
     list.list = true;
     CHECK(run(list) == "id date tier colour moves interruptions result\n"
                        "1 1970-01-02 3 black 5 1 -\n");
 
     SparOptions replay;
     replay.db = db.path();
-    replay.data_dir = scratch.data();
+    replay.data_dir = scratch.path("data").string();
     replay.replay = 1;
     replay.end_move = 25; // ignored: the saved session's own end move, 3, is used
     const std::string replayed = run(replay);
@@ -148,7 +127,7 @@ TEST_CASE("spar --script meets a Dubious move, leaves the book, ends and is save
 
 TEST_CASE("spar reads the user's moves from stdin and stops at the end of the input", "[cli]") {
     const FixtureDb db;
-    const Scratch scratch("interactive");
+    const ScratchDir scratch("spar", "interactive", use_fake_engine);
     const std::uint64_t seed = seed_drawing_e4(db);
     const std::string output = run(session(db, scratch, seed), "e9\ne5\n");
     CHECK(output.starts_with(fmt::format("seed: {}\n"
@@ -162,7 +141,7 @@ TEST_CASE("spar reads the user's moves from stdin and stops at the end of the in
 
 TEST_CASE("spar refuses a bad command before it opens a file", "[cli]") {
     const FixtureDb db;
-    const Scratch scratch("refusals");
+    const ScratchDir scratch("spar", "refusals", use_fake_engine);
     SparOptions options = session(db, scratch, 1);
     options.colour.reset();
     CHECK(run(options) == "error: a new session needs --tier and --colour");
@@ -175,7 +154,7 @@ TEST_CASE("spar refuses a bad command before it opens a file", "[cli]") {
     options.list = true;
     options.replay = 1;
     CHECK(run(options) == "error: --list and --replay exclude each other");
-    CHECK_FALSE(std::filesystem::exists(scratch.data()));
+    CHECK_FALSE(std::filesystem::exists(scratch.path("data").string()));
     options.list = false;
     options.profile = "Nobody";
     CHECK(run(options) == "error: no profile named Nobody");

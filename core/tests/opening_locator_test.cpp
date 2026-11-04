@@ -8,6 +8,8 @@
 #include <chesscoach/opening_locator.hpp>
 #include <chesscoach/opening_schema.hpp>
 
+#include "scratch_dir.hpp"
+
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <catch2/catch_test_macros.hpp>
 
@@ -25,30 +27,9 @@
 using chesscoach::ImportError;
 using chesscoach::LocatorInput;
 using chesscoach::StoreError;
+using chesscoach::testing::ScratchDir;
 
 namespace {
-
-// A directory of its own for each test, under the build directory, removed when it ends.
-class Scratch {
-  public:
-    explicit Scratch(std::string_view name)
-        : root_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "locator" / name) {
-        std::filesystem::remove_all(root_);
-        std::filesystem::create_directories(root_);
-    }
-    Scratch(const Scratch&) = delete;
-    Scratch& operator=(const Scratch&) = delete;
-    Scratch(Scratch&&) = delete;
-    Scratch& operator=(Scratch&&) = delete;
-    ~Scratch() {
-        std::error_code ignored;
-        std::filesystem::remove_all(root_, ignored);
-    }
-    [[nodiscard]] std::filesystem::path path(std::string_view name) const { return root_ / name; }
-
-  private:
-    std::filesystem::path root_;
-};
 
 // SQLite's open flags are ints, combined with | as its API documents.
 int create_flags() {
@@ -116,7 +97,7 @@ std::string listing(const std::filesystem::path& directory) {
 
 TEST_CASE("The locator takes --db, there or not, else the data directory's file, else the bundle's",
           "[locator]") {
-    const Scratch scratch("order");
+    const ScratchDir scratch("locator", "order");
     const auto explicit_db = scratch.path("mine.db");
     const auto data_dir = scratch.path("data");
     const auto bundle = scratch.path("bundle");
@@ -147,7 +128,7 @@ TEST_CASE("The locator takes --db, there or not, else the data directory's file,
 }
 
 TEST_CASE("An import puts a copy in place and keeps the file it replaces", "[locator]") {
-    const Scratch scratch("round-trip");
+    const ScratchDir scratch("locator", "round-trip");
     const auto data_dir = scratch.path("data");
     const auto first = scratch.path("first.db");
     const auto second = scratch.path("second.db");
@@ -177,7 +158,7 @@ TEST_CASE("An import puts a copy in place and keeps the file it replaces", "[loc
 }
 
 TEST_CASE("An import reads through the -wal beside a source in WAL mode", "[locator]") {
-    const Scratch scratch("wal");
+    const ScratchDir scratch("locator", "wal");
     const auto data_dir = scratch.path("data");
     const auto source = scratch.path("wal.db");
     write_openings(source, "1", "5");
@@ -203,7 +184,7 @@ TEST_CASE("An import reads through the -wal beside a source in WAL mode", "[loca
 }
 
 TEST_CASE("An import that cannot be used is refused and changes nothing", "[locator]") {
-    const Scratch scratch("refused");
+    const ScratchDir scratch("locator", "refused");
     const auto data_dir = scratch.path("data");
     write_openings(data_dir / "openings.db", "1", "7");
     write_openings(data_dir / "openings.db.previous", "1", "6");

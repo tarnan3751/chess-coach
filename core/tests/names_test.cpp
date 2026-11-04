@@ -4,6 +4,8 @@
 #include <chesscoach/names.hpp>
 #include <chesscoach/position.hpp>
 
+#include "scratch_dir.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
@@ -16,6 +18,7 @@ using chesscoach::load_names;
 using chesscoach::NameErrorKind;
 using chesscoach::Opening;
 using chesscoach::Position;
+using chesscoach::testing::ScratchDir;
 
 namespace {
 
@@ -30,29 +33,6 @@ Key key_after(std::initializer_list<std::string_view> moves) {
     }
     return position.key();
 }
-
-// A scratch directory of its own for each test, under the build directory (so two lanes or two
-// presets never share one), removed when the test ends.
-class ScratchDir {
-  public:
-    explicit ScratchDir(std::string_view name)
-        : path_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / name) {
-        std::filesystem::remove_all(path_);
-        std::filesystem::create_directories(path_);
-    }
-    ScratchDir(const ScratchDir&) = delete;
-    ScratchDir& operator=(const ScratchDir&) = delete;
-    ScratchDir(ScratchDir&&) = delete;
-    ScratchDir& operator=(ScratchDir&&) = delete;
-    ~ScratchDir() {
-        std::error_code ignored;
-        std::filesystem::remove_all(path_, ignored);
-    }
-    [[nodiscard]] const std::filesystem::path& path() const { return path_; }
-
-  private:
-    std::filesystem::path path_;
-};
 
 void write(const std::filesystem::path& file, std::string_view text) {
     std::ofstream out(file, std::ios::binary);
@@ -104,7 +84,7 @@ TEST_CASE("Names match by position, whatever the move order", "[names]") {
 }
 
 TEST_CASE("The first line to reach a position wins, and later ones are collisions", "[names]") {
-    const ScratchDir dir("names-first-wins");
+    const ScratchDir dir("names", "names-first-wins");
     write(dir.path() / "a.tsv", "eco\tname\tpgn\n"
                                 "A00\tFirst\t1. e4 e5 2. Nf3 Nc6\n"
                                 "A00\tSecond\t1. Nf3 Nc6 2. e4 e5\n"
@@ -129,7 +109,7 @@ TEST_CASE("The first line to reach a position wins, and later ones are collision
 }
 
 TEST_CASE("load_names refuses a missing file or a wrong header", "[names]") {
-    const ScratchDir dir("names-refusals");
+    const ScratchDir dir("names", "names-refusals");
     auto missing = load_names(dir.path());
     REQUIRE_FALSE(missing.has_value());
     CHECK(missing.error().kind == NameErrorKind::missing_file);

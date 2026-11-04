@@ -55,7 +55,7 @@ if(BUILD_TESTING)
   # eval and explore --engine against core's fake engine, through tests/fake-stockfish.sh.
   chesscoach_add_test(cli_engine_commands_test MODULE cli KIND unit
                       SOURCES tests/engine_commands_test.cpp
-                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt)
+                      LIBS chesscoach::cli_commands cli_test_fixture core_test_support fmt::fmt)
   add_dependencies(cli_engine_commands_test fake-uci)
   target_compile_definitions(cli_engine_commands_test PRIVATE
                              CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
@@ -66,7 +66,7 @@ if(BUILD_TESTING)
   # spar against core's fake engine, through tests/fake-stockfish-legal.sh.
   chesscoach_add_test(cli_spar_test MODULE cli KIND unit
                       SOURCES tests/spar_command_test.cpp
-                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt)
+                      LIBS chesscoach::cli_commands cli_test_fixture core_test_support fmt::fmt)
   add_dependencies(cli_spar_test fake-uci)
   target_compile_definitions(cli_spar_test PRIVATE
                              CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
@@ -77,7 +77,8 @@ if(BUILD_TESTING)
   # Where the CLI finds the opening database, and database info and import.
   chesscoach_add_test(cli_database_command_test MODULE cli KIND unit
                       SOURCES tests/database_command_test.cpp
-                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt SQLiteCpp)
+                      LIBS chesscoach::cli_commands cli_test_fixture core_test_support fmt::fmt
+                           SQLiteCpp)
   target_compile_definitions(cli_database_command_test PRIVATE
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_assert_no_qt(cli_database_command_test)
@@ -85,7 +86,7 @@ if(BUILD_TESTING)
   # repertoire, drill and profile on scratch data directories and the fixture database.
   chesscoach_add_test(cli_repertoire_commands_test MODULE cli KIND unit
                       SOURCES tests/repertoire_commands_test.cpp
-                      LIBS chesscoach::cli_commands cli_test_fixture fmt::fmt)
+                      LIBS chesscoach::cli_commands cli_test_fixture core_test_support fmt::fmt)
   target_compile_definitions(cli_repertoire_commands_test PRIVATE
                              CHESSCOACH_TEST_SCRATCH_DIR="${CMAKE_CURRENT_BINARY_DIR}/scratch")
   chesscoach_assert_no_qt(cli_repertoire_commands_test)

@@ -5,6 +5,8 @@
 // directory in the staged file's place, leaving current as it was and no staging file behind.
 #include <chesscoach/file_swap.hpp>
 
+#include "scratch_dir.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <filesystem>
@@ -12,40 +14,12 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 
 using chesscoach::KeepPrevious;
 using chesscoach::replace_keeping_previous;
+using chesscoach::testing::ScratchDir;
 
 namespace {
-
-// A directory of its own for each test, under the build directory, removed when it ends.
-class Scratch {
-  public:
-    explicit Scratch(std::string_view name)
-        : root_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "file_swap" / name),
-          previous_(root_ / "current.db.previous") {
-        std::filesystem::remove_all(root_);
-        std::filesystem::create_directories(root_);
-    }
-    Scratch(const Scratch&) = delete;
-    Scratch& operator=(const Scratch&) = delete;
-    Scratch(Scratch&&) = delete;
-    Scratch& operator=(Scratch&&) = delete;
-    // Only the error_code overloads, which do not throw: the read-only .previous of one case is
-    // made writable again so the scratch can go.
-    ~Scratch() {
-        std::error_code ignored;
-        std::filesystem::permissions(previous_, std::filesystem::perms::owner_write,
-                                     std::filesystem::perm_options::add, ignored);
-        std::filesystem::remove_all(root_, ignored);
-    }
-    [[nodiscard]] std::filesystem::path path(std::string_view name) const { return root_ / name; }
-
-  private:
-    std::filesystem::path root_;
-    std::filesystem::path previous_;
-};
 
 void write_text(const std::filesystem::path& path, std::string_view text) {
     std::ofstream out(path, std::ios::binary);
@@ -62,7 +36,7 @@ std::string read_text(const std::filesystem::path& path) {
 } // namespace
 
 TEST_CASE("A swap puts the staged file in place and keeps the one it replaces", "[swap]") {
-    const Scratch scratch("success");
+    const ScratchDir scratch("file_swap", "success");
     const auto staged = scratch.path("current.db.importing");
     const auto current = scratch.path("current.db");
     const auto previous = scratch.path("current.db.previous");
@@ -85,7 +59,7 @@ TEST_CASE("A swap puts the staged file in place and keeps the one it replaces", 
 }
 
 TEST_CASE("Without a hard link, the file replaced is kept as a complete copy", "[swap]") {
-    const Scratch scratch("copy");
+    const ScratchDir scratch("file_swap", "copy");
     const auto staged = scratch.path("current.db.importing");
     const auto current = scratch.path("current.db");
     const auto previous = scratch.path("current.db.previous");
@@ -103,7 +77,7 @@ TEST_CASE("Without a hard link, the file replaced is kept as a complete copy", "
 }
 
 TEST_CASE("A read-only previous or a symlink there is replaced, never written through", "[swap]") {
-    const Scratch scratch("previous");
+    const ScratchDir scratch("file_swap", "previous");
     const auto staged = scratch.path("current.db.importing");
     const auto current = scratch.path("current.db");
     const auto previous = scratch.path("current.db.previous");
@@ -134,7 +108,7 @@ TEST_CASE("A read-only previous or a symlink there is replaced, never written th
 }
 
 TEST_CASE("A final rename that fails leaves current as it was and no staging file", "[swap]") {
-    const Scratch scratch("fails");
+    const ScratchDir scratch("file_swap", "fails");
     const auto staged = scratch.path("current.db.importing");
     const auto current = scratch.path("current.db");
     const auto previous = scratch.path("current.db.previous");

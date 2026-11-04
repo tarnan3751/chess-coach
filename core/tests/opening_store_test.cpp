@@ -7,6 +7,8 @@
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
 
+#include "scratch_dir.hpp"
+
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <catch2/catch_test_macros.hpp>
 
@@ -17,7 +19,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 
 using chesscoach::Badge;
 using chesscoach::Key;
@@ -27,6 +28,7 @@ using chesscoach::OpeningStore;
 using chesscoach::PositionRow;
 using chesscoach::StoreError;
 using chesscoach::Tier;
+using chesscoach::testing::ScratchDir;
 
 namespace {
 
@@ -43,32 +45,6 @@ constexpr Key all_ones = 18446744073709551615ULL;
 constexpr std::string_view start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 constexpr std::string_view e4_fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -";
 constexpr std::string_view ep_fen = "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6";
-
-// A scratch directory of its own for each test, under the build directory (so two lanes or two
-// presets never share one), removed when the test ends.
-class ScratchDir {
-  public:
-    explicit ScratchDir(std::string_view name)
-        : path_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / name),
-          database_(path_ / "openings.db") {
-        std::filesystem::remove_all(path_);
-        std::filesystem::create_directories(path_);
-    }
-    ScratchDir(const ScratchDir&) = delete;
-    ScratchDir& operator=(const ScratchDir&) = delete;
-    ScratchDir(ScratchDir&&) = delete;
-    ScratchDir& operator=(ScratchDir&&) = delete;
-    ~ScratchDir() {
-        std::error_code ignored;
-        std::filesystem::permissions(database_, std::filesystem::perms::owner_all, ignored);
-        std::filesystem::remove_all(path_, ignored);
-    }
-    [[nodiscard]] std::filesystem::path file(std::string_view name) const { return path_ / name; }
-
-  private:
-    std::filesystem::path path_;
-    std::filesystem::path database_; // made read-only by a test, so writable again before removal
-};
 
 // SQLite's open flags are ints, combined with | as its API documents.
 int create_flags() {
@@ -309,9 +285,9 @@ TEST_CASE("The test database's real keys are Position's", "[store]") {
 }
 
 TEST_CASE("The store reads meta, positions, nodes and moves by key and tier", "[store]") {
-    const ScratchDir dir("store-lookups");
-    build(dir.file("openings.db"));
-    const auto store = OpeningStore::open(dir.file("openings.db"));
+    const ScratchDir dir("store", "store-lookups");
+    build(dir.path("openings.db"));
+    const auto store = OpeningStore::open(dir.path("openings.db"));
     REQUIRE(store.has_value());
 
     const auto& meta = store->meta();
@@ -361,9 +337,9 @@ TEST_CASE("The store reads meta, positions, nodes and moves by key and tier", "[
 
 TEST_CASE("The store counts rows per tier, the start position's games and the positions",
           "[store]") {
-    const ScratchDir dir("store-counts");
-    build(dir.file("openings.db"));
-    const auto store = OpeningStore::open(dir.file("openings.db"));
+    const ScratchDir dir("store", "store-counts");
+    build(dir.path("openings.db"));
+    const auto store = OpeningStore::open(dir.path("openings.db"));
     REQUIRE(store.has_value());
     CHECK(store->counts() == chesscoach::StoreCounts{
                                  .nodes = {1, 0, 3, 1, 0, 0, 2},
@@ -376,19 +352,19 @@ TEST_CASE("The store counts rows per tier, the start position's games and the po
 
     // An empty database counts zero everywhere.
     {
-        SQLite::Database db(dir.file("empty.db"), create_flags());
+        SQLite::Database db(dir.path("empty.db"), create_flags());
         db.exec(chesscoach::openings_schema_sql());
         insert_meta(db, "schema_version", "1");
     }
-    const auto empty = OpeningStore::open(dir.file("empty.db"));
+    const auto empty = OpeningStore::open(dir.path("empty.db"));
     REQUIRE(empty.has_value());
     CHECK(empty->counts() == chesscoach::StoreCounts{});
 }
 
 TEST_CASE("The dump is the canonical text of §11", "[store]") {
-    const ScratchDir dir("store-dump");
-    build(dir.file("openings.db"));
-    const auto store = OpeningStore::open(dir.file("openings.db"));
+    const ScratchDir dir("store", "store-dump");
+    build(dir.path("openings.db"));
+    const auto store = OpeningStore::open(dir.path("openings.db"));
     REQUIRE(store.has_value());
     std::ostringstream dump;
     store->dump(dump);
@@ -399,8 +375,8 @@ TEST_CASE("The dump is the canonical text of §11", "[store]") {
 }
 
 TEST_CASE("The store opens a read-only file and leaves it unchanged", "[store]") {
-    const ScratchDir dir("store-read-only");
-    const auto path = dir.file("openings.db");
+    const ScratchDir dir("store", "store-read-only");
+    const auto path = dir.path("openings.db");
     build(path);
     std::filesystem::permissions(path, std::filesystem::perms::owner_read |
                                            std::filesystem::perms::group_read |
@@ -415,46 +391,46 @@ TEST_CASE("The store opens a read-only file and leaves it unchanged", "[store]")
         CHECK(dump.str() == golden_dump);
     }
     CHECK(read_bytes(path) == before);
-    CHECK_FALSE(std::filesystem::exists(dir.file("openings.db-journal")));
-    CHECK_FALSE(std::filesystem::exists(dir.file("openings.db-wal")));
+    CHECK_FALSE(std::filesystem::exists(dir.path("openings.db-journal")));
+    CHECK_FALSE(std::filesystem::exists(dir.path("openings.db-wal")));
 }
 
 TEST_CASE("The store refuses a file it does not understand", "[store]") {
-    const ScratchDir dir("store-refusals");
+    const ScratchDir dir("store", "store-refusals");
 
-    CHECK(open_error(dir.file("missing.db")) == StoreError::missing_file);
-    CHECK(open_error(dir.file("")) == StoreError::missing_file);
+    CHECK(open_error(dir.path("missing.db")) == StoreError::missing_file);
+    CHECK(open_error(dir.path("")) == StoreError::missing_file);
 
     {
-        std::ofstream text(dir.file("text.db"), std::ios::binary);
+        std::ofstream text(dir.path("text.db"), std::ios::binary);
         text << "this is not an SQLite database, only text long enough to have a header\n";
     }
-    CHECK(open_error(dir.file("text.db")) == StoreError::unreadable);
+    CHECK(open_error(dir.path("text.db")) == StoreError::unreadable);
 
     {
-        SQLite::Database db(dir.file("empty.db"), create_flags());
+        SQLite::Database db(dir.path("empty.db"), create_flags());
         db.exec("CREATE TABLE positions (key INTEGER PRIMARY KEY) WITHOUT ROWID");
     }
-    CHECK(open_error(dir.file("empty.db")) == StoreError::no_meta);
+    CHECK(open_error(dir.path("empty.db")) == StoreError::no_meta);
     {
-        const std::ofstream zero(dir.file("zero.db"), std::ios::binary);
+        const std::ofstream zero(dir.path("zero.db"), std::ios::binary);
     }
-    CHECK(open_error(dir.file("zero.db")) == StoreError::no_meta);
+    CHECK(open_error(dir.path("zero.db")) == StoreError::no_meta);
 
     {
-        SQLite::Database db(dir.file("unversioned.db"), create_flags());
+        SQLite::Database db(dir.path("unversioned.db"), create_flags());
         db.exec(chesscoach::openings_schema_sql());
         insert_meta(db, "data_version", "0");
     }
-    CHECK(open_error(dir.file("unversioned.db")) == StoreError::no_meta);
+    CHECK(open_error(dir.path("unversioned.db")) == StoreError::no_meta);
 
     // A meta table without key and value columns is no meta table.
     {
-        SQLite::Database db(dir.file("misshapen-meta.db"), create_flags());
+        SQLite::Database db(dir.path("misshapen-meta.db"), create_flags());
         db.exec("CREATE TABLE meta (name TEXT, data TEXT);"
                 "INSERT INTO meta VALUES ('schema_version', '1');");
     }
-    CHECK(open_error(dir.file("misshapen-meta.db")) == StoreError::no_meta);
+    CHECK(open_error(dir.path("misshapen-meta.db")) == StoreError::no_meta);
 
     // A meta table whose page is corrupt on disk is unreadable, not missing: the first bytes of
     // its b-tree page, the page type among them, are overwritten.
@@ -462,7 +438,7 @@ TEST_CASE("The store refuses a file it does not understand", "[store]") {
         std::int64_t root_page = 0;
         std::int64_t page_size = 0;
         {
-            SQLite::Database db(dir.file("corrupt-meta.db"), create_flags());
+            SQLite::Database db(dir.path("corrupt-meta.db"), create_flags());
             db.exec(chesscoach::openings_schema_sql());
             insert_meta(db, "schema_version", "1");
             root_page =
@@ -470,17 +446,17 @@ TEST_CASE("The store refuses a file it does not understand", "[store]") {
             page_size = db.execAndGet("PRAGMA page_size").getInt64();
         }
         REQUIRE(root_page > 1);
-        std::fstream file(dir.file("corrupt-meta.db"),
+        std::fstream file(dir.path("corrupt-meta.db"),
                           std::ios::binary | std::ios::in | std::ios::out);
         file.seekp((root_page - 1) * page_size);
         const std::string garbage(16, '\xff');
         file.write(garbage.data(), static_cast<std::streamsize>(garbage.size()));
     }
-    CHECK(open_error(dir.file("corrupt-meta.db")) == StoreError::unreadable);
+    CHECK(open_error(dir.path("corrupt-meta.db")) == StoreError::unreadable);
 
     for (const std::string_view version : {"2", "0", "01", " 1", ""}) {
         CAPTURE(version);
-        const auto path = dir.file("versioned.db");
+        const auto path = dir.path("versioned.db");
         std::filesystem::remove(path);
         {
             SQLite::Database db(path, create_flags());
@@ -491,12 +467,12 @@ TEST_CASE("The store refuses a file it does not understand", "[store]") {
     }
 
     {
-        SQLite::Database db(dir.file("partial.db"), create_flags());
+        SQLite::Database db(dir.path("partial.db"), create_flags());
         db.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
         db.exec("CREATE TABLE positions (key INTEGER PRIMARY KEY, fen TEXT NOT NULL)");
         insert_meta(db, "schema_version", "1");
     }
-    CHECK(open_error(dir.file("partial.db")) == StoreError::schema_mismatch);
+    CHECK(open_error(dir.path("partial.db")) == StoreError::schema_mismatch);
 
     CHECK(chesscoach::opening_schema_version == 1);
 }

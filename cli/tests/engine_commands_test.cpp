@@ -7,6 +7,7 @@
 #include "commands/eval.hpp"
 #include "commands/explore.hpp"
 #include "fixture.hpp"
+#include "scratch_dir.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <fmt/format.h>
@@ -18,54 +19,37 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 using chesscoach::cli::EvalOptions;
 using chesscoach::cli::ExploreOptions;
 using chesscoach::cli::test::FixtureDb;
 using chesscoach::cli::test::key_after;
+using chesscoach::testing::ScratchDir;
 
 namespace {
 
 constexpr std::string_view start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 
-// A data directory and the fake engine's log for one test, under the build directory; the fake
-// is found through CHESSCOACH_FAKE_UCI, which the wrapper script reads.
-class Scratch {
-  public:
-    explicit Scratch(std::string_view name)
-        : root_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "engine-commands" / name),
-          data_(root_ / "data"), log_(root_ / "fake.log") {
-        std::filesystem::remove_all(root_);
-        std::filesystem::create_directories(root_);
-        // NOLINTBEGIN(concurrency-mt-unsafe): set before any engine starts, one test at a time
-        setenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI, 1);
-        setenv("CHESSCOACH_FAKE_UCI_LOG", log_.c_str(), 1);
-        // NOLINTEND(concurrency-mt-unsafe)
-    }
-    Scratch(const Scratch&) = delete;
-    Scratch& operator=(const Scratch&) = delete;
-    Scratch(Scratch&&) = delete;
-    Scratch& operator=(Scratch&&) = delete;
-    ~Scratch() {
-        std::error_code ignored;
-        std::filesystem::remove_all(root_, ignored);
-    }
-    [[nodiscard]] std::string data() const { return data_.string(); }
-    [[nodiscard]] bool engine_ran() const { return std::filesystem::exists(log_); }
-    void forget_engine() const { std::filesystem::remove(log_); }
-    [[nodiscard]] std::string missing() const { return (root_ / "no-such-engine").string(); }
+// The fake engine's environment, set before any engine starts: core's fake-uci, which the wrapper
+// script reads, logging every line it receives to fake.log in the scratch directory.
+void use_fake_engine(const std::filesystem::path& scratch) {
+    // NOLINTBEGIN(concurrency-mt-unsafe): one test at a time
+    setenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI, 1);
+    setenv("CHESSCOACH_FAKE_UCI_LOG", (scratch / "fake.log").c_str(), 1);
+    // NOLINTEND(concurrency-mt-unsafe)
+}
 
-  private:
-    std::filesystem::path root_;
-    std::filesystem::path data_;
-    std::filesystem::path log_;
-};
+// Whether the fake engine has started since the scratch directory was made or last forgotten.
+bool engine_ran(const ScratchDir& scratch) {
+    return std::filesystem::exists(scratch.path("fake.log"));
+}
 
-EvalOptions eval_options(const Scratch& scratch, int min_depth = 3) {
+void forget_engine(const ScratchDir& scratch) { std::filesystem::remove(scratch.path("fake.log")); }
+
+EvalOptions eval_options(const ScratchDir& scratch, int min_depth = 3) {
     EvalOptions options;
-    options.data_dir = scratch.data();
+    options.data_dir = scratch.path("data").string();
     options.moves = "";
     options.query = {.lines = 3, .seconds = 0.05, .min_depth = min_depth};
     options.engine.stockfish = CHESSCOACH_FAKE_STOCKFISH;
@@ -112,28 +96,28 @@ std::vector<std::string> entries(const std::string& dir) {
 } // namespace
 
 TEST_CASE("eval searches on a miss and serves a repeat from the engine cache", "[cli][engine]") {
-    const Scratch scratch("repeat");
+    const ScratchDir scratch("engine-commands", "repeat", use_fake_engine);
     CHECK(run_eval(eval_options(scratch)) == start_eval("no"));
-    CHECK(scratch.engine_ran());
-    CHECK(entries(scratch.data()) == std::vector<std::string>{"profiles.db"});
+    CHECK(engine_ran(scratch));
+    CHECK(entries(scratch.path("data").string()) == std::vector<std::string>{"profiles.db"});
 
     // The second run never looks for the engine: its binary does not exist.
-    scratch.forget_engine();
+    forget_engine(scratch);
     auto again = eval_options(scratch);
-    again.engine.stockfish = scratch.missing();
+    again.engine.stockfish = scratch.path("no-such-engine").string();
     CHECK(run_eval(again) == start_eval("yes"));
-    CHECK_FALSE(scratch.engine_ran());
-    CHECK(entries(scratch.data()) == std::vector<std::string>{"profiles.db"});
+    CHECK_FALSE(engine_ran(scratch));
+    CHECK(entries(scratch.path("data").string()) == std::vector<std::string>{"profiles.db"});
 }
 
 TEST_CASE("eval searches again when the cache is not deep enough", "[cli][engine]") {
-    const Scratch scratch("min-depth");
+    const ScratchDir scratch("engine-commands", "min-depth", use_fake_engine);
     CHECK(run_eval(eval_options(scratch)) == start_eval("no"));
-    scratch.forget_engine();
+    forget_engine(scratch);
     CHECK(run_eval(eval_options(scratch, 4)) == start_eval("no"));
-    CHECK(scratch.engine_ran());
+    CHECK(engine_ran(scratch));
     // A line count is its own cache entry.
-    scratch.forget_engine();
+    forget_engine(scratch);
     auto one_line = eval_options(scratch);
     one_line.query.lines = 1;
     CHECK(run_eval(one_line) == fmt::format("fen: {}\n"
@@ -142,11 +126,11 @@ TEST_CASE("eval searches again when the cache is not deep enough", "[cli][engine
                                             "1: depth 3 cp 29 e4 e5\n"
                                             "cached: no\n",
                                             start_fen, key_after("")));
-    CHECK(scratch.engine_ran());
+    CHECK(engine_ran(scratch));
 }
 
 TEST_CASE("eval with --db adds the stored evaluation from white's side", "[cli][engine]") {
-    const Scratch scratch("stored");
+    const ScratchDir scratch("engine-commands", "stored", use_fake_engine);
     const FixtureDb db;
     auto options = eval_options(scratch);
     options.db = db.path();
@@ -162,21 +146,21 @@ TEST_CASE("eval with --db adds the stored evaluation from white's side", "[cli][
 }
 
 TEST_CASE("eval reports a missing engine, a bad request and a bad position", "[cli][engine]") {
-    const Scratch scratch("errors");
+    const ScratchDir scratch("engine-commands", "errors", use_fake_engine);
     auto missing = eval_options(scratch);
-    missing.engine.stockfish = scratch.missing();
-    CHECK(run_eval(missing) == "error: no engine at " + scratch.missing());
+    missing.engine.stockfish = scratch.path("no-such-engine").string();
+    CHECK(run_eval(missing) == "error: no engine at " + scratch.path("no-such-engine").string());
     auto no_lines = eval_options(scratch);
     no_lines.query.lines = 0;
     CHECK(run_eval(no_lines) == "error: --lines 0 is not at least 1");
     auto bad_move = eval_options(scratch);
     bad_move.moves = "e4 e9";
     CHECK(run_eval(bad_move).starts_with("error: "));
-    CHECK_FALSE(scratch.engine_ran());
+    CHECK_FALSE(engine_ran(scratch));
 }
 
 TEST_CASE("explore --engine adds the engine's first line after the eval line", "[cli][engine]") {
-    const Scratch scratch("explore");
+    const ScratchDir scratch("engine-commands", "explore", use_fake_engine);
     const FixtureDb db;
     const ExploreOptions plain{.db = db.path(), .tier = 3, .fen = {}, .moves = "e4 e5"};
     const auto without = run_explore(plain);
@@ -184,7 +168,7 @@ TEST_CASE("explore --engine adds the engine's first line after the eval line", "
 
     auto with = plain;
     with.engine = chesscoach::cli::ExploreEngine{
-        .data_dir = scratch.data(),
+        .data_dir = scratch.path("data").string(),
         .query = {.lines = 1, .seconds = 0.05, .min_depth = 3},
         .settings = {.stockfish = CHESSCOACH_FAKE_STOCKFISH, .threads = 1, .hash_mb = 16},
     };
@@ -193,11 +177,11 @@ TEST_CASE("explore --engine adds the engine's first line after the eval line", "
     const auto expected = without.substr(0, eval_line_end) + "engine: depth 3 cp 29 e2e4\n" +
                           without.substr(eval_line_end);
     CHECK(run_explore(with) == expected);
-    CHECK(scratch.engine_ran());
+    CHECK(engine_ran(scratch));
 
     // Through the same cache: served without the engine the second time.
-    scratch.forget_engine();
-    with.engine->settings.stockfish = scratch.missing();
+    forget_engine(scratch);
+    with.engine->settings.stockfish = scratch.path("no-such-engine").string();
     CHECK(run_explore(with) == expected);
-    CHECK_FALSE(scratch.engine_ran());
+    CHECK_FALSE(engine_ran(scratch));
 }

@@ -14,6 +14,7 @@
 #include "commands/profiles.hpp"
 #include "commands/repertoire.hpp"
 #include "fixture.hpp"
+#include "scratch_dir.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <fmt/format.h>
@@ -24,7 +25,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
 
 using chesscoach::Color;
@@ -35,31 +35,9 @@ using chesscoach::cli::ProfileOptions;
 using chesscoach::cli::RepertoireOptions;
 using chesscoach::cli::test::FixtureDb;
 using chesscoach::cli::test::key_after;
+using chesscoach::testing::ScratchDir;
 
 namespace {
-
-// A directory of its own for each test, under the build directory, removed when it ends.
-class Scratch {
-  public:
-    explicit Scratch(std::string_view name)
-        : root_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "repertoire" / name) {
-        std::filesystem::remove_all(root_);
-        std::filesystem::create_directories(root_);
-    }
-    Scratch(const Scratch&) = delete;
-    Scratch& operator=(const Scratch&) = delete;
-    Scratch(Scratch&&) = delete;
-    Scratch& operator=(Scratch&&) = delete;
-    ~Scratch() {
-        std::error_code ignored;
-        std::filesystem::remove_all(root_, ignored);
-    }
-    [[nodiscard]] std::string data() const { return (root_ / "data").string(); }
-    [[nodiscard]] std::filesystem::path file(std::string_view name) const { return root_ / name; }
-
-  private:
-    std::filesystem::path root_;
-};
 
 // The tests' clock.
 std::int64_t at_1000() { return 1000; }
@@ -72,17 +50,17 @@ template <typename Command> std::string output(const Command& command) {
 }
 
 // The options of a repertoire or drill command on the scratch data directory, white's, Default's.
-RepertoireOptions repertoire_on(const Scratch& scratch, std::string action) {
+RepertoireOptions repertoire_on(const ScratchDir& scratch, std::string action) {
     RepertoireOptions options;
-    options.data_dir = scratch.data();
+    options.data_dir = scratch.path("data").string();
     options.colour = "white";
     options.action = std::move(action);
     return options;
 }
 
-DrillOptions drill_on(const Scratch& scratch, std::string action) {
+DrillOptions drill_on(const ScratchDir& scratch, std::string action) {
     DrillOptions options;
-    options.data_dir = scratch.data();
+    options.data_dir = scratch.path("data").string();
     options.colour = "white";
     options.action = std::move(action);
     return options;
@@ -114,7 +92,7 @@ std::string run(const ProfileOptions& options) {
 }
 
 // repertoire add of the line for the colour.
-std::string add(const Scratch& scratch, std::string moves, std::string colour = "white") {
+std::string add(const ScratchDir& scratch, std::string moves, std::string colour = "white") {
     RepertoireOptions options = repertoire_on(scratch, "add");
     options.moves = std::move(moves);
     options.colour = std::move(colour);
@@ -146,7 +124,7 @@ void write_text(const std::filesystem::path& path, std::string_view text) {
 
 TEST_CASE("repertoire add chooses the colour's moves along a line, replacing, and list shows them",
           "[cli][repertoire]") {
-    const Scratch scratch("add");
+    const ScratchDir scratch("repertoire", "add");
     CHECK(add(scratch, "e4 e5 Nf3 Nc6 Bb5") == "added: 3\nchanged: 0\nunchanged: 0\n");
     // UCI and SAN mixed; 1. e4 is kept and 2. Nf3 replaced.
     CHECK(add(scratch, "e2e4 e7e5 Nc3") == "added: 0\nchanged: 1\nunchanged: 1\n");
@@ -164,7 +142,7 @@ TEST_CASE("repertoire add chooses the colour's moves along a line, replacing, an
 
 TEST_CASE("repertoire remove removes only the choice at the position the line reaches",
           "[cli][repertoire]") {
-    const Scratch scratch("remove");
+    const ScratchDir scratch("repertoire", "remove");
     REQUIRE(add(scratch, "e4 e5 Nf3") == "added: 2\nchanged: 0\nunchanged: 0\n");
     RepertoireOptions remove = repertoire_on(scratch, "remove");
     CHECK(run(remove) == "removed: 1\n");
@@ -181,7 +159,7 @@ TEST_CASE("repertoire remove removes only the choice at the position the line re
 
 TEST_CASE("repertoire coverage and gaps print core's coverage at the tier", "[cli][repertoire]") {
     const FixtureDb db;
-    const Scratch scratch("coverage");
+    const ScratchDir scratch("repertoire", "coverage");
     REQUIRE(add(scratch, "e4") == "added: 1\nchanged: 0\nunchanged: 0\n");
     RepertoireOptions coverage_options = repertoire_on(scratch, "coverage");
     coverage_options.db = db.path();
@@ -199,7 +177,7 @@ TEST_CASE("repertoire coverage and gaps print core's coverage at the tier", "[cl
     // The same numbers as compute_coverage on the store's repertoire.
     auto openings = chesscoach::OpeningStore::open(db.path());
     REQUIRE(openings.has_value());
-    auto profiles = ProfileStore::open(scratch.data());
+    auto profiles = ProfileStore::open(scratch.path("data").string());
     REQUIRE(profiles.has_value());
     const auto coverage =
         chesscoach::compute_coverage(*openings, profiles->repertoire(1, Color::white), Color::white,
@@ -219,26 +197,26 @@ TEST_CASE("repertoire coverage and gaps print core's coverage at the tier", "[cl
     deep.depth = 40;
     CHECK(run(deep).starts_with("covered: "));
     // A --depth refused before profiles.db is opened creates none.
-    const Scratch fresh("coverage-fresh");
+    const ScratchDir fresh("repertoire", "coverage-fresh");
     RepertoireOptions refused = repertoire_on(fresh, "coverage");
     refused.db = db.path();
     refused.depth = 41;
     CHECK(run(refused) == "error: --depth 41 is not from 0 to 40");
-    CHECK_FALSE(std::filesystem::exists(std::filesystem::path(fresh.data()) / "profiles.db"));
+    CHECK_FALSE(std::filesystem::exists(fresh.path("data") / "profiles.db"));
     RepertoireOptions no_db = coverage_options;
     no_db.db.clear();
     CHECK(run(no_db) ==
           fmt::format("error: no opening database: {} does not exist (give --db, or put one there "
                       "with database import)",
-                      (std::filesystem::path(scratch.data()) / "openings.db").string()));
+                      (scratch.path("data") / "openings.db").string()));
     gaps.tier = 7;
     CHECK(run(gaps) == "error: tier 7 is not one of 0 to 6");
 }
 
 TEST_CASE("repertoire import adds a PGN's games and variations", "[cli][repertoire]") {
-    const Scratch scratch("import");
+    const ScratchDir scratch("repertoire", "import");
     REQUIRE(add(scratch, "d4") == "added: 1\nchanged: 0\nunchanged: 0\n");
-    const auto pgn = scratch.file("lines.pgn");
+    const auto pgn = scratch.path("lines.pgn");
     write_text(pgn, "[Event \"Mine\"]\n\n1. e4 e5 2. Nf3 (2. Nc3 Nf6) 2... Nc6 3. Bb5 *\n\n"
                     "[Event \"Also mine\"]\n\n1. e4 c5 2. Nf3 d6 3. Qx9 *\n");
     RepertoireOptions import = repertoire_on(scratch, "import");
@@ -251,13 +229,13 @@ TEST_CASE("repertoire import adds a PGN's games and variations", "[cli][repertoi
     CHECK(run(repertoire_on(scratch, "list")) ==
           listed("e4 e5 Nf3 Nc6", "f1b5", "Bb5") + listed("", "d2d4", "d4") +
               listed("e4 c5", "g1f3", "Nf3") + listed("e4 e5", "g1f3", "Nf3"));
-    import.pgn = scratch.file("missing.pgn").string();
+    import.pgn = scratch.path("missing.pgn").string();
     CHECK(run(import).starts_with("error: cannot read "));
 }
 
 TEST_CASE("drill syncs, lists the cards due, and a good review moves the due date",
           "[cli][drill]") {
-    const Scratch scratch("drill");
+    const ScratchDir scratch("repertoire", "drill");
     REQUIRE(add(scratch, "e4 e5 Nf3") == "added: 2\nchanged: 0\nunchanged: 0\n");
     const auto e4 = [](std::int64_t due) {
         return fmt::format("1 {} e2e4 e4 due {} {}\n", key_after(""), due, fen_after(""));
@@ -301,8 +279,8 @@ TEST_CASE("drill syncs, lists the cards due, and a good review moves the due dat
 
 TEST_CASE("profile lists, creates and removes profiles, and exports and imports them",
           "[cli][profile]") {
-    const Scratch scratch("profiles");
-    const std::string data = scratch.data();
+    const ScratchDir scratch("repertoire", "profiles");
+    const std::string data = scratch.path("data").string();
     CHECK(run(profile_on(data, "list")) == "1 Default tier 2 (1400-1599)\n");
     ProfileOptions create = profile_on(data, "create");
     create.name = "Club";
@@ -317,25 +295,25 @@ TEST_CASE("profile lists, creates and removes profiles, and exports and imports 
     club.moves = "e4";
     REQUIRE(run(club) == "added: 1\nchanged: 0\nunchanged: 0\n");
 
-    const std::string exported = scratch.file("export.db").string();
-    const std::string broken = scratch.file("broken").string();
+    const std::string exported = scratch.path("export.db").string();
+    const std::string broken = scratch.path("broken").string();
     std::filesystem::create_directories(broken);
     write_text(std::filesystem::path(broken) / "profiles.db", "not a database\n");
     ProfileOptions not_one = profile_on(broken, "export");
     not_one.path = exported;
     CHECK(run(not_one) == "error: profiles.db in " + broken + " is not a profiles.db");
-    ProfileOptions nothing = profile_on(scratch.file("empty").string(), "export");
+    ProfileOptions nothing = profile_on(scratch.path("empty").string(), "export");
     nothing.path = exported;
     CHECK(run(nothing) ==
-          "error: " + scratch.file("empty").string() + " has no profiles.db to export");
-    CHECK_FALSE(std::filesystem::exists(scratch.file("empty")));
+          "error: " + scratch.path("empty").string() + " has no profiles.db to export");
+    CHECK_FALSE(std::filesystem::exists(scratch.path("empty")));
     ProfileOptions to = profile_on(data, "export");
     to.path = exported;
     CHECK(run(to) == "exported: " + exported + "\n");
     CHECK(run(to) == "error: " + exported + " exists or cannot be written");
 
     // Imported into another data directory, whose own file is kept as profiles.db.previous.
-    const std::string other = scratch.file("other").string();
+    const std::string other = scratch.path("other").string();
     CHECK(run(profile_on(other, "list")) == "1 Default tier 2 (1400-1599)\n");
     ProfileOptions from = profile_on(other, "import");
     from.path = exported;
@@ -348,7 +326,7 @@ TEST_CASE("profile lists, creates and removes profiles, and exports and imports 
     imported.profile = "Club";
     CHECK(run(imported) == listed("", "e2e4", "e4"));
 
-    const std::string notes = scratch.file("notes.txt").string();
+    const std::string notes = scratch.path("notes.txt").string();
     write_text(notes, "not a database\n");
     from.path = notes;
     CHECK(run(from) == "error: " + notes + " is not a profiles.db");

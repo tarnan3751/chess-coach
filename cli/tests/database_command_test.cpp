@@ -8,6 +8,7 @@
 #include "commands/database.hpp"
 #include "commands/stats.hpp"
 #include "fixture.hpp"
+#include "scratch_dir.hpp"
 
 #include <SQLiteCpp/SQLiteCpp.h>
 #include <catch2/catch_test_macros.hpp>
@@ -21,36 +22,14 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 
 using chesscoach::cli::DatabaseOptions;
 using chesscoach::cli::resolve_db;
 using chesscoach::cli::StatsOptions;
 using chesscoach::cli::test::FixtureDb;
+using chesscoach::testing::ScratchDir;
 
 namespace {
-
-// A directory of its own for each test, under the build directory, removed when it ends.
-class Scratch {
-  public:
-    explicit Scratch(std::string_view name)
-        : root_(std::filesystem::path(CHESSCOACH_TEST_SCRATCH_DIR) / "database" / name) {
-        std::filesystem::remove_all(root_);
-        std::filesystem::create_directories(root_);
-    }
-    Scratch(const Scratch&) = delete;
-    Scratch& operator=(const Scratch&) = delete;
-    Scratch(Scratch&&) = delete;
-    Scratch& operator=(Scratch&&) = delete;
-    ~Scratch() {
-        std::error_code ignored;
-        std::filesystem::remove_all(root_, ignored);
-    }
-    [[nodiscard]] std::string path(std::string_view name) const { return (root_ / name).string(); }
-
-  private:
-    std::filesystem::path root_;
-};
 
 // A command's output, or its error message prefixed with "error: ".
 std::string run(const std::function<chesscoach::cli::Result<void>(std::ostream&)>& command) {
@@ -76,9 +55,9 @@ std::string openings_in(const std::string& data_dir) {
 
 TEST_CASE("resolve_db takes --db, there or not, else --data-dir's openings.db", "[cli][database]") {
     const FixtureDb db;
-    const Scratch scratch("resolve");
-    const std::string data = scratch.path("data");
-    const std::string missing = scratch.path("missing.db");
+    const ScratchDir scratch("database", "resolve");
+    const std::string data = scratch.path("data").string();
+    const std::string missing = scratch.path("missing.db").string();
     // --db as given, there or not, with or without a data directory; without either, a request.
     CHECK(resolve_db(missing, std::nullopt) == missing);
     CHECK(resolve_db(missing, data) == missing);
@@ -100,8 +79,8 @@ TEST_CASE("resolve_db takes --db, there or not, else --data-dir's openings.db", 
 
 TEST_CASE("A command reads --data-dir's openings.db as it reads --db", "[cli][database]") {
     const FixtureDb db;
-    const Scratch scratch("command");
-    const std::string data = scratch.path("data");
+    const ScratchDir scratch("database", "command");
+    const std::string data = scratch.path("data").string();
     const DatabaseOptions put{.action = "import", .data_dir = data, .db = "", .file = db.path()};
     REQUIRE(database(put).starts_with("imported: "));
     const std::string with_db = stats(StatsOptions{.db = db.path(), .data_dir = std::nullopt});
@@ -112,20 +91,20 @@ TEST_CASE("A command reads --data-dir's openings.db as it reads --db", "[cli][da
 TEST_CASE("database info prints where the database is and what its meta records",
           "[cli][database]") {
     const FixtureDb db;
-    const Scratch scratch("info");
+    const ScratchDir scratch("database", "info");
     CHECK(database({.action = "info", .data_dir = "", .db = db.path(), .file = ""}) ==
           fmt::format("path: {}\nschema_version: 1\ndata_version: 0\nmonths: 2013-01\n"
                       "min_games: 10\nmax_ply: 8\n",
                       db.path()));
-    const std::string data = scratch.path("data");
+    const std::string data = scratch.path("data").string();
     CHECK(database({.action = "info", .data_dir = data, .db = "", .file = ""})
               .starts_with("error: no opening database: "));
 }
 
 TEST_CASE("database import puts a copy in place and keeps the one it replaces", "[cli][database]") {
     const FixtureDb db;
-    const Scratch scratch("import");
-    const std::string data = scratch.path("data");
+    const ScratchDir scratch("database", "import");
+    const std::string data = scratch.path("data").string();
     const DatabaseOptions put{.action = "import", .data_dir = data, .db = "", .file = db.path()};
     CHECK(database(put) ==
           fmt::format("imported: {}\ndata_version: 0\nmonths: 2013-01\n", openings_in(data)));
@@ -138,8 +117,8 @@ TEST_CASE("database import puts a copy in place and keeps the one it replaces", 
 
 TEST_CASE("database import refuses what it cannot put in place", "[cli][database]") {
     const FixtureDb db;
-    const Scratch scratch("refused");
-    const std::string data = scratch.path("data");
+    const ScratchDir scratch("database", "refused");
+    const std::string data = scratch.path("data").string();
     const auto import = [&data](const std::string& file) {
         return database({.action = "import", .data_dir = data, .db = "", .file = file});
     };
@@ -147,16 +126,16 @@ TEST_CASE("database import refuses what it cannot put in place", "[cli][database
 
     CHECK(database({.action = "import", .data_dir = "", .db = "", .file = db.path()}) ==
           "error: database import needs --data-dir, the directory to put openings.db in");
-    const std::string missing = scratch.path("missing.db");
+    const std::string missing = scratch.path("missing.db").string();
     CHECK(import(missing) == "error: no such file " + missing);
-    const std::string notes = scratch.path("notes.txt");
+    const std::string notes = scratch.path("notes.txt").string();
     {
         std::ofstream out(notes);
         out << "not a database\n";
     }
     CHECK(import(notes) ==
           "error: " + notes + " is not an opening database: not a readable SQLite database");
-    const std::string newer = scratch.path("newer.db");
+    const std::string newer = scratch.path("newer.db").string();
     std::filesystem::copy_file(db.path(), newer);
     {
         SQLite::Database file(newer, SQLite::OPEN_READWRITE);
