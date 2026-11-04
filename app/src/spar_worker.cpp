@@ -100,6 +100,7 @@ SparInterruption converted(const Interruption& interruption, const QString& play
             .san = QString::fromStdString(choice.san),
             .uci = QString::fromStdString(choice.row.move),
             .badges = badge_words(choice.row.badges),
+            .badge_bits = choice.row.badges.raw(),
             .total = choice.row.total(),
             .white = choice.row.white,
             .draws = choice.row.draws,

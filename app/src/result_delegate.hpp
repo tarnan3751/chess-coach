@@ -4,8 +4,9 @@
 // from the cell's shares_role data (a QList<double> of three fractions summing to 1). The badge
 // pills: Book, Popular and Dubious by name in their colours, or a muted dash for none, from the
 // cell's badges_role data (the bits, as Badges::raw holds them), each pill's tooltip the sentence
-// saying what its badge means. ResultDelegate is the bar as a delegate of its own, as Spar's
-// better choices use it; Explore's table paints both through its own delegate. GUI thread only.
+// saying what its badge means. ResultDelegate and BadgeDelegate are the bar and the pills as
+// delegates of their own, as Spar's better choices use them; Explore's table paints both through
+// its own delegate. GUI thread only.
 #pragma once
 
 #include <chesscoach/badges.hpp>
@@ -81,6 +82,23 @@ class ResultDelegate : public QStyledItemDelegate {
                const QModelIndex& index) const override;
     [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
                                  const QModelIndex& index) const override;
+
+  private:
+    const StudyPalette* palette_;
+};
+
+class BadgeDelegate : public QStyledItemDelegate {
+  public:
+    // palette is the owner's, which outlives the delegate; nullptr for the light theme's.
+    explicit BadgeDelegate(QObject* parent, const StudyPalette* palette = nullptr);
+
+    // The cell as the style paints it without its text (the badges' names), then the pills.
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override;
+    [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
+                                 const QModelIndex& index) const override;
+    bool helpEvent(QHelpEvent* event, QAbstractItemView* view, const QStyleOptionViewItem& option,
+                   const QModelIndex& index) override;
 
   private:
     const StudyPalette* palette_;

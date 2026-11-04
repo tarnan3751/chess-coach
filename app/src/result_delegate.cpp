@@ -4,6 +4,7 @@
 #include "tables.hpp"
 
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QColor>
 #include <QCoreApplication>
 #include <QFontMetrics>
@@ -14,6 +15,7 @@
 #include <QRect>
 #include <QRectF>
 #include <QStringList>
+#include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QToolTip>
 #include <QVariant>
@@ -245,6 +247,40 @@ QSize ResultDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelI
     const QSize text = QStyledItemDelegate::sizeHint(option, index);
     return {results_bar_size.width() + (2 * cell_padding),
             qMax(text.height(), results_bar_size.height() + (2 * cell_padding_vertical))};
+}
+
+BadgeDelegate::BadgeDelegate(QObject* parent, const StudyPalette* palette)
+    : QStyledItemDelegate(parent), palette_(palette != nullptr ? palette : &StudyPalette::light()) {
+}
+
+void BadgeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
+                          const QModelIndex& index) const {
+    QStyleOptionViewItem cell = option;
+    initStyleOption(&cell, index);
+    cell.text.clear();
+    const QStyle* style = option.widget != nullptr ? option.widget->style() : QApplication::style();
+    style->drawControl(QStyle::CE_ItemViewItem, &cell, painter, option.widget);
+    painter->save();
+    paint_badge_pills(*painter, option, badges_of(index), *palette_);
+    painter->restore();
+}
+
+QSize BadgeDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
+    const QSize text = QStyledItemDelegate::sizeHint(option, index);
+    if (option.widget == nullptr) {
+        return text;
+    }
+    return {badge_pills_width(badges_of(index), option.font, *option.widget),
+            qMax(text.height(),
+                 badge_pill_height(option.font, *option.widget) + (2 * cell_padding_vertical))};
+}
+
+bool BadgeDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
+                              const QStyleOptionViewItem& option, const QModelIndex& index) {
+    if (event == nullptr || view == nullptr) {
+        return QStyledItemDelegate::helpEvent(event, view, option, index);
+    }
+    return show_pill_tooltip(*event, *view, option, index);
 }
 
 } // namespace chesscoach::app

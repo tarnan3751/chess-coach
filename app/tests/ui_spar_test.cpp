@@ -18,6 +18,7 @@
 #include "sounds.hpp"
 #include "spar_screen.hpp"
 #include "study_palette.hpp"
+#include "tables.hpp"
 #include "ui_harness.hpp"
 
 #include <QAbstractButton>
@@ -183,6 +184,15 @@ void meet_a_dubious_move(MainWindow& window, const BoardView& board) {
     QVERIFY(painted(window, better, 0, 3, StudyPalette::dark().border));
     QVERIFY(!painted(window, better, 0, 3, StudyPalette::light().border));
     child<QAction>(window, QStringLiteral("theme_light")).trigger();
+    // The pills and the Study header, as Explore's table paints them.
+    QVERIFY(dynamic_cast<const chesscoach::app::TableHeader*>(choices.horizontalHeader()) !=
+            nullptr);
+    QCOMPARE(choices.model()->headerData(3, Qt::Horizontal, chesscoach::app::header_note_role),
+             QVariant(QStringLiteral("white · draw · black")));
+    QVERIFY(painted(window, better, 0, 1, StudyPalette::light().book_bg));
+    QVERIFY(painted(window, better, 0, 1, StudyPalette::light().popular_bg));
+    QVERIFY(painted(window, better, 1, 1, StudyPalette::light().book_bg));
+    QVERIFY(!painted(window, better, 1, 1, StudyPalette::light().popular_bg));
     press(window, QStringLiteral("spar_continue"));
     QVERIFY(!interruption_shown(window));
     QVERIFY(board.isEnabled());

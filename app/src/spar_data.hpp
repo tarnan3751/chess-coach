@@ -20,7 +20,8 @@ namespace chesscoach::app {
 struct SparChoice {
     QString san;
     QString uci;
-    QString badges; // the names, "Book, Popular", or empty
+    QString badges;        // the names, "Book, Popular", or empty
+    quint8 badge_bits = 0; // the same badges as Badges::raw holds them, for the pills
     qint64 total = 0;
     qint64 white = 0;
     qint64 draws = 0;

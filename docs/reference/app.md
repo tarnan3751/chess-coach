@@ -337,9 +337,11 @@ The Study look's parts for a table that paints itself (`tables.{hpp,cpp}`,
   frame round white wins, draws and black wins in the results colours, with the white and black
   percentages inside their segments in 10 px bold, and the draws' only in a segment 18 px wide or
   more (in the white segment's text colour); a percentage that does not fit its segment is left
-  out; a Results header's note is `results_note`, "white · draw · black". `ResultDelegate` paints
-  the bar over the style's cell for Spar's better choices, in the palette the window hands the
-  Spar screen when it applies a theme (`SparScreen::set_palette`).
+  out; a Results header's note is `results_note`, "white · draw · black".
+- **Spar's better choices** paint the same things through delegates of their own over the style's
+  cells: `TableHeader` with the Results note, `BadgeDelegate` for the pills (from the choice's
+  `badge_bits`) and `ResultDelegate` for the bar, in the palette the window hands the Spar screen
+  when it applies a theme (`SparScreen::set_palette`).
 
 ## Spar
 
@@ -416,8 +418,9 @@ replay's up to its ply, and clicking a row does nothing on Spar.
   the two evaluations the worker reads from the store, **Wording**, or that the database has no
   evaluation for it), never its badges, which beside "too few games" would read as a
   contradiction; the better choices (`spar_better`: Move, Badges by name, "Book,
-  Popular", Games and Results, with the result bar, the Badges and Results headers each with a
-  tooltip saying what the three badges and the bar's three parts are); and *Keep playing*
+  Popular", painted as pills, Games and Results, with the result bar, under the Study header with
+  the Results note, as **Tables** says, the Badges and Results headers each with a tooltip saying
+  what the three badges and the bar's three parts are); and *Keep playing*
   (`spar_continue`). The move stands; Keep
   playing closes the panel and gives the board back;
 - **the summary** (`spar_summary`, `spar_summary_text`), when a session ends: how it ended ("You
@@ -872,16 +875,16 @@ the UI tests run silent on every platform, their sounds going to the null backen
 - `ui_spar_test`, on the fixture database's tier-4 tree (the start position's e4, a Dubious a3 and
   d4, black's e5 after 1. a3, and white's Nf3 alone after 1. a3 e5) with the fake engine's `legal`
   script as the coach off book, a fixed seed and a move limit of four: a session as white
-  interrupted on 1. a3 with its better choices, their results bar repainted in the dark palette,
-  Keep playing, interrupted again on 2. h4 off book and answered by the engine, ended at its move
-  limit with the summary and the saved session listed, and replayed with the interruptions at plies
-  one and three, each live interruption sounding once and the replay's none; a session as black,
-  where the coach moves first and the board turns; End the game saving a stopped session, and
-  closing the window saving one; a second session sending the coach's engine `ucinewgame`, read from
-  the fake's log; the Settings dialog's spar entries ending the next session at the new limit; the
-  summary's wording for a win, a draw and a stopped game and for none, one, two and three stops; and
-  Explore's line and tier untouched by a session, the tier selector disabled only on Spar.
-  Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
+  interrupted on 1. a3 with its better choices, their pills and Study header, their results bar
+  repainted in the dark palette, Keep playing, interrupted again on 2. h4 off book and answered by
+  the engine, ended at its move limit with the summary and the saved session listed, and replayed
+  with the interruptions at plies one and three, each live interruption sounding once and the
+  replay's none; a session as black, where the coach moves first and the board turns; End the game
+  saving a stopped session, and closing the window saving one; a second session sending the coach's
+  engine `ucinewgame`, read from the fake's log; the Settings dialog's spar entries ending the next
+  session at the new limit; the summary's wording for a win, a draw and a stopped game and for none,
+  one, two and three stops; and Explore's line and tier untouched by a session, the tier selector
+  disabled only on Spar. Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
 - `ui_repertoire_test`, on the same tier-4 tree: 1. e4 chosen by a board move and shown in the tree,
   then replaced by 1. a3, each time with the coverage equal to core's `compute_coverage` on the same
   stores; the gap 1. a3 e5 listed and Go to this position taking the board there; Save this move

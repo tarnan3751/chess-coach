@@ -107,6 +107,13 @@ SparScreen::SparScreen(QWidget* parent)
     played_->setWordWrap(true);
     summary_text_->setWordWrap(true);
     summary_text_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    // The better choices paint as Explore's table does (docs/reference/app.md, **Tables**): the
+    // Study header with the Results note, the badges as pills, the results bar.
+    auto* better_header = new TableHeader(&palette_, better_);
+    better_->setHorizontalHeader(better_header);
+    better_header->setSectionResizeMode(QHeaderView::ResizeToContents);
+    better_->horizontalHeaderItem(3)->setData(header_note_role, results_note());
+    better_->setItemDelegateForColumn(1, new BadgeDelegate(better_, &palette_));
     better_->setItemDelegateForColumn(3, new ResultDelegate(better_, &palette_));
     better_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     better_->horizontalHeaderItem(1)->setToolTip(
@@ -186,6 +193,7 @@ SparScreen::SparScreen(QWidget* parent)
 void SparScreen::set_palette(const StudyPalette& palette) {
     palette_ = palette;
     better_->viewport()->update();
+    better_->horizontalHeader()->viewport()->update();
 }
 
 bool SparScreen::user_white() const { return white_->isChecked(); }
@@ -223,7 +231,9 @@ void SparScreen::show_interruption(const SparInterruption& interruption, bool co
         const int row = better_->rowCount();
         better_->insertRow(row);
         better_->setItem(row, 0, table_item(choice.san));
-        better_->setItem(row, 1, table_item(choice.badges));
+        auto* badges = table_item(choice.badges);
+        badges->setData(badges_role, static_cast<uint>(choice.badge_bits));
+        better_->setItem(row, 1, badges);
         better_->setItem(row, 2, table_item(number(choice.total)));
         auto* result = table_item(QString());
         const auto total = static_cast<double>(choice.total > 0 ? choice.total : 1);
