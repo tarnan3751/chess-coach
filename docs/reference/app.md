@@ -672,7 +672,8 @@ themes keep their names, *Light* and *Dark*, and their setting values, `light` a
   the evaluation bar's frame (`EvalBar::set_palette`) and the toolbar's icons. *View > Theme*
   switches and saves the choice; the window applies the saved one at start. A label whose
   dynamic property `muted` is true, such as a screen's description, takes the muted colour
-  (`QLabel[muted="true"]` in both stylesheets).
+  (`QLabel[muted="true"]` in both stylesheets), and so does a disabled widget's text
+  (`QWidget:disabled`), with the palette's Disabled roles under it.
 - **The style** is Fusion on every platform, set with the fonts by `configure_application`, which
   `main.cpp` calls once and every UI test's `initTestCase` too. It draws what the stylesheet does
   not reach (radio buttons, spin boxes, whose arrows a stylesheet rule would hide, scroll bars,

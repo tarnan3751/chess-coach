@@ -15,6 +15,11 @@ QMainWindow, QDialog {
 QWidget {
     color: #e8e1d4;
 }
+/* A disabled widget's text, and the palette's Disabled roles under it, in the muted colour: a
+   rule without a state would set every state's */
+QWidget:disabled {
+    color: #a89e8e;
+}
 QGraphicsView#board {
     background: transparent;
     border: none;
