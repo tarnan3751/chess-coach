@@ -198,5 +198,4 @@ Lichess's, under CC0. [NOTICE](NOTICE) lists every component with its licence, a
 ## Contributing
 
 Issues and pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) says how to build, what
-the gate checks and how commits are written, and everyone follows the
-[code of conduct](CODE_OF_CONDUCT.md).
+the gate checks and how commits are written.

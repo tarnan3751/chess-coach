@@ -3,7 +3,7 @@
 Thank you for looking. chess-coach is an offline desktop chess opening coach: C++20, Qt 6
 Widgets, CMake with vcpkg, SQLite, and a local Stockfish over UCI. It is developed by one person
 with an agent team, under rules written down in the repository; this page is the short version
-for anyone else. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+for anyone else.
 
 Bug reports and feature requests are issues, from the templates. A change is a pull request;
 for anything larger than a fix, open an issue first, so the design can be agreed before the code
