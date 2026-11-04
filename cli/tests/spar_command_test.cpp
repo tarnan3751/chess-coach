@@ -156,7 +156,7 @@ TEST_CASE("spar refuses a bad command before it opens a file", "[cli]") {
     options.list = true;
     options.replay = 1;
     CHECK(run(options) == "error: --list and --replay exclude each other");
-    CHECK_FALSE(std::filesystem::exists(scratch.path("data").string()));
+    CHECK_FALSE(std::filesystem::exists(scratch.path("data")));
     options.list = false;
     options.profile = "Nobody";
     CHECK(run(options) == "error: no profile named Nobody");
