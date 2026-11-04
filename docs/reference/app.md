@@ -80,9 +80,11 @@ resources.
   tier selector (`tier_selector`), a `QComboBox` of the seven rating bands (**Wording**), each
   with its first letter capitalised ("Under 1200", "2200 and above"), with the tier index as each
   item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`), its
-  arrow the `chevron-down` icon in the muted colour; and at the right an icon-only *Settings*
-  button (`settings_toolbar_action` on the button `settings_button`, `gear`), which opens Edit >
-  Settings….
+  arrow the `chevron-down` icon in the muted colour; and at the right two icon-only buttons: the
+  sound toggle (`sounds_action` on the button `sounds_button`), checked while the sounds are on,
+  with the `sound-on` icon and the tooltip "Sounds on", else `sound-off` and "Sounds off"
+  (**Sounds**), and *Settings* (`settings_toolbar_action` on the button `settings_button`, `gear`),
+  which opens Edit > Settings….
 - **The menus**: *File* with *Back up your work…* and *Restore a backup…* (`export_action`,
   `import_action`, **Export and import**) and *Import database…* (`import_database_action`, **The
   database**), *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with *Light* and
@@ -712,7 +714,10 @@ card's move after a wrong answer in Drill), sounds `move_sound` of its SAN; a wr
 Drill sounds `wrong` as its verdict shows; and an interruption in Practice sounds `interruption` as
 its panel opens. A position set with `set_position` (New game, Back, the move list, a card, a
 replay's steps) sounds nothing, nor does a replay's interruption. The sounds are on unless the
-`sounds` setting is `false` (**Settings**), which Play sounds in the Settings dialog sets.
+`sounds` setting is `false` (**Settings**). The toolbar's sound toggle (**Shell**) turns them off
+and on and saves the choice at once; Play sounds in the Settings dialog does the same when the
+dialog is accepted, through the toggle, so each shows what the other set. A theme change redraws
+the toggle's icon in its colours.
 
 `app_sounds_test`, a unit test, checks the SAN rule, the null backend playing only while enabled,
 the five files' format, length and peak, and on macOS that `NSSound` decodes all five, which it
@@ -811,9 +816,10 @@ the UI tests run silent on every platform, their sounds going to the null backen
   board and New game clearing it, Flip board, the four screens, Help > How to use chess-coach
   with its five sections and no link, the toolbar's tooltips, each screen's description, the
   status bar without a database; 1. e4 d5 2. exd5 Qxd5 3. Nc3 Qe5+ sounding a move, a capture or a
-  check once each and New game nothing; and Play sounds in the Settings dialog turning them off and
-  on, saved for the next window. Screenshots: `main-window-start`, `main-window-after-moves`,
-  `main-window-flipped`, `help-dialog`.
+  check once each and New game nothing; Play sounds in the Settings dialog turning them off and
+  on, saved for the next window; and the toolbar's sound toggle and Play sounds following each
+  other, with the toggle's icon and tooltip in both themes. Screenshots: `main-window-start`,
+  `main-window-after-moves`, `main-window-flipped`, `main-window-sounds-off`, `help-dialog`.
 - `ui_explore_test`, on a fixture database the test writes into `core`'s schema with real keys
   (`app/tests/fixture_db.cpp`, the CLI fixture's rows, with the badges §7.3 gives them): opening it,
   with the data version, the start position off book at tier 2 and its moves with badges, bars,
@@ -887,8 +893,8 @@ the UI tests run silent on every platform, their sounds going to the null backen
 
 The window, Explore, Repertoire and Drill tests set `CHESS_COACH_STOCKFISH` to a path that does
 not exist, so no real engine runs in them, and the window and Explore tests write nothing but the
-window test's sounds setting, in a data directory of its own; the engine and Spar tests name the
-fake engine in their settings.
+settings of the window's sound tests, each in a data directory of its own; the engine and Spar
+tests name the fake engine in their settings.
 
 `tools/ui_tests.sh [<regex>]` builds the `dev` preset, runs the UI tests (`ctest -L ui`, filtered
 by name with the regex), and lists the screenshots of the run; the full gate runs the same tests

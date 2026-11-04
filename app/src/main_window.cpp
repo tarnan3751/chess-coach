@@ -573,6 +573,17 @@ void MainWindow::build_toolbar() {
     auto* stretch = new QWidget();
     stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     toolbar->addWidget(stretch);
+    // The sound toggle, checked while the sounds are on; its icon and tooltip say which
+    // (show_sounds_state), and a toggle saves the choice at once.
+    sounds_action_ = toolbar->addAction(tr("Sounds"));
+    sounds_action_->setObjectName(QStringLiteral("sounds_action"));
+    sounds_action_->setCheckable(true);
+    sounds_action_->setChecked(sounds_.enabled());
+    connect(sounds_action_, &QAction::toggled, this, &MainWindow::set_sounds_enabled);
+    if (auto* button = qobject_cast<QToolButton*>(toolbar->widgetForAction(sounds_action_))) {
+        button->setObjectName(QStringLiteral("sounds_button"));
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    }
     QAction* settings = toolbar->addAction(tr("Settings"));
     settings->setObjectName(QStringLiteral("settings_toolbar_action"));
     connect(settings, &QAction::triggered, this, &MainWindow::show_settings);
@@ -914,7 +925,7 @@ void MainWindow::show_settings() {
         settings_.set_engine(engine);
         settings_.set_spar(spar);
         settings_.set_repertoire_depth(dialog->repertoire_depth());
-        set_sounds_enabled(dialog->sounds_enabled());
+        sounds_action_->setChecked(dialog->sounds_enabled()); // saved by the toggle if it changed
         emit configure_requested(engine);
         emit spar_configure_requested(engine, spar.seconds);
         request_evaluation();
@@ -928,6 +939,14 @@ void MainWindow::show_settings() {
 void MainWindow::set_sounds_enabled(bool enabled) {
     settings_.set_sounds_enabled(enabled);
     sounds_.set_enabled(enabled);
+    show_sounds_state(StudyPalette::named(settings_.theme()));
+}
+
+void MainWindow::show_sounds_state(const StudyPalette& palette) {
+    const bool on = sounds_.enabled();
+    sounds_action_->setIcon(
+        themed_icon(on ? QStringLiteral("sound-on") : QStringLiteral("sound-off"), palette));
+    sounds_action_->setToolTip(on ? tr("Sounds on") : tr("Sounds off"));
 }
 
 void MainWindow::export_profile(const QString& path) { emit export_requested(path); }
@@ -1315,6 +1334,7 @@ void MainWindow::apply_theme(const QString& theme) {
     for (const auto& [action, icon] : themed_actions_) {
         action->setIcon(themed_icon(icon, palette));
     }
+    show_sounds_state(palette);
     (dark ? dark_action_ : light_action_)->setChecked(true);
 }
 

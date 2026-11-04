@@ -2,7 +2,8 @@
 // tier selector, the move list following the board, New game, Flip board, the screen switcher,
 // Help > How to use chess-coach, the toolbar's tooltips, the screens' descriptions and the status
 // bar, with screenshots (ui_harness.hpp); and the sounds, one per move by its SAN and none for a
-// position set, which the Settings dialog turns off and on.
+// position set, which the Settings dialog and the toolbar's toggle turn off and on, each following
+// the other.
 #include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 #include <chesscoach/version.hpp>
@@ -10,11 +11,13 @@
 #include "board_view.hpp"
 #include "drill_screen.hpp"
 #include "explore_screen.hpp"
+#include "icons.hpp"
 #include "main_window.hpp"
 #include "repertoire_screen.hpp"
 #include "settings.hpp"
 #include "sounds.hpp"
 #include "spar_screen.hpp"
+#include "study_palette.hpp"
 #include "ui_harness.hpp"
 
 #include <QAction>
@@ -23,6 +26,8 @@
 #include <QDialog>
 #include <QFileInfo>
 #include <QFontDatabase>
+#include <QIcon>
+#include <QImage>
 #include <QLabel>
 #include <QListWidget>
 #include <QObject>
@@ -33,6 +38,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextBrowser>
+#include <QToolButton>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -46,12 +52,17 @@ using chesscoach::app::RepertoireScreen;
 using chesscoach::app::Settings;
 using chesscoach::app::SoundEvent;
 using chesscoach::app::SparScreen;
+using chesscoach::app::StudyPalette;
+using chesscoach::app::themed_icon;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
 using chesscoach::app::test::played;
 using chesscoach::app::test::save_screenshot;
 
 namespace {
+
+// An icon as the toolbar draws it, to compare two.
+QImage drawn(const QIcon& icon) { return icon.pixmap(QSize(16, 16)).toImage(); }
 
 class MainWindowTest : public QObject {
     Q_OBJECT
@@ -297,6 +308,52 @@ class MainWindowTest : public QObject {
         click(again_board, "e2");
         click(again_board, "e4");
         QVERIFY(played(again.sounds()).last() == SoundEvent::move);
+    }
+
+    void the_sound_toggle_and_the_settings_dialog_follow_each_other() const {
+        const QString data_dir = root_.filePath(QStringLiteral("sounds-toggle"));
+        MainWindow window(data_dir, QString());
+        auto& toggle = child<QAction>(window, QStringLiteral("sounds_action"));
+        const auto& button = child<QToolButton>(window, QStringLiteral("sounds_button"));
+        QVERIFY(toggle.isCheckable());
+        QVERIFY(toggle.isChecked());
+        QCOMPARE(button.toolButtonStyle(), Qt::ToolButtonIconOnly);
+        QCOMPARE(button.toolTip(), QStringLiteral("Sounds on"));
+        QCOMPARE(drawn(toggle.icon()),
+                 drawn(themed_icon(QStringLiteral("sound-on"), StudyPalette::light())));
+        QVERIFY(drawn(toggle.icon()) !=
+                drawn(themed_icon(QStringLiteral("sound-off"), StudyPalette::light())));
+
+        // The toggle turns them off at once, saved, with the other icon.
+        toggle.trigger();
+        QVERIFY(!toggle.isChecked());
+        QVERIFY(!window.sounds().enabled());
+        QVERIFY(!Settings(data_dir).sounds_enabled());
+        QCOMPARE(button.toolTip(), QStringLiteral("Sounds off"));
+        QCOMPARE(drawn(toggle.icon()),
+                 drawn(themed_icon(QStringLiteral("sound-off"), StudyPalette::light())));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        save_screenshot(window, QStringLiteral("main-window"), QStringLiteral("sounds-off"));
+
+        // The Settings dialog shows it, and turns them on again, which the toggle follows.
+        child<QAction>(window, QStringLiteral("settings_action")).trigger();
+        auto& dialog = child<QDialog>(window, QStringLiteral("settings_dialog"));
+        auto& box = child<QCheckBox>(dialog, QStringLiteral("sounds_setting"));
+        QVERIFY(!box.isChecked());
+        box.setChecked(true);
+        dialog.accept();
+        QVERIFY(toggle.isChecked());
+        QVERIFY(window.sounds().enabled());
+        QVERIFY(Settings(data_dir).sounds_enabled());
+        QCOMPARE(button.toolTip(), QStringLiteral("Sounds on"));
+
+        // The dark theme draws the toggle in its colours.
+        child<QAction>(window, QStringLiteral("theme_dark")).trigger();
+        QCOMPARE(drawn(toggle.icon()),
+                 drawn(themed_icon(QStringLiteral("sound-on"), StudyPalette::dark())));
+        QVERIFY(drawn(toggle.icon()) !=
+                drawn(themed_icon(QStringLiteral("sound-on"), StudyPalette::light())));
     }
 
     void the_status_bar_shows_no_database_and_the_engine() const {

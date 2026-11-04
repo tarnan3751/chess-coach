@@ -1,17 +1,17 @@
 // The main window (docs/reference/app.md, **Shell**): a toolbar with New game, Back, Flip board,
-// the Rating chooser and Settings; the evaluation bar and the board on the left with the move list
-// below them; the screen tabs on the right over Explore, Practice, Repertoire and Drill; the File >
-// Back up and Restore, Edit > Settings, View > Theme and Help menus; the database and the engine
-// in the status bar, in the Study look of the theme chosen (**Themes**). The board belongs to the
-// current screen: it keeps Explore's line and sends each position at the selected tier to the
-// database worker and each position to the engine worker; it runs Spar's sessions through the
-// spar worker; and it builds the repertoires and drills their cards through the profile worker,
-// each worker on its own thread, and shows their answers. It never touches the opening store, the
-// profile store or an engine itself: the imports run on the database and profile workers too, once
-// the others have let go. It plays the sounds: each move the board shows, a wrong answer in Drill
-// and the coach's interruption in Spar, unless they are turned off. GUI thread only. It writes
-// settings.ini itself (settings.hpp) and sends Qt's own settings to the data directory; the
-// workers write profiles.db; a profile export goes where the user picks.
+// the Rating chooser, the sound toggle and Settings; the evaluation bar and the board on the left
+// with the move list below them; the screen tabs on the right over Explore, Practice, Repertoire
+// and Drill; the File > Back up and Restore, Edit > Settings, View > Theme and Help menus; the
+// database and the engine in the status bar, in the Study look of the theme chosen (**Themes**).
+// The board belongs to the current screen: it keeps Explore's line and sends each position at the
+// selected tier to the database worker and each position to the engine worker; it runs Spar's
+// sessions through the spar worker; and it builds the repertoires and drills their cards through
+// the profile worker, each worker on its own thread, and shows their answers. It never touches the
+// opening store, the profile store or an engine itself: the imports run on the database and profile
+// workers too, once the others have let go. It plays the sounds: each move the board shows, a wrong
+// answer in Drill and the coach's interruption in Spar, unless they are turned off. GUI thread
+// only. It writes settings.ini itself (settings.hpp) and sends Qt's own settings to the data
+// directory; the workers write profiles.db; a profile export goes where the user picks.
 #pragma once
 
 #include <chesscoach/position.hpp>
@@ -57,6 +57,7 @@ class ProfileWorker;
 class RepertoireScreen;
 class SparScreen;
 class SparWorker;
+struct StudyPalette;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -197,8 +198,10 @@ class MainWindow : public QMainWindow {
     void engine_failed(const QString& message);
     void update_eval_bar();
     void show_settings();
-    // Turns the sounds on or off and saves the choice.
+    // The sound toggle's answer: turns the sounds on or off, saves the choice and shows it.
     void set_sounds_enabled(bool enabled);
+    // The sound toggle's icon, sound-on or sound-off in the palette's colours, and its tooltip.
+    void show_sounds_state(const StudyPalette& palette);
     void database_opened(const QString& data_version, const QString& months);
     void database_failed(const QString& message);
     void position_ready(const ExploreData& explore);
@@ -234,6 +237,7 @@ class MainWindow : public QMainWindow {
     QTabBar* tabs_;
     QAction* new_game_action_ = nullptr;
     QAction* back_action_ = nullptr;
+    QAction* sounds_action_ = nullptr;          // the toolbar's sound toggle
     QAction* import_action_ = nullptr;          // File > Restore a backup…
     QAction* import_database_action_ = nullptr; // File > Import database…
     QPointer<QProgressDialog> import_progress_; // while an import runs
