@@ -69,9 +69,13 @@ TEST_CASE("A loss reads by the two evaluations, not the difference alone", "[wor
     CHECK(loss_sentence({.before = mate_in_3, .after = 250}) ==
           QStringLiteral("The engine says it misses a forced win."));
     CHECK(loss_cell({.before = mate_in_3, .after = 250}) == QStringLiteral("misses a win"));
-    // A mate kept, a little slower, gives away almost nothing.
-    CHECK(loss_sentence({.before = mate_in_3, .after = mate_in_3 - 2}) ==
-          QStringLiteral("The engine says it gives away almost nothing."));
+    // A mate kept, however much slower, keeps the win: mate in 3 to mate in 8, and to mate in 23.
+    const QString kept = QStringLiteral("The engine says it keeps the forced win.");
+    CHECK(loss_sentence({.before = mate_in_3, .after = mate_in_3 - 5}) == kept);
+    CHECK(loss_sentence({.before = mate_in_3, .after = mate_in_3 - 20}) == kept);
+    CHECK(loss_sentence({.before = mate_in_3, .after = mate_in_3}) == kept);
+    CHECK(loss_cell({.before = mate_in_3, .after = mate_in_3 - 20}) ==
+          QStringLiteral("keeps the win"));
     // Still winning after a large swing, +12 to +4: pawns, never "by force".
     CHECK(loss_sentence({.before = 1200, .after = 400}) ==
           QStringLiteral("The engine says it gives away about 8.0 pawns."));

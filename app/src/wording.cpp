@@ -33,14 +33,15 @@ constexpr qint64 almost_nothing_cp = 5;
 constexpr qint64 mate_floor = 90000;
 
 // How a move's loss reads, from its two evaluations.
-enum class LossCase : std::uint8_t { by_force, missed_win, almost_nothing, pawns };
+enum class LossCase : std::uint8_t { by_force, kept_win, missed_win, almost_nothing, pawns };
 
 LossCase loss_case(const MoveEvaluations& evaluations) {
     if (evaluations.after <= -mate_floor) {
         return LossCase::by_force;
     }
-    if (evaluations.before >= mate_floor && evaluations.after < mate_floor) {
-        return LossCase::missed_win;
+    if (evaluations.before >= mate_floor) {
+        // A mate for the mover both before and after, however much slower, keeps the win.
+        return evaluations.after >= mate_floor ? LossCase::kept_win : LossCase::missed_win;
     }
     return evaluations.before - evaluations.after < almost_nothing_cp ? LossCase::almost_nothing
                                                                       : LossCase::pawns;
@@ -93,6 +94,8 @@ QString loss_sentence(const MoveEvaluations& evaluations) {
     switch (loss_case(evaluations)) {
     case LossCase::by_force:
         return translate("The engine says it loses by force.");
+    case LossCase::kept_win:
+        return translate("The engine says it keeps the forced win.");
     case LossCase::missed_win:
         return translate("The engine says it misses a forced win.");
     case LossCase::almost_nothing:
@@ -110,6 +113,8 @@ QString loss_cell(const MoveEvaluations& evaluations) {
     switch (loss_case(evaluations)) {
     case LossCase::by_force:
         return translate("loses by force");
+    case LossCase::kept_win:
+        return translate("keeps the win");
     case LossCase::missed_win:
         return translate("misses a win");
     case LossCase::almost_nothing:

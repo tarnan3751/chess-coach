@@ -44,13 +44,15 @@ struct MoveEvaluations {
                                                const PositionRow& after);
 
 // A move's loss as a sentence, chosen by its two evaluations: a mate against the mover after it,
-// "The engine says it loses by force."; a mate for the mover before it and none after, "The engine
-// says it misses a forced win."; else the loss, before less after, "The engine says it gives away
-// about 1.1 pawns." ("about 1 pawn" when it rounds to 1.0), or "almost nothing" under 5, however
-// large the loss: a move from +12 to +4 still wins.
+// "The engine says it loses by force."; a mate for the mover both before and after it, however
+// much slower, "The engine says it keeps the forced win."; a mate for the mover before it and none
+// after, "The engine says it misses a forced win."; else the loss, before less after, "The engine
+// says it gives away about 1.1 pawns." ("about 1 pawn" when it rounds to 1.0), or "almost
+// nothing" under 5, however large the loss: a move from +12 to +4 still wins.
 [[nodiscard]] QString loss_sentence(const MoveEvaluations& evaluations);
 
-// The same cases in a table's cell: "loses by force", "misses a win", "1.1", "almost none".
+// The same cases in a table's cell: "loses by force", "keeps the win", "misses a win", "1.1",
+// "almost none".
 [[nodiscard]] QString loss_cell(const MoveEvaluations& evaluations);
 
 // A depth in plies as a game counts moves, white's and black's together, rounded up: 20 plies are

@@ -628,18 +628,19 @@ centipawns and "1.0" for 95 (`pawns`); a move's loss, chosen by its two evaluati
 (`MoveEvaluations`, §7.2's values from the mover's side, which `move_evaluations` reads from the
 store's rows through core's `evaluation_value`), not by their difference, since a mate is worth
 about ±99,999: a mate against the mover after the move, "The engine says it loses by force."; a mate
-for the mover before it and none after, "The engine says it misses a forced win."; else the loss in
-pawns, "… gives away about 1.1 pawns." or "about 1 pawn", or "almost nothing" under 5 centipawns,
-however large the loss, so a move from +12 to +4 is "about 8.0 pawns" (`loss_sentence`, and
-`loss_cell` for a table: "loses by force", "misses a win", "1.1", "almost none"); a day as "4
-November 2026" (`day`); and the months an opening database holds (`month_range`, from `meta`'s
-`YYYY-MM` list): "October 2026", a run of months one after another as "October 2026 to March 2027",
-and months with gaps listed with the year after each year's last, "January, March and April 2013";
-and the engine's state (`engine_words`), "Stockfish 17 ready", "Stockfish 17 thinking…", "Engine
-starting…", "Engine not started", "No engine found" and "The engine did not start", the last two
-with the way forward when asked for it ("No engine found. Choose a Stockfish program in Settings.",
-"The engine did not start. Choose another engine program in Settings."), which Explore's engine
-panel says. `app_wording_test` checks each.
+for the mover both before and after it, however much slower, "The engine says it keeps the forced
+win."; a mate for the mover before it and none after, "The engine says it misses a forced win.";
+else the loss in pawns, "… gives away about 1.1 pawns." or "about 1 pawn", or "almost nothing"
+under 5 centipawns, however large the loss, so a move from +12 to +4 is "about 8.0 pawns"
+(`loss_sentence`, and `loss_cell` for a table: "loses by force", "keeps the win", "misses a win",
+"1.1", "almost none"); a day as "4 November 2026" (`day`); and the months an opening database holds
+(`month_range`, from `meta`'s `YYYY-MM` list): "October 2026", a run of months one after another
+as "October 2026 to March 2027", and months with gaps listed with the year after each year's last,
+"January, March and April 2013"; and the engine's state (`engine_words`), "Stockfish 17 ready",
+"Stockfish 17 thinking…", "Engine starting…", "Engine not started", "No engine found" and "The
+engine did not start", the last two with the way forward when asked for it ("No engine found.
+Choose a Stockfish program in Settings.", "The engine did not start. Choose another engine program
+in Settings."), which Explore's engine panel says. `app_wording_test` checks each.
 
 ## Themes
 
