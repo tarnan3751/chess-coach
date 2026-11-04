@@ -176,9 +176,11 @@ class SparWorker::Coach final : public ReplyProvider {
         }
     }
 
+    // An error's message never reaches the user: the session turns any provider error into
+    // provider_failed, which the worker words itself; so the messages are plain literals, not tr().
     tl::expected<std::string, ProviderError> reply(const Position& position) override {
         if (stopped_.load()) {
-            return tl::unexpected(ProviderError{translate("the window is closing").toStdString()});
+            return tl::unexpected(ProviderError{"the window is closing"});
         }
         if (!engine_.has_value() || !engine_->is_alive()) {
             {
@@ -187,15 +189,14 @@ class SparWorker::Coach final : public ReplyProvider {
             }
             const auto binary = find_engine_binary(settings_, resources_);
             if (!binary) {
-                return tl::unexpected(ProviderError{translate("no engine found").toStdString()});
+                return tl::unexpected(ProviderError{"no engine found"});
             }
             EngineOptions options;
             options.threads = settings_.threads;
             options.hash_mb = settings_.hash_mb;
             auto started = Engine::start(*binary, options);
             if (!started) {
-                return tl::unexpected(
-                    ProviderError{translate("the engine did not start").toStdString()});
+                return tl::unexpected(ProviderError{"the engine did not start"});
             }
             const std::scoped_lock lock(engine_mutex_);
             engine_.emplace(std::move(*started));
