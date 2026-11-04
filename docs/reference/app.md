@@ -415,7 +415,7 @@ replay's up to its ply, and clicking a row does nothing on Spar.
   "White won", "Black won" or "Draw" when the game has a result, else "Move limit"), newest first,
   and *Replay this game* (`spar_replay`), which plays the selected one again: *Previous move* and
   *Next move* (`spar_previous`, `spar_next`) step through it one ply at a time with the position
-  (`spar_replay_position`, "Position 3 of 6") on the board,
+  (`spar_replay_position`, "Start of the game" at ply 0, then "Position 3 of 6") on the board,
   and each interruption is shown read-only, without Keep playing, after the move it interrupted.
   *Start a practice game* ends the replay.
 
@@ -489,7 +489,8 @@ shows and *New game*, *Back* and the move list's rows go back along. `Repertoire
   column's header with a tooltip saying what it is; and
   *Save this move* (`repertoire_choose`), which makes the selected move the choice;
 - the gaps (`repertoire_gaps`, "Positions with no answer yet, most common first"): How often and
-  Moves, the line that reaches the position (no screen shows a FEN), and *Go to this position* (`repertoire_goto`), which takes the board to the selected gap.
+  Line, the moves that reach the position ("Moves" is only ever a count, and no screen shows a
+  FEN), and *Go to this position* (`repertoire_goto`), which takes the board to the selected gap.
 
 A board move where the colour is to move makes that move the position's choice, replacing any;
 a move where the opponent is to move only follows the line.

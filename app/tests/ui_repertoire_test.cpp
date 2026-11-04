@@ -147,6 +147,11 @@ class RepertoireTest : public QObject {
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
                      coverage_text(QStringLiteral("0.0%")));
         QTRY_COMPARE(rows(window, QStringLiteral("repertoire_gaps")), 1);
+        // The gaps' line of moves is a Line; Moves is only ever a count.
+        QCOMPARE(child<QTableWidget>(window, QStringLiteral("repertoire_gaps"))
+                     .horizontalHeaderItem(1)
+                     ->text(),
+                 QStringLiteral("Line"));
         QCOMPARE(cell(window, QStringLiteral("repertoire_gaps"), 0, 1),
                  QStringLiteral("the starting position"));
 

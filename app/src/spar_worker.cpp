@@ -298,7 +298,7 @@ void SparWorker::start(int tier, bool user_white, quint64 seed, int end_move) {
                                           seed, SparConfig{.end_move = end_move, .sampler = {}});
         if (!started) {
             emit session_failed(
-                tr("The practice game could not start. Check Practice games end at move in "
+                tr("The practice game could not start. Check “Practice games end at move” in "
                    "Settings."));
             return;
         }

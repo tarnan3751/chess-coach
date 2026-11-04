@@ -242,7 +242,7 @@ void replay_the_session(MainWindow& window, const BoardView& board) {
     const int moves_before = played(window.sounds()).count(SoundEvent::move);
     press(window, QStringLiteral("spar_replay"));
     QTRY_COMPARE(child<QLabel>(window, QStringLiteral("spar_replay_position")).text(),
-                 QStringLiteral("Position 0 of 6"));
+                 QStringLiteral("Start of the game"));
     QCOMPARE(board.position().fen(), chesscoach::Position::start().fen());
     press(window, QStringLiteral("spar_next"));
     QVERIFY(interruption_shown(window));

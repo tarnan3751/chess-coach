@@ -47,7 +47,7 @@ RepertoireScreen::RepertoireScreen(QWidget* parent)
           },
           this)),
       choose_(new QPushButton(tr("Save this move"), this)),
-      gaps_(make_table({tr("How often"), tr("Moves")}, this)),
+      gaps_(make_table({tr("How often"), tr("Line")}, this)),
       goto_(new QPushButton(tr("Go to this position"), this)) {
     setObjectName(QStringLiteral("repertoire_screen"));
     white_->setObjectName(QStringLiteral("repertoire_white"));

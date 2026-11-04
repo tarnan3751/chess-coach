@@ -289,7 +289,8 @@ void SparScreen::show_replay(int ply, int count,
     replay_position_->setVisible(true);
     previous_->setEnabled(ply > 0);
     next_->setEnabled(ply < count);
-    replay_position_->setText(tr("Position %1 of %2").arg(ply).arg(count));
+    replay_position_->setText(ply == 0 ? tr("Start of the game")
+                                       : tr("Position %1 of %2").arg(ply).arg(count));
     if (interruption) {
         show_interruption(*interruption, false);
     } else {
