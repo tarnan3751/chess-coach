@@ -14,6 +14,7 @@
 #include <QStringList>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <exception>
 #include <mutex>
 #include <string>
@@ -23,6 +24,13 @@
 namespace chesscoach::app {
 
 namespace {
+
+// The handshake bound of the coach's engine started with a session, ahead of need, which core
+// gives each of the handshake's two answers (uciok, then readyok after the options): short, so
+// that a binary slow to answer holds the spar worker, and with it the game's first book reply, End
+// the game and the worker's part of the window's close, twice this at most; the first reply off
+// book starts it again with core's full bound.
+constexpr std::chrono::milliseconds early_handshake{2000};
 
 QString translate(const char* text) {
     return QCoreApplication::translate("chesscoach::app::SparWorker", text);
@@ -177,10 +185,12 @@ class SparWorker::Coach final : public ReplyProvider {
         }
     }
 
-    // The running engine, started when none runs. An error's message never reaches the user: the
-    // session turns any provider error into provider_failed, which the worker words itself; so
-    // the messages are plain literals, not tr().
-    tl::expected<Engine*, ProviderError> start_engine() {
+    // The running engine, started when none runs, its handshake bounded by handshake when one is
+    // given, else by core's default. An error's message never reaches the user: the session turns
+    // any provider error into provider_failed, which the worker words itself; so the messages are
+    // plain literals, not tr().
+    tl::expected<Engine*, ProviderError>
+    start_engine(std::optional<std::chrono::milliseconds> handshake = std::nullopt) {
         if (stopped_.load()) {
             return tl::unexpected(ProviderError{"the window is closing"});
         }
@@ -198,6 +208,9 @@ class SparWorker::Coach final : public ReplyProvider {
         EngineOptions options;
         options.threads = settings_.threads;
         options.hash_mb = settings_.hash_mb;
+        if (handshake) {
+            options.handshake_timeout = *handshake;
+        }
         auto started = Engine::start(*binary, options);
         if (!started) {
             return tl::unexpected(ProviderError{"the engine did not start"});
@@ -328,10 +341,10 @@ void SparWorker::start(int tier, bool user_white, quint64 seed, int end_move) {
         coach_turn();
     }
     // The coach's engine starts now, while the user looks at the board, rather than in the first
-    // reply off book, which would wait for it; one that does not start is left for that reply,
-    // which tries again and reports it.
+    // reply off book, which would wait for it; one that does not start within the short bound is
+    // left for that reply, which tries again with the full one and reports it.
     if (session_.has_value() && session_->phase() != Phase::ended) {
-        static_cast<void>(coach_->start_engine());
+        static_cast<void>(coach_->start_engine(early_handshake));
     }
 }
 

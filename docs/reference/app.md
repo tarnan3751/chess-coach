@@ -387,11 +387,16 @@ turn it is, and whether the session ended. The app calls the positions in book a
 known lines" and keeps "book" for the Book badge. The coach's reply comes from the sampler in book
 and from the engine off book. The engine starts when a session starts, if none runs, after
 `session_started` and the coach's first move as black, while the user looks at the board, so the
-first reply off book does not wait the tenth of a second Stockfish takes to start; one that is not
-found or does not start is left for that reply, which tries again and reports it. It takes Threads
-and Hash from the engine settings and the binary found as the engine worker finds it, searches
-through `EngineReplyProvider` at the session's tier (`ProviderConfig{seconds, elo_offset = 100}`),
-and starts again after it dies; each session after the first sends the running engine
+first reply off book does not wait the tenth of a second Stockfish takes to start. That start gives
+the engine 2 s for each of its handshake's two answers (`uciok`, then `readyok` after the options),
+so a binary that is slow or does not answer holds the spar worker, and with it the game's first
+book reply, End the game and the worker's part of the window's closing, 4 s at most; Explore's
+engine, which the engine worker starts with the same binary under core's full bound, is joined by
+the window's closing as before. One that is not found or does not start in time is left for the
+first reply off book, which tries again with core's full 30 s and reports it. It takes Threads and
+Hash from the engine settings and the binary found as the engine worker finds it, searches through
+`EngineReplyProvider` at the session's tier (`ProviderConfig{seconds, elo_offset = 100}`), and
+starts again after it dies; each session after the first sends the running engine
 `ucinewgame` (`Engine::new_game`), as UCI asks between games. A reply that fails, or a read of a corrupt opening
 database, which throws, reports `session_failed`, and the session waits for End the game. When the
 session reaches its move limit, or is ended, the worker saves it with
@@ -927,11 +932,13 @@ a program built with `CHESSCOACH_HARNESS_SOUNDS` defined, `app_measure`, decides
   with the interruptions at plies one and three, each live interruption sounding once and the
   replay's none; a session as black, where the coach moves first and the board turns; the coach's
   engine starting with the session, one handshake more and no search in the fake's log before any
-  move; End the game saving a stopped session, and closing the window saving one; a second session
-  sending the coach's engine `ucinewgame`, read from the fake's log; the Settings dialog's spar entries ending the next
-  session at the new limit; the summary's wording for a win, a draw and a stopped game and for none,
-  one, two and three stops; and Explore's line and tier untouched by a session, the tier selector
-  disabled only on Spar. Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
+  move, and one slow to answer its handshake holding the first book reply no more than the start's
+  bound, 4 s; End the game saving a stopped session, and closing the window saving one; a second
+  session sending the coach's engine `ucinewgame`, read from the fake's log; the Settings dialog's
+  spar entries ending the next session at the new limit; the summary's wording for a win, a draw and
+  a stopped game and for none, one, two and three stops; and Explore's line and tier untouched by a
+  session, the tier selector disabled only on Spar. Screenshots: `spar-interruption`,
+  `spar-summary`, `spar-replay`.
 - `ui_repertoire_test`, on the same tier-4 tree: 1. e4 chosen by a board move and shown in the tree,
   then replaced by 1. a3, each time with the coverage equal to core's `compute_coverage` on the same
   stores; the gap 1. a3 e5 listed and Go to this position taking the board there; Save this move

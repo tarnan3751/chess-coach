@@ -4,7 +4,8 @@
 // move and another on an off-book move, the hand-off to the engine, the end at the move limit with
 // the summary and the saved session listed, its replay with the interruptions at their plies, each
 // live interruption sounding once and the replay's not at all; a session as black, where the coach
-// moves first; the coach's engine started with the session, before any move; End the game saving
+// moves first; the coach's engine started with the session, before any move, and a slow one
+// holding the game's first reply no more than its short handshake bound; End the game saving
 // a stopped session, and closing the window saving one too; the tier selector disabled only on
 // Spar while a session runs; and the Settings dialog's spar entries.
 // Screenshots of the interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
@@ -437,6 +438,35 @@ class SparTest : public QObject {
         // The session's end came after its start on the spar worker's thread: one start, no more.
         QCOMPARE(count(QStringLiteral("uci")), 2);
         qunsetenv("CHESSCOACH_FAKE_UCI_LOG");
+    }
+
+    void a_slow_engine_holds_the_game_four_seconds_at_most() {
+        // An engine slow to answer its handshake, 5 s: the start ahead of need gives up within its
+        // bound, 2 s for each of the handshake's two answers, so the first book reply waits 4 s at
+        // most, not for the engine.
+        struct SlowEngine {
+            SlowEngine() {
+                qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "slow-start");
+                qputenv("CHESSCOACH_FAKE_UCI_DELAY", "5000");
+            }
+            ~SlowEngine() {
+                qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "legal");
+                qunsetenv("CHESSCOACH_FAKE_UCI_DELAY");
+            }
+            Q_DISABLE_COPY_MOVE(SlowEngine)
+        };
+        const SlowEngine slow;
+        const Session session(*db_);
+        MainWindow& window = *session.window;
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        press(window, QStringLiteral("spar_start"));
+        QTRY_VERIFY(board.isEnabled());
+        // 1. a3 keeps the game in the known lines, so the coach's e5 comes from the book.
+        click(board, "a2");
+        click(board, "a3");
+        QTRY_VERIFY_WITH_TIMEOUT(move_row(window, 0) == QStringLiteral("1. a3 e5"), 4000);
+        press(window, QStringLiteral("spar_end"));
+        QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
     }
 
     void closing_the_window_saves_a_running_session() {
