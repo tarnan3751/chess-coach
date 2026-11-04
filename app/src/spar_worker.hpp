@@ -1,7 +1,7 @@
 // The spar worker: a QObject on its own QThread for the window's life, owning the live
 // SparSession and everything it needs (docs/reference/app.md, **Spar**): its own read-only
-// OpeningStore connection to --db, its own Engine (started at the first off-book reply, separate
-// from the engine worker's, and searched at limited strength through EngineReplyProvider), and
+// OpeningStore connection to --db, its own Engine (started when a session starts, separate from
+// the engine worker's, and searched at limited strength through EngineReplyProvider), and
 // a ProfileStore connection that saves each session when it ends or is stopped. The window calls
 // its slots by queued connection and gets every answer back the same way; the GUI thread never
 // touches the session, the store or the engine.
@@ -44,7 +44,7 @@ class SparWorker : public QObject {
     // The engine for off-book replies and each reply's seconds; a running engine is dropped.
     Q_SLOT void configure(const chesscoach::app::EngineSettings& engine, double seconds);
     // A new session (a running one is saved as stopped first): session_started, then, when the
-    // user plays black, the coach's first move.
+    // user plays black, the coach's first move; then the coach's engine starts, if none runs.
     Q_SLOT void start(int tier, bool user_white, quint64 seed, int end_move);
     // The user's move (UCI): move_accepted, then the coach's reply unless the session ended.
     Q_SLOT void user_move(const QString& uci);

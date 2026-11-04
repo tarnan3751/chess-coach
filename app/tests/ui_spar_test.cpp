@@ -4,8 +4,9 @@
 // move and another on an off-book move, the hand-off to the engine, the end at the move limit with
 // the summary and the saved session listed, its replay with the interruptions at their plies, each
 // live interruption sounding once and the replay's not at all; a session as black, where the coach
-// moves first; End the game saving a stopped session, and closing the window saving one too; the
-// tier selector disabled only on Spar while a session runs; and the Settings dialog's spar entries.
+// moves first; the coach's engine started with the session, before any move; End the game saving
+// a stopped session, and closing the window saving one too; the tier selector disabled only on
+// Spar while a session runs; and the Settings dialog's spar entries.
 // Screenshots of the interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
@@ -47,6 +48,7 @@
 #include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTest>
+#include <algorithm>
 #include <memory>
 
 using chesscoach::app::BoardView;
@@ -378,7 +380,7 @@ class SparTest : public QObject {
         const Session session(*db_);
         MainWindow& window = *session.window;
         const auto& board = child<BoardView>(window, QStringLiteral("board"));
-        // 1. h4 leaves the book, so the coach's engine starts and replies.
+        // 1. h4 leaves the book, so the coach's engine, started with the session, replies.
         press(window, QStringLiteral("spar_start"));
         QTRY_VERIFY(board.isEnabled());
         click(board, "h2");
@@ -393,6 +395,42 @@ class SparTest : public QObject {
         // The next session tells the running engine a new game begins.
         press(window, QStringLiteral("spar_start"));
         QTRY_COMPARE(new_games(), first + 1);
+        qunsetenv("CHESSCOACH_FAKE_UCI_LOG");
+    }
+
+    void the_coachs_engine_starts_with_the_session() {
+        const QTemporaryDir logs;
+        const QString log = logs.filePath(QStringLiteral("engine.log"));
+        qputenv("CHESSCOACH_FAKE_UCI_LOG", log.toUtf8());
+        // Every engine the window starts logs its lines here, Explore's too: a handshake is a
+        // "uci" line, a search a "go" line.
+        const auto count = [&log](const QString& command) {
+            QFile file(log);
+            if (!file.open(QIODevice::ReadOnly)) {
+                return 0;
+            }
+            const QStringList lines = QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'));
+            return static_cast<int>(std::ranges::count_if(lines, [&command](const QString& line) {
+                return line == command || line.startsWith(command + QLatin1Char(' '));
+            }));
+        };
+        const Session session(*db_);
+        MainWindow& window = *session.window;
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        // Explore's engine, asked for the start before the window turned to Practice, has started
+        // by now or never will; the coach's starts with the session, before any move.
+        QTest::qWait(300);
+        const int handshakes = count(QStringLiteral("uci"));
+        const int searches = count(QStringLiteral("go"));
+        press(window, QStringLiteral("spar_start"));
+        QTRY_VERIFY(board.isEnabled());
+        QTRY_COMPARE(count(QStringLiteral("uci")), handshakes + 1);
+        QTest::qWait(200);
+        QCOMPARE(count(QStringLiteral("uci")), handshakes + 1);
+        QCOMPARE(count(QStringLiteral("go")), searches);
+        QCOMPARE(move_rows(window), 0);
+        press(window, QStringLiteral("spar_end"));
+        QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
         qunsetenv("CHESSCOACH_FAKE_UCI_LOG");
     }
 

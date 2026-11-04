@@ -149,9 +149,10 @@ void register_spar_types() {
     qRegisterMetaType<SparReplay>();
 }
 
-// The coach once off book: the worker's engine, started at the first reply asked of it with the
-// engine settings, through an EngineReplyProvider at the session's tier. stop() may be called
-// from another thread: the search in progress stops, and no other starts.
+// The coach once off book: the worker's engine, started with the engine settings when a session
+// starts (start_engine) or else at the first reply asked of it, through an EngineReplyProvider at
+// the session's tier. stop() may be called from another thread: the search in progress stops, and
+// no other starts.
 class SparWorker::Coach final : public ReplyProvider {
   public:
     Coach(EngineSettings settings, double seconds, std::optional<std::filesystem::path> resources)
@@ -176,33 +177,42 @@ class SparWorker::Coach final : public ReplyProvider {
         }
     }
 
-    // An error's message never reaches the user: the session turns any provider error into
-    // provider_failed, which the worker words itself; so the messages are plain literals, not tr().
-    tl::expected<std::string, ProviderError> reply(const Position& position) override {
+    // The running engine, started when none runs. An error's message never reaches the user: the
+    // session turns any provider error into provider_failed, which the worker words itself; so
+    // the messages are plain literals, not tr().
+    tl::expected<Engine*, ProviderError> start_engine() {
         if (stopped_.load()) {
             return tl::unexpected(ProviderError{"the window is closing"});
         }
-        if (!engine_.has_value() || !engine_->is_alive()) {
-            {
-                const std::scoped_lock lock(engine_mutex_);
-                engine_.reset();
-            }
-            const auto binary = find_engine_binary(settings_, resources_);
-            if (!binary) {
-                return tl::unexpected(ProviderError{"no engine found"});
-            }
-            EngineOptions options;
-            options.threads = settings_.threads;
-            options.hash_mb = settings_.hash_mb;
-            auto started = Engine::start(*binary, options);
-            if (!started) {
-                return tl::unexpected(ProviderError{"the engine did not start"});
-            }
+        if (engine_.has_value() && engine_->is_alive()) {
+            return &*engine_;
+        }
+        {
             const std::scoped_lock lock(engine_mutex_);
-            engine_.emplace(std::move(*started));
+            engine_.reset();
+        }
+        const auto binary = find_engine_binary(settings_, resources_);
+        if (!binary) {
+            return tl::unexpected(ProviderError{"no engine found"});
+        }
+        EngineOptions options;
+        options.threads = settings_.threads;
+        options.hash_mb = settings_.hash_mb;
+        auto started = Engine::start(*binary, options);
+        if (!started) {
+            return tl::unexpected(ProviderError{"the engine did not start"});
+        }
+        const std::scoped_lock lock(engine_mutex_);
+        return &engine_.emplace(std::move(*started));
+    }
+
+    tl::expected<std::string, ProviderError> reply(const Position& position) override {
+        const auto engine = start_engine();
+        if (!engine) {
+            return tl::unexpected(engine.error());
         }
         // Only this thread replaces engine_, and not before the search below returns.
-        EngineReplyProvider provider(*engine_, tier_,
+        EngineReplyProvider provider(**engine, tier_,
                                      ProviderConfig{.seconds = seconds_, .elo_offset = 100});
         return provider.reply(position);
     }
@@ -316,6 +326,12 @@ void SparWorker::start(int tier, bool user_white, quint64 seed, int end_move) {
     emit session_started(seed, QString::fromStdString(session.position().fen()), state());
     if (session.phase() != Phase::ended && !session.user_to_move()) {
         coach_turn();
+    }
+    // The coach's engine starts now, while the user looks at the board, rather than in the first
+    // reply off book, which would wait for it; one that does not start is left for that reply,
+    // which tries again and reports it.
+    if (session_.has_value() && session_->phase() != Phase::ended) {
+        static_cast<void>(coach_->start_engine());
     }
 }
 

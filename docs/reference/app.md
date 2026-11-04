@@ -375,7 +375,7 @@ engine processes run, Explore's idle. Its slots, reached by queued connection:
 | Slot | Answer |
 |---|---|
 | `configure(EngineSettings, seconds)` | Keeps the engine settings and each reply's seconds, and drops a running engine |
-| `start(tier, user_white, seed, end_move)` | `session_started(seed, fen, SparState)`, then, when the user plays black, the coach's first move; a running session is saved as stopped first; `session_failed(message)` without a database |
+| `start(tier, user_white, seed, end_move)` | `session_started(seed, fen, SparState)`, then, when the user plays black, the coach's first move, then the coach's engine started if none runs; a running session is saved as stopped first; `session_failed(message)` without a database |
 | `user_move(uci)` | `move_accepted(san, uci, interruption, SparState)`, the interruption when the coach interrupts the move, then the coach's reply, `coach_moved(san, uci, SparState)`, unless the session ended |
 | `end_session()` | Saves the running session as stopped: `session_ended(SparSummary)` |
 | `list_sessions()` | `sessions_ready(sessions)`: the Default profile's saved sessions, newest first |
@@ -385,11 +385,14 @@ engine processes run, Explore's idle. Its slots, reached by queued connection:
 the known lines, so the engine replies.", "The practice game is over."), the move number, whose
 turn it is, and whether the session ended. The app calls the positions in book at the tier "the
 known lines" and keeps "book" for the Book badge. The coach's reply comes from the sampler in book
-and from the engine off book: the engine starts at the first off-book reply, with Threads and
-Hash from the engine settings and the binary found as the engine worker finds it, and searches
+and from the engine off book. The engine starts when a session starts, if none runs, after
+`session_started` and the coach's first move as black, while the user looks at the board, so the
+first reply off book does not wait the tenth of a second Stockfish takes to start; one that is not
+found or does not start is left for that reply, which tries again and reports it. It takes Threads
+and Hash from the engine settings and the binary found as the engine worker finds it, searches
 through `EngineReplyProvider` at the session's tier (`ProviderConfig{seconds, elo_offset = 100}`),
-again after it dies; each session after the first sends the running engine `ucinewgame`
-(`Engine::new_game`), as UCI asks between games. A reply that fails, or a read of a corrupt opening
+and starts again after it dies; each session after the first sends the running engine
+`ucinewgame` (`Engine::new_game`), as UCI asks between games. A reply that fails, or a read of a corrupt opening
 database, which throws, reports `session_failed`, and the session waits for End the game. When the
 session reaches its move limit, or is ended, the worker saves it with
 `ProfileStore::save_spar_session` under the Default profile (`profiles.db` is created then if it is
@@ -912,9 +915,10 @@ the UI tests run silent on every platform, their sounds going to the null backen
   bar repainted in the dark palette, Keep playing, interrupted again on 2. h4 off book and answered
   by the engine, ended at its move limit with the summary and the saved session listed, and replayed
   with the interruptions at plies one and three, each live interruption sounding once and the
-  replay's none; a session as black, where the coach moves first and the board turns; End the game
-  saving a stopped session, and closing the window saving one; a second session sending the coach's
-  engine `ucinewgame`, read from the fake's log; the Settings dialog's spar entries ending the next
+  replay's none; a session as black, where the coach moves first and the board turns; the coach's
+  engine starting with the session, one handshake more and no search in the fake's log before any
+  move; End the game saving a stopped session, and closing the window saving one; a second session
+  sending the coach's engine `ucinewgame`, read from the fake's log; the Settings dialog's spar entries ending the next
   session at the new limit; the summary's wording for a win, a draw and a stopped game and for none,
   one, two and three stops; and Explore's line and tier untouched by a session, the tier selector
   disabled only on Spar. Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.

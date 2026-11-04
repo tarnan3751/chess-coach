@@ -918,8 +918,8 @@ void practice_game(const Session& session, Report* report, bool& first_engine) {
             } else if (first_engine) {
                 first_engine = false;
                 report->sample("practice.first_engine_reply", shown, "ms",
-                               "the same for the process's first reply from the engine: the "
-                               "coach's engine starts, then searches 0.5 s");
+                               "the same for the process's first reply from the engine, the "
+                               "coach's engine started with the session, then a 0.5 s search");
             } else {
                 report->sample("practice.engine_reply", shown, "ms",
                                "the same for a later reply from the engine, which searches "

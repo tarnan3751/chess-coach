@@ -184,7 +184,10 @@ brackets; times in milliseconds.
 | Explore step: a move off book | 4.7 (3.5–5.2) | 7.1 (3.6–10.2) |
 | Explore's engine lines: a 2 s search; from the cache (the four steps' medians) | | 2004.7–2022.3; 4.4–16.1 |
 | Practice: a reply from the book | | 3.4 (3.2–4.5) |
-| Practice: the first reply from the engine; a later one (0.5 s searches) | | 607.8 (607.5–609.8); 502.5 (501.4–503.4) |
+| Practice: the first reply from the engine; a later one (0.5 s searches) | | 502.4 (501.9–503.0)*; 502.5 (501.4–503.4) |
+
+\* Measured on 2026-11-04 once the coach's engine started with the session; it was 612.8
+(608.5–614.7) the same day at `be2a254`, when it started at that first reply.
 
 | The board | Device pixel ratio 1 | Device pixel ratio 2 |
 |---|---:|---:|
@@ -223,9 +226,9 @@ walks more of it.
 
 The pipeline's benchmark built the sample in 29 ms (28–29), 69,565 games per second, 14.2 MB at
 its peak. The CLI's `explore` took 3.2 to 4.6 ms a process and `stats` 722 ms (719–727). In the
-app nothing a user waits for takes 100 ms but what the settings ask (a search) and, the first time
-a practice game leaves book in a run, the coach's engine starting (about 105 ms more); memory
-grows while the first steps read the database in and then holds.
+app nothing a user waits for takes 100 ms but what the settings ask, a search; the coach's engine
+starting, which added about 110 ms to the first practice game leaving book in a run, now starts
+with the session. Memory grows while the first steps read the database in and then holds.
 
 ## The module boundary
 
