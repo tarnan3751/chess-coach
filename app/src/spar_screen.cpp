@@ -11,8 +11,10 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QList>
+#include <QLocale>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QStringList>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -20,21 +22,68 @@
 
 namespace chesscoach::app {
 
+namespace {
+
+// A game's result in words: "White won", "Black won" or "Draw"; anything else as it is.
+QString result_words(const QString& result) {
+    if (result == QStringLiteral("1-0")) {
+        return SparScreen::tr("White won");
+    }
+    if (result == QStringLiteral("0-1")) {
+        return SparScreen::tr("Black won");
+    }
+    if (result == QStringLiteral("1/2-1/2")) {
+        return SparScreen::tr("Draw");
+    }
+    return result;
+}
+
+// How the summary says the game ended.
+QString ending(const SparSummary& summary) {
+    if (!summary.ended) {
+        return SparScreen::tr("You ended this practice game early.");
+    }
+    if (summary.result.isEmpty()) {
+        return SparScreen::tr("The practice game reached its move limit.");
+    }
+    if (summary.result == QStringLiteral("1/2-1/2")) {
+        return SparScreen::tr("The practice game was a draw.");
+    }
+    return SparScreen::tr("%1 the practice game.").arg(result_words(summary.result));
+}
+
+// How often the coach stopped the user.
+QString stops(int interruptions) {
+    switch (interruptions) {
+    case 0:
+        return SparScreen::tr("The coach did not need to stop you.");
+    case 1:
+        return SparScreen::tr("The coach stopped you once.");
+    case 2:
+        return SparScreen::tr("The coach stopped you twice.");
+    default:
+        return SparScreen::tr("The coach stopped you %1 times.").arg(interruptions);
+    }
+}
+
+} // namespace
+
 SparScreen::SparScreen(QWidget* parent)
-    : QWidget(parent), white_(new QRadioButton(tr("White"), this)),
-      black_(new QRadioButton(tr("Black"), this)), start_(new QPushButton(tr("Start"), this)),
-      end_(new QPushButton(tr("End session"), this)), status_(new QLabel(this)),
+    : QWidget(parent), white_(new QRadioButton(tr("Play White"), this)),
+      black_(new QRadioButton(tr("Play Black"), this)),
+      start_(new QPushButton(tr("Start a practice game"), this)),
+      end_(new QPushButton(tr("End the game"), this)), status_(new QLabel(this)),
       interruption_(new QFrame(this)), reason_(new QLabel(interruption_)),
       played_(new QLabel(interruption_)),
-      better_(make_table({tr("Move"), tr("Badges"), tr("Games"), tr("Result")}, interruption_)),
-      continue_(new QPushButton(tr("Continue"), interruption_)), summary_(new QFrame(this)),
+      better_(make_table({tr("Move"), tr("Badges"), tr("Games"), tr("Results")}, interruption_)),
+      continue_(new QPushButton(tr("Keep playing"), interruption_)), summary_(new QFrame(this)),
       summary_text_(new QLabel(summary_)),
       sessions_(make_table(
-          {tr("Date"), tr("Tier"), tr("Colour"), tr("Moves"), tr("Interruptions"), tr("Result")},
+          {tr("Date"), tr("Rating"), tr("You played"), tr("Moves"), tr("Stops"), tr("Result")},
           this)),
-      replay_(new QPushButton(tr("Replay"), this)),
-      previous_(new QPushButton(tr("Previous"), this)), next_(new QPushButton(tr("Next"), this)),
-      replay_position_(new QLabel(this)) {
+      replay_(new QPushButton(tr("Replay this game"), this)),
+      previous_(new QPushButton(tr("Previous move"), this)),
+      next_(new QPushButton(tr("Next move"), this)), replay_position_(new QLabel(this)) {
     setObjectName(QStringLiteral("spar_screen"));
     white_->setObjectName(QStringLiteral("spar_white"));
     black_->setObjectName(QStringLiteral("spar_black"));
@@ -55,6 +104,8 @@ SparScreen::SparScreen(QWidget* parent)
     replay_position_->setObjectName(QStringLiteral("spar_replay_position"));
     white_->setChecked(true);
     status_->setWordWrap(true);
+    reason_->setWordWrap(true);
+    played_->setWordWrap(true);
     summary_text_->setWordWrap(true);
     summary_text_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     better_->setItemDelegateForColumn(3, new ResultDelegate(better_));
@@ -74,7 +125,7 @@ SparScreen::SparScreen(QWidget* parent)
     auto* interruption = new QVBoxLayout(interruption_);
     interruption->addWidget(reason_);
     interruption->addWidget(played_);
-    interruption->addWidget(new QLabel(tr("Better choices:"), interruption_));
+    interruption->addWidget(new QLabel(tr("Better choices here"), interruption_));
     interruption->addWidget(better_);
     interruption->addWidget(continue_, 0, Qt::AlignRight);
 
@@ -93,7 +144,7 @@ SparScreen::SparScreen(QWidget* parent)
     column->addWidget(status_);
     column->addWidget(interruption_);
     column->addWidget(summary_);
-    column->addWidget(new QLabel(tr("Saved sessions"), this));
+    column->addWidget(new QLabel(tr("Your saved practice games"), this));
     column->addWidget(sessions_, 1);
     column->addLayout(stepping);
 
@@ -113,7 +164,8 @@ SparScreen::SparScreen(QWidget* parent)
     connect(next_, &QPushButton::clicked, this, [this] { emit replay_step(1); });
     set_running(false);
     end_replay();
-    show_message(tr("Choose a colour and start a session at the selected tier."));
+    show_message(tr("Choose your colour and press Start a practice game. The coach plays like "
+                    "the players at the rating in the Rating menu."));
 }
 
 bool SparScreen::user_white() const { return white_->isChecked(); }
@@ -134,24 +186,34 @@ void SparScreen::set_running(bool running) {
 
 void SparScreen::show_state(const SparState& state) {
     status_->setText(state.ended ? state.phase
-                                 : tr("%1 · move %2").arg(state.phase).arg(state.move_number));
+                                 : tr("Move %1. %2").arg(state.move_number).arg(state.phase));
 }
 
 void SparScreen::show_message(const QString& text) { status_->setText(text); }
 
 void SparScreen::show_interruption(const SparInterruption& interruption, bool continue_button) {
-    reason_->setText(tr("%1: %2").arg(interruption.reason, interruption.played_san));
-    const QString badges = interruption.badges.isEmpty() ? tr("no badges") : interruption.badges;
-    const QString loss =
-        interruption.loss ? tr("loses %1 cp").arg(*interruption.loss) : tr("loss unknown");
-    played_->setText(tr("%1 played: %2, %3").arg(interruption.played_san, badges, loss));
+    reason_->setText(interruption.reason);
+    // A Dubious move is always Popular too, which the reason has said; another move's badges are
+    // news.
+    QStringList said;
+    if (!interruption.dubious && !interruption.badges.isEmpty()) {
+        said << tr("At this rating it is marked %1.").arg(interruption.badges);
+    }
+    if (!interruption.loss) {
+        said << tr("The database has no engine evaluation for it.");
+    } else if (*interruption.loss <= 0) {
+        said << tr("The engine says it does not lose ground.");
+    } else {
+        said << tr("The engine says it gives away about %1 pawns.").arg(pawns(*interruption.loss));
+    }
+    played_->setText(said.join(QLatin1Char(' ')));
     better_->setRowCount(0);
     for (const SparChoice& choice : interruption.better) {
         const int row = better_->rowCount();
         better_->insertRow(row);
         better_->setItem(row, 0, table_item(choice.san));
         better_->setItem(row, 1, table_item(choice.badges));
-        better_->setItem(row, 2, table_item(QString::number(choice.total)));
+        better_->setItem(row, 2, table_item(number(choice.total)));
         auto* result = table_item(QString());
         const auto total = static_cast<double>(choice.total > 0 ? choice.total : 1);
         result->setData(shares_role, QVariant::fromValue(QList<double>{
@@ -176,17 +238,10 @@ void SparScreen::show_summary(const SparSummary& summary) {
         }
         numbered << pair;
     }
-    QString result = summary.result;
-    if (!summary.ended) {
-        result = tr("stopped");
-    } else if (result.isEmpty()) {
-        result = tr("ended at its move limit");
-    }
-    summary_text_->setText(tr("Session over: %1.\nSeed %2. Interruptions: %3. Reached: %4.\n%5")
-                               .arg(result)
-                               .arg(summary.seed)
-                               .arg(summary.interruptions)
-                               .arg(summary.phase_reached, numbered.join(QLatin1Char(' '))));
+    summary_text_->setText(
+        QStringList{ending(summary), stops(summary.interruptions), summary.phase_reached}.join(
+            QLatin1Char(' ')) +
+        QLatin1Char('\n') + numbered.join(QLatin1Char(' ')));
     summary_->show();
 }
 
@@ -195,16 +250,19 @@ void SparScreen::show_sessions(const QVector<SparSessionInfo>& sessions) {
     for (const SparSessionInfo& session : sessions) {
         const int row = sessions_->rowCount();
         sessions_->insertRow(row);
-        auto* date = table_item(QDateTime::fromSecsSinceEpoch(session.started_at)
-                                    .toString(QStringLiteral("yyyy-MM-dd HH:mm")));
+        auto* date = table_item(QLocale(QLocale::English)
+                                    .toString(QDateTime::fromSecsSinceEpoch(session.started_at),
+                                              QStringLiteral("d MMMM yyyy, HH:mm")));
         date->setData(Qt::UserRole, QVariant::fromValue(session.id));
         sessions_->setItem(row, 0, date);
         sessions_->setItem(row, 1, table_item(rating_band(session.tier)));
         sessions_->setItem(row, 2, table_item(session.user_white ? tr("White") : tr("Black")));
-        sessions_->setItem(row, 3, table_item(QString::number(session.moves)));
-        sessions_->setItem(row, 4, table_item(QString::number(session.interruptions)));
+        // The moves as a game counts them, white's and black's together: six plies are three.
+        sessions_->setItem(row, 3, table_item(number((session.moves + 1) / 2)));
+        sessions_->setItem(row, 4, table_item(number(session.interruptions)));
         sessions_->setItem(
-            row, 5, table_item(session.result.isEmpty() ? tr("move limit") : session.result));
+            row, 5,
+            table_item(session.result.isEmpty() ? tr("Move limit") : result_words(session.result)));
     }
     if (sessions_->rowCount() > 0) {
         sessions_->selectRow(0);
@@ -214,13 +272,13 @@ void SparScreen::show_sessions(const QVector<SparSessionInfo>& sessions) {
 void SparScreen::show_replay(int ply, int count,
                              const std::optional<SparInterruption>& interruption) {
     summary_->hide();
-    status_->setText(tr("Replaying a saved session"));
+    status_->setText(tr("Replaying a saved practice game."));
     previous_->setVisible(true);
     next_->setVisible(true);
     replay_position_->setVisible(true);
     previous_->setEnabled(ply > 0);
     next_->setEnabled(ply < count);
-    replay_position_->setText(tr("ply %1 of %2").arg(ply).arg(count));
+    replay_position_->setText(tr("Step %1 of %2").arg(ply).arg(count));
     if (interruption) {
         show_interruption(*interruption, false);
     } else {

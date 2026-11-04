@@ -100,7 +100,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     screens->setObjectName(QStringLiteral("screens"));
     tabs_->addTab(tr("Explore"));
     screens->addWidget(explore_);
-    tabs_->addTab(tr("Spar"));
+    tabs_->addTab(tr("Practice")); // the Spar screen (PLAN.md §11, 2026-11-04)
     screens->addWidget(spar_);
     tabs_->addTab(tr("Repertoire"));
     screens->addWidget(repertoire_);
@@ -888,7 +888,7 @@ void MainWindow::spar_start(bool user_white) {
     spar_san_.clear();
     tier_selector_->setEnabled(false);
     spar_->set_running(true);
-    spar_->show_message(tr("Starting\u2026"));
+    spar_->show_message(tr("Starting a practice game\u2026"));
     board_->set_position(Position::start());
     face(user_white);
     rebuild_move_list();
@@ -948,7 +948,7 @@ void MainWindow::spar_session_ended(const SparSummary& summary) {
     spar_waiting_ = false;
     tier_selector_->setEnabled(true);
     spar_->set_running(false);
-    spar_->show_message(tr("Ended"));
+    spar_->show_message(tr("The practice game is over."));
     spar_->show_summary(summary);
     update_board_input();
 }

@@ -1,11 +1,11 @@
-// UI tests of the Spar screen (app; ui) on the fixture database's tier-4 tree, with core's fake
-// engine and its legal script as the coach off book (tests/fake-stockfish.sh): a session as white
-// meeting an interruption on a Dubious move and another on an off-book move, the hand-off to the
-// engine, the end at the move limit with the summary and the saved session listed, its replay with
-// the interruptions at their plies; a session as black, where the coach moves first; End session
-// saving a stopped session, and closing the window saving one too; the tier selector disabled
-// only on Spar while a session runs; and the Settings dialog's spar entries. Screenshots of the
-// interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
+// UI tests of the Spar screen, labelled Practice (app; ui) on the fixture database's tier-4 tree,
+// with core's fake engine and its legal script as the coach off book (tests/fake-stockfish.sh): a
+// session as white meeting an interruption on a Dubious move and another on an off-book move, the
+// hand-off to the engine, the end at the move limit with the summary and the saved session listed,
+// its replay with the interruptions at their plies; a session as black, where the coach moves
+// first; End the game saving a stopped session, and closing the window saving one too; the tier
+// selector disabled only on Spar while a session runs; and the Settings dialog's spar entries.
+// Screenshots of the interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
 
@@ -50,6 +50,12 @@ using chesscoach::app::test::save_screenshot;
 namespace {
 
 constexpr int spar_tier = 4;
+
+// The reason the coach gives for 2. h4.
+QString off_book_h4() {
+    return QStringLiteral(
+        "h4 leaves the book. The database has too few games at this rating after it.");
+}
 
 // A window on the fixture database at tier 4 with the Spar screen current, its settings naming
 // the fake engine, a fixed seed and a session four moves long.
@@ -119,15 +125,15 @@ void meet_a_dubious_move(MainWindow& window, const BoardView& board) {
     click(board, "a3");
     QTRY_VERIFY(interruption_shown(window));
     QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(),
-             QStringLiteral("Dubious move: a3"));
+             QStringLiteral("a3 is Dubious (popular here, but it loses ground)."));
     QCOMPARE(child<QLabel>(window, QStringLiteral("spar_played")).text(),
-             QStringLiteral("a3 played: PD, loses 109 cp"));
+             QStringLiteral("The engine says it gives away about 1.1 pawns."));
     QCOMPARE(rows(window, QStringLiteral("spar_better")), 2);
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 0), QStringLiteral("e4"));
-    QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 1), QStringLiteral("BP"));
+    QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 1), QStringLiteral("Book, Popular"));
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 2), QStringLiteral("60"));
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 1, 0), QStringLiteral("d4"));
-    QCOMPARE(cell(window, QStringLiteral("spar_better"), 1, 1), QStringLiteral("B"));
+    QCOMPARE(cell(window, QStringLiteral("spar_better"), 1, 1), QStringLiteral("Book"));
     QTRY_COMPARE(move_row(window, 0), QStringLiteral("1. a3 e5"));
     QVERIFY(!board.isEnabled()); // until Continue
     QTRY_VERIFY(!board.animating());
@@ -142,13 +148,13 @@ void leave_the_book(MainWindow& window, const BoardView& board) {
     click(board, "h2");
     click(board, "h4");
     QTRY_VERIFY(interruption_shown(window));
-    QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(),
-             QStringLiteral("Off book: h4"));
+    QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(), off_book_h4());
     QCOMPARE(rows(window, QStringLiteral("spar_better")), 1);
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 0), QStringLiteral("Nf3"));
     QTRY_COMPARE(move_rows(window), 2);
     QTRY_VERIFY(move_row(window, 1).count(QLatin1Char(' ')) == 2); // "2. h4 <reply>"
-    QCOMPARE(status(window), QStringLiteral("Off book: engine replies · move 3"));
+    QCOMPARE(status(window),
+             QStringLiteral("Move 3. You have left the book, so the engine replies."));
     press(window, QStringLiteral("spar_continue"));
 }
 
@@ -157,21 +163,20 @@ void reach_the_move_limit(MainWindow& window, const BoardView& board) {
     click(board, "g1");
     click(board, "f3");
     QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
-    QCOMPARE(status(window), QStringLiteral("Ended"));
+    QCOMPARE(status(window), QStringLiteral("The practice game is over."));
     const QString summary = child<QLabel>(window, QStringLiteral("spar_summary_text")).text();
-    QVERIFY2(summary.contains(QStringLiteral("ended at its move limit")), qPrintable(summary));
-    QVERIFY(summary.contains(QStringLiteral("Seed 7")));
-    QVERIFY(summary.contains(QStringLiteral("Interruptions: 2")));
-    QVERIFY(summary.contains(QStringLiteral("Reached: Off book: engine replies")));
-    QVERIFY(summary.contains(QStringLiteral("1. a3 e5 2. h4")));
+    QVERIFY2(summary.startsWith(QStringLiteral(
+                 "The practice game reached its move limit. The coach stopped you twice. You left "
+                 "the book, and the engine played the rest.\n1. a3 e5 2. h4")),
+             qPrintable(summary));
     QVERIFY(!board.isEnabled());
     QVERIFY(child<QComboBox>(window, QStringLiteral("tier_selector")).isEnabled());
     QTRY_COMPARE(rows(window, QStringLiteral("spar_sessions")), 1);
     QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 1), QStringLiteral("1800–1999"));
     QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 2), QStringLiteral("White"));
-    QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("6"));
+    QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("3"));
     QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 4), QStringLiteral("2"));
-    QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 5), QStringLiteral("move limit"));
+    QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 5), QStringLiteral("Move limit"));
     QTRY_VERIFY(!board.animating());
     save_screenshot(window, QStringLiteral("spar"), QStringLiteral("summary"));
 }
@@ -180,25 +185,24 @@ void replay_the_session(MainWindow& window, const BoardView& board) {
     // The replay steps through it, the interruptions at their plies.
     press(window, QStringLiteral("spar_replay"));
     QTRY_COMPARE(child<QLabel>(window, QStringLiteral("spar_replay_position")).text(),
-                 QStringLiteral("ply 0 of 6"));
+                 QStringLiteral("Step 0 of 6"));
     QCOMPARE(board.position().fen(), chesscoach::Position::start().fen());
     press(window, QStringLiteral("spar_next"));
     QVERIFY(interruption_shown(window));
     QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(),
-             QStringLiteral("Dubious move: a3"));
+             QStringLiteral("a3 is Dubious (popular here, but it loses ground)."));
     QVERIFY(!child<QPushButton>(window, QStringLiteral("spar_continue")).isVisible());
     press(window, QStringLiteral("spar_next"));
     QVERIFY(!interruption_shown(window));
     press(window, QStringLiteral("spar_next"));
     QVERIFY(interruption_shown(window));
-    QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(),
-             QStringLiteral("Off book: h4"));
+    QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(), off_book_h4());
     QCOMPARE(move_row(window, 1), QStringLiteral("2. h4"));
     save_screenshot(window, QStringLiteral("spar"), QStringLiteral("replay"));
     press(window, QStringLiteral("spar_previous"));
     QVERIFY(!interruption_shown(window));
     QCOMPARE(child<QLabel>(window, QStringLiteral("spar_replay_position")).text(),
-             QStringLiteral("ply 2 of 6"));
+             QStringLiteral("Step 2 of 6"));
     QVERIFY(!board.isEnabled());
 }
 
@@ -225,7 +229,7 @@ class SparTest : public QObject {
         QVERIFY(!board.isEnabled()); // no session yet
 
         press(window, QStringLiteral("spar_start"));
-        QTRY_COMPARE(status(window), QStringLiteral("In book · move 1"));
+        QTRY_COMPARE(status(window), QStringLiteral("Move 1. You are in the book."));
         QTRY_VERIFY(board.isEnabled());
         QVERIFY(!child<QComboBox>(window, QStringLiteral("tier_selector")).isEnabled());
         // Explore's evaluation: the bar is empty on Spar.
@@ -249,7 +253,7 @@ class SparTest : public QObject {
         QTRY_VERIFY(board.isEnabled());
         QVERIFY(board.flipped());
         QCOMPARE(board.position().side_to_move(), chesscoach::Color::black);
-        QCOMPARE(status(window), QStringLiteral("In book · move 1"));
+        QCOMPARE(status(window), QStringLiteral("Move 1. You are in the book."));
     }
 
     void end_session_saves_a_stopped_session() {
@@ -267,10 +271,11 @@ class SparTest : public QObject {
         QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
         QVERIFY(child<QLabel>(window, QStringLiteral("spar_summary_text"))
                     .text()
-                    .startsWith(QStringLiteral("Session over: stopped.")));
+                    .startsWith(QStringLiteral("You ended this practice game early.")));
         QTRY_COMPARE(rows(window, QStringLiteral("spar_sessions")), 1);
-        QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 5), QStringLiteral("stopped"));
-        QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("2"));
+        QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 5),
+                 QStringLiteral("Ended early"));
+        QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("1"));
     }
 
     void each_session_after_the_first_starts_a_new_game() {
@@ -350,7 +355,7 @@ class SparTest : public QObject {
         QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
         QVERIFY(child<QLabel>(window, QStringLiteral("spar_summary_text"))
                     .text()
-                    .contains(QStringLiteral("ended at its move limit")));
+                    .startsWith(QStringLiteral("The practice game reached its move limit.")));
     }
 
     void the_spar_screen_leaves_explores_line_alone() {

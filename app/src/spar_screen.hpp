@@ -1,8 +1,9 @@
-// The Spar screen (docs/reference/app.md, **Spar**): the colour to play and Start and End
-// session; a status line with the session's phase and move number; the interruption panel, shown
-// when the coach interrupts a move, with the reason, the move's badges and loss, the better
-// choices (move, badges, games, result bar) and Continue; the summary at the end; and the saved
-// sessions with Replay and Previous and Next to step through one. It shows what the window passes
+// The Spar screen, labelled Practice in the app (docs/reference/app.md, **Spar**): the colour to
+// play, Start a practice game and End the game; a status line with the move number and the
+// session's phase; the interruption panel, shown when the coach interrupts a move, with the
+// reason, the move's badges and loss, the better choices (move, badges, games, result bar) and
+// Keep playing; the summary at the end; and the saved sessions with Replay this game and Previous
+// move and Next move to step through one. It shows what the window passes
 // on from the spar worker and asks for nothing itself but through its signals. GUI thread only.
 #pragma once
 

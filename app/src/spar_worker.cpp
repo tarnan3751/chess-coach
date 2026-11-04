@@ -11,6 +11,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <QStringList>
 #include <algorithm>
 #include <atomic>
 #include <exception>
@@ -27,46 +28,60 @@ QString translate(const char* text) {
     return QCoreApplication::translate("chesscoach::app::SparWorker", text);
 }
 
+// What the status line says of the game while it runs, after its move number.
 QString phase_text(Phase phase) {
     switch (phase) {
     case Phase::book:
-        return translate("In book");
+        return translate("You are in the book.");
     case Phase::off_book:
-        return translate("Off book: engine replies");
+        return translate("You have left the book, so the engine replies.");
     case Phase::ended:
-        return translate("Ended");
+        return translate("The practice game is over.");
     }
     return {};
 }
 
-QString badge_letters(Badges badges) {
-    QString letters;
+// What the summary says of how far the game went.
+QString reached_text(Phase phase) {
+    return phase == Phase::off_book
+               ? translate("You left the book, and the engine played the rest.")
+               : translate("You stayed in the book.");
+}
+
+// The badges' names, "Book", "Popular" and "Dubious", joined by separator.
+QString badge_words(Badges badges, const QString& separator) {
+    QStringList words;
     if (badges.has(Badge::book)) {
-        letters += QLatin1Char('B');
+        words << translate("Book");
     }
     if (badges.has(Badge::popular)) {
-        letters += QLatin1Char('P');
+        words << translate("Popular");
     }
     if (badges.has(Badge::dubious)) {
-        letters += QLatin1Char('D');
+        words << translate("Dubious");
     }
-    return letters;
+    return words.join(separator);
 }
 
 // The interruption as the window shows it; played_san is the move's SAN where it was played.
 SparInterruption converted(const Interruption& interruption, const QString& played_san) {
     SparInterruption out;
     out.dubious = interruption.reason == Interruption::Reason::dubious;
-    out.reason = out.dubious ? translate("Dubious move") : translate("Off book");
+    out.reason =
+        out.dubious
+            ? translate("%1 is Dubious (popular here, but it loses ground).").arg(played_san)
+            : translate("%1 leaves the book. The database has too few games at this rating after "
+                        "it.")
+                  .arg(played_san);
     out.played_san = played_san;
     out.played_uci = QString::fromStdString(interruption.played);
-    out.badges = badge_letters(interruption.badges);
+    out.badges = badge_words(interruption.badges, translate(" and "));
     out.loss = interruption.loss;
     for (const BetterChoice& choice : interruption.better) {
         out.better.append(SparChoice{
             .san = QString::fromStdString(choice.san),
             .uci = QString::fromStdString(choice.row.move),
-            .badges = badge_letters(choice.row.badges),
+            .badges = badge_words(choice.row.badges, QStringLiteral(", ")),
             .total = choice.row.total(),
             .white = choice.row.white,
             .draws = choice.row.draws,
@@ -92,7 +107,14 @@ class Recorded final : public ReplyProvider {
 
 // A read of a corrupt opening database throws (OpeningStore, SparSession::coach_reply).
 QString unreadable() {
-    return translate("The opening database could not be read; end the session to save it.");
+    return translate("The opening database could not be read. Press End the game to save the "
+                     "moves so far.");
+}
+
+// A saved game whose record the opening database does not play again.
+QString no_replay() {
+    return translate("This game does not replay with the opening database you have now. Choose "
+                     "another one in the list.");
 }
 
 } // namespace
@@ -249,15 +271,16 @@ void SparWorker::start(int tier, bool user_white, quint64 seed, int end_move) {
     const auto at = tier_from_index(tier);
     const OpeningStore* store = open_store();
     if (!at.has_value() || store == nullptr) {
-        emit session_failed(
-            tr("Sparring needs an opening database: import one with File > Import database…"));
+        emit session_failed(tr(
+            "A practice game needs an opening database. Import one with File > Import database."));
         return;
     }
     try {
         auto started = SparSession::start(*store, *at, user_white ? Color::white : Color::black,
                                           seed, SparConfig{.end_move = end_move, .sampler = {}});
         if (!started) {
-            emit session_failed(tr("The session could not start."));
+            emit session_failed(
+                tr("The practice game could not start. Check the move limit in Settings."));
             return;
         }
         session_.emplace(std::move(*started));
@@ -283,7 +306,7 @@ void SparWorker::user_move(const QString& uci) {
     try {
         const auto outcome = session.play_user_move(uci.toStdString());
         if (!outcome) {
-            emit session_failed(tr("The move %1 is not legal here.").arg(uci));
+            emit session_failed(tr("That move is not legal here. Play another one."));
             return;
         }
         const UserMoveOutcome& played = *outcome;
@@ -313,7 +336,8 @@ void SparWorker::coach_turn() {
     try {
         const auto reply = session.coach_reply(*coach_);
         if (!reply) {
-            emit session_failed(tr("The coach could not reply; end the session to save it."));
+            emit session_failed(tr("The engine did not give the next move. Press End the game "
+                                   "to save it, then check the engine in Settings."));
             return;
         }
         const auto san = before.san_of(*reply);
@@ -361,7 +385,7 @@ void SparWorker::finish() {
     SparSummary out;
     out.seed = summary.seed;
     out.interruptions = static_cast<int>(summary.interruptions.size());
-    out.phase_reached = phase_text(summary.phase_reached);
+    out.phase_reached = reached_text(summary.phase_reached);
     out.result = QString::fromStdString(summary.result.value_or(""));
     out.ended = ended;
     Position position = Position::start();
@@ -387,7 +411,8 @@ void SparWorker::finish() {
     use_pending_database();
     emit session_ended(out);
     if (out.saved_id == 0) {
-        emit session_failed(tr("The session could not be saved."));
+        emit session_failed(
+            tr("This practice game could not be saved. Check that your disk has free space."));
     }
     list_sessions();
 }
@@ -400,7 +425,7 @@ void SparWorker::list_sessions() {
             profiles != nullptr ? default_profile(*profiles) : std::optional<std::int64_t>();
         if (profiles != nullptr && profile.has_value()) {
             for (const SparSessionRow& row : profiles->spar_sessions(*profile)) {
-                QString result = tr("stopped");
+                QString result = tr("Ended early");
                 if (row.phase == Phase::ended) {
                     result = QString::fromStdString(row.result.value_or(""));
                 }
@@ -427,22 +452,25 @@ void SparWorker::replay_session(qint64 id) {
         const ProfileStore* profiles = open_profiles(false);
         const OpeningStore* store = open_store();
         if (profiles == nullptr || store == nullptr) {
-            emit session_failed(tr("The session cannot be replayed without its databases."));
+            emit session_failed(tr("A saved game needs the opening database to replay. Import "
+                                   "one with File > Import database."));
             return;
         }
         const auto found = profiles->spar_session(id);
         if (!found.has_value()) {
-            emit session_failed(tr("No saved session %1.").arg(id));
+            emit session_failed(
+                tr("That saved game is no longer there. Choose another one in the list."));
             return;
         }
         const SparSessionRow& row = *found;
         const auto replayed = replay_spar_session(*store, row);
         if (!replayed.has_value()) {
             if (replayed.error() == SparError::replay_database_mismatch) {
-                emit session_failed(tr("The saved session was played against another build of "
-                                       "the opening database."));
+                emit session_failed(tr("This game was played with another version of the "
+                                       "opening database, so it cannot be replayed. Choose a "
+                                       "game played with the one you have now."));
             } else {
-                emit session_failed(tr("The saved session does not replay on this database."));
+                emit session_failed(no_replay());
             }
             return;
         }
@@ -454,7 +482,7 @@ void SparWorker::replay_session(qint64 id) {
                                               .sampler = {.min_games = row.min_games},
                                           });
         if (!started) {
-            emit session_failed(tr("The saved session does not replay on this database."));
+            emit session_failed(no_replay());
             return;
         }
         SparSession& session = *started;
@@ -469,7 +497,7 @@ void SparWorker::replay_session(qint64 id) {
             if (session.user_to_move()) {
                 const auto played = session.play_user_move(move);
                 if (!played) {
-                    emit session_failed(tr("The saved session does not replay on this database."));
+                    emit session_failed(no_replay());
                     return;
                 }
                 const UserMoveOutcome& outcome = *played;
@@ -481,7 +509,7 @@ void SparWorker::replay_session(qint64 id) {
                 Recorded recorded(move);
                 const auto reply = session.coach_reply(recorded);
                 if (!reply || *reply != move) {
-                    emit session_failed(tr("The saved session does not replay on this database."));
+                    emit session_failed(no_replay());
                     return;
                 }
                 out.san = QString::fromStdString(before.san_of(move).value_or(move));
@@ -491,7 +519,8 @@ void SparWorker::replay_session(qint64 id) {
         emit replay_ready(replay);
     } catch (const std::exception&) {
         profiles_.reset();
-        emit session_failed(tr("The saved session could not be read."));
+        emit session_failed(
+            tr("This saved game could not be read. Choose another one in the list."));
     }
 }
 

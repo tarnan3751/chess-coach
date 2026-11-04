@@ -18,7 +18,7 @@ namespace chesscoach::app {
 struct SparChoice {
     QString san;
     QString uci;
-    QString badges; // the letters B, P and D, or empty
+    QString badges; // the names, "Book, Popular", or empty
     qint64 total = 0;
     qint64 white = 0;
     qint64 draws = 0;
@@ -27,16 +27,16 @@ struct SparChoice {
 
 struct SparInterruption {
     bool dubious = false; // else the move left the book
-    QString reason;       // "Dubious move" or "Off book"
+    QString reason;       // why, as a sentence: "a3 is Dubious (…)."
     QString played_san;
     QString played_uci;
-    QString badges;             // the played move's, or empty
+    QString badges;             // the played move's names, "Popular and Dubious", or empty
     std::optional<qint64> loss; // centipawns, when defined
     QVector<SparChoice> better;
 };
 
 struct SparState {
-    QString phase;       // "In book", "Off book: engine replies" or "Ended"
+    QString phase;       // "You are in the book.", "You have left the book, so …" or "The … over."
     int move_number = 1; // 1 at the start, one more after each black move
     bool user_to_move = false;
     bool ended = false;
@@ -46,9 +46,9 @@ struct SparSummary {
     quint64 seed = 0;
     QStringList moves_san;
     int interruptions = 0;
-    QString phase_reached; // "In book" or "Off book: engine replies"
+    QString phase_reached; // "You stayed in the book." or "You left the book, and …"
     QString result;        // "1-0", "0-1", "1/2-1/2", or empty when it ended at its move limit
-    bool ended = false;    // false when stopped by End session
+    bool ended = false;    // false when stopped by End the game
     qint64 saved_id = 0;   // the saved session's id, 0 when it could not be saved
 };
 
@@ -60,7 +60,7 @@ struct SparSessionInfo {
     bool user_white = true;
     int moves = 0;
     qint64 interruptions = 0;
-    QString result; // as SparSummary's, or "stopped"
+    QString result; // as SparSummary's, or "Ended early"
 };
 
 // One ply of a replayed session, with the interruption the user's move met, if any.

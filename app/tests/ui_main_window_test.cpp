@@ -126,7 +126,7 @@ class MainWindowTest : public QObject {
         QCOMPARE(screens.count(), 4);
         const QStringList names{
             QStringLiteral("Explore"),
-            QStringLiteral("Spar"),
+            QStringLiteral("Practice"),
             QStringLiteral("Repertoire"),
             QStringLiteral("Drill"),
         };

@@ -79,7 +79,7 @@ which the executable and the UI tests link. The piece set and the two stylesheet
   below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
   `1. e4 e5`.
 - **The screen switcher** on the right: a `QTabBar` (`screen_tabs`) over a `QStackedWidget`
-  (`screens`) with Explore (**Explore**), Spar (**Spar**), Repertoire (**Repertoire**) and Drill
+  (`screens`) with Explore (**Explore**), Practice (**Spar**), Repertoire (**Repertoire**) and Drill
   (**Drill**). The board belongs to the current screen: a move on it goes to that screen's line,
   session or card, and the evaluation bar and Explore's engine are idle on the other three.
 - **The status bar**: `database_status`, the opening database's file name and where it was found,
@@ -241,6 +241,10 @@ beside it does not move; it follows the board's flip. It is empty on the other s
 
 ## Spar
 
+The Spar screen is labelled **Practice** in the app: its tab, its buttons and its messages say
+"practice game", while the code, the CLI's `spar` and this section keep "spar" (`PLAN.md` §11,
+2026-11-04).
+
 **The worker.** `SparWorker` is a `QObject` on its own `QThread` for the window's life, set up
 like the other two. It owns the live core `SparSession` (`docs/reference/core.md`), its own
 `OpeningStore` connection to `--db` (read-only, opened at the first start), its own `Engine` for
@@ -257,14 +261,14 @@ engine processes run, Explore's idle. Its slots, reached by queued connection:
 | `list_sessions()` | `sessions_ready(sessions)`: the Default profile's saved sessions, newest first |
 | `replay_session(id)` | `replay_ready(SparReplay)`: a saved session played again from its seed, with each interruption at its ply |
 
-`SparState` carries the phase as text ("In book", "Off book: engine replies", "Ended"), the move
-number, whose turn it is, and whether the session ended. The coach's reply comes from the sampler in
+`SparState` carries the phase as a sentence ("You are in the book.", "You have left the book, so
+the engine replies.", "The practice game is over."), the move number, whose turn it is, and whether the session ended. The coach's reply comes from the sampler in
 book and from the engine off book: the engine starts at the first off-book reply, with Threads and
 Hash from the engine settings and the binary found as the engine worker finds it, and searches
 through `EngineReplyProvider` at the session's tier (`ProviderConfig{seconds, elo_offset = 100}`),
 again after it dies; each session after the first sends the running engine `ucinewgame`
 (`Engine::new_game`), as UCI asks between games. A reply that fails, or a read of a corrupt opening
-database, which throws, reports `session_failed`, and the session waits for End session. When the
+database, which throws, reports `session_failed`, and the session waits for End the game. When the
 session reaches its move limit, or is ended, the worker saves it with
 `ProfileStore::save_spar_session` under the Default profile (`profiles.db` is created then if it is
 absent), with its start time and, when it ended rather than being stopped, its end time; it answers
@@ -294,24 +298,30 @@ replay's up to its ply, and clicking a row does nothing on Spar.
 
 **The screen.** `SparScreen` holds:
 
-- the colour (`spar_white`, `spar_black`), *Start* (`spar_start`) and *End session*
-  (`spar_end`), and the status line (`spar_status`): "In book · move 3", "Off book: engine
-  replies · move 5", "Ended", or a message;
+- the colour, *Play White* and *Play Black* (`spar_white`, `spar_black`), *Start a practice game*
+  (`spar_start`) and *End the game* (`spar_end`), and the status line (`spar_status`): "Move 3.
+  You are in the book.", "Move 5. You have left the book, so the engine replies.", "The practice
+  game is over.", or a message;
 - **the interruption panel** (`spar_interruption`), shown when the coach interrupts a move: the
-  reason and the move (`spar_reason`, "Dubious move: a3" or "Off book: h4"), the move's badges
-  and its loss in centipawns when it has one (`spar_played`, "a3 played: PD, loses 109 cp"), the
-  better choices (`spar_better`: Move, Badges, Games and Result, with the result bar), and
-  *Continue* (`spar_continue`). The move stands; Continue closes the panel and gives the board
-  back;
-- **the summary** (`spar_summary`, `spar_summary_text`), when a session ends: whether it was
-  stopped, ended at its move limit or ended in a result, the seed, the interruptions, the phase
-  reached and the moves;
-- **the saved sessions** (`spar_sessions`): Date, Tier (its band), Colour, Moves (plies),
-  Interruptions and Result ("stopped" for one ended early, else the game's result when it has
-  one, else "move limit"), newest first, and *Replay* (`spar_replay`), which plays the selected one
-  again: *Previous* and *Next* (`spar_previous`, `spar_next`) step through it one ply at a time
-  with the position (`spar_replay_position`, "ply 3 of 6") on the board, and each interruption is
-  shown read-only, without Continue, after the move it interrupted. *Start* ends the replay.
+  reason, a sentence naming the move (`spar_reason`, "a3 is Dubious (popular here, but it loses
+  ground)." or "h4 leaves the book. The database has too few games at this rating after it."),
+  the move's badges when the reason has not named them, and its loss in pawns (`spar_played`,
+  "The engine says it gives away about 1.1 pawns.", or that the database has no evaluation for
+  it), the better choices (`spar_better`: Move, Badges by name, "Book, Popular", Games and
+  Results, with the result bar), and *Keep playing* (`spar_continue`). The move stands; Keep
+  playing closes the panel and gives the board back;
+- **the summary** (`spar_summary`, `spar_summary_text`), when a session ends: how it ended ("You
+  ended this practice game early.", "The practice game reached its move limit.", "White won the
+  practice game."), how often the coach stopped the user ("The coach stopped you twice."), how far
+  it went ("You left the book, and the engine played the rest."), and the moves;
+- **the saved sessions** (`spar_sessions`, under "Your saved practice games"): Date ("4 November
+  2026, 14:05"), Rating (its band), You played, Moves (white's and black's together, so six plies
+  are three), Stops and Result ("Ended early" for one ended early, else "White won", "Black won"
+  or "Draw" when the game has a result, else "Move limit"), newest first, and *Replay this game*
+  (`spar_replay`), which plays the selected one again: *Previous move* and *Next move*
+  (`spar_previous`, `spar_next`) step through it one ply at a time with the position
+  (`spar_replay_position`, "Step 3 of 6") on the board, and each interruption is shown read-only,
+  without Keep playing, after the move it interrupted. *Start a practice game* ends the replay.
 
 ## Profile worker
 
@@ -408,7 +418,7 @@ worker (`import_profiles`) closes its own and runs `ProfileStore::import_profile
 the copy and the store's busy timeout being no work for the GUI thread, which migrates the copy and
 keeps the replaced file as `profiles.db.previous`; meanwhile a window-modal busy dialog
 (`profile_import_progress`), which neither Escape nor a close dismisses, takes the window's input,
-so that no move opens the engine cache and no End session saves a session while the file is swapped,
+so that no move opens the engine cache and no End the game saves a session while the file is swapped,
 and both of the File menu's imports are off until the worker answers `profiles_imported`. The engine
 and spar workers then close their stores once more, in case one opened the old file meanwhile; each
 opens the file again at its next use, and the current screen reads it again. An error goes to the
@@ -598,7 +608,7 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   interrupted on 1. a3 with its better choices, Continue, interrupted again on 2. h4 off book and
   answered by the engine, ended at its move limit with the summary and the saved session listed,
   and replayed with the interruptions at plies one and three; a session as black, where the
-  coach moves first and the board turns; End session saving a stopped session, and closing the
+  coach moves first and the board turns; End the game saving a stopped session, and closing the
   window saving one; a second session sending the coach's engine `ucinewgame`, read from the fake's
   log; the Settings dialog's spar entries ending the next session at the new limit;
   and Explore's line and tier untouched by a session, the tier selector disabled only on Spar.
