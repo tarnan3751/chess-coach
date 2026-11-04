@@ -1,15 +1,16 @@
-// The main window (docs/reference/app.md, **Shell**): a toolbar with New game, Back, Flip board
-// and the tier selector; the evaluation bar and the board on the left with the move list below
-// them; the screen switcher on the right over Explore, Spar, Repertoire and Drill; the File >
-// Back up and Restore, Edit > Settings, View > Theme and Help menus; the database and the
-// engine in the status bar. The board belongs to the current screen: it keeps Explore's line and
-// sends each position at the selected tier to the database worker and each position to the
-// engine worker; it runs Spar's sessions through the spar worker; and it builds the repertoires
-// and drills their cards through the profile worker, each worker on its own thread, and shows
-// their answers. It never touches the opening store, the profile store or an engine itself: the
-// imports run on the database and profile workers too, once the others have let go. GUI thread
-// only. It writes settings.ini itself (settings.hpp) and sends Qt's own settings to the data
-// directory; the workers write profiles.db; a profile export goes where the user picks.
+// The main window (docs/reference/app.md, **Shell**): a toolbar with New game, Back, Flip board,
+// the Rating chooser and Settings; the evaluation bar and the board on the left with the move list
+// below them; the screen tabs on the right over Explore, Practice, Repertoire and Drill; the File >
+// Back up and Restore, Edit > Settings, View > Theme and Help menus; the database and the engine
+// in the status bar, in the Study look of the theme chosen (**Themes**). The board belongs to the
+// current screen: it keeps Explore's line and sends each position at the selected tier to the
+// database worker and each position to the engine worker; it runs Spar's sessions through the
+// spar worker; and it builds the repertoires and drills their cards through the profile worker,
+// each worker on its own thread, and shows their answers. It never touches the opening store, the
+// profile store or an engine itself: the imports run on the database and profile workers too, once
+// the others have let go. GUI thread only. It writes settings.ini itself (settings.hpp) and sends
+// Qt's own settings to the data directory; the workers write profiles.db; a profile export goes
+// where the user picks.
 #pragma once
 
 #include <chesscoach/position.hpp>
@@ -32,6 +33,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 class QAction;
@@ -233,6 +235,8 @@ class MainWindow : public QMainWindow {
     QComboBox* tier_selector_;
     QLabel* database_label_ = nullptr;
     QLabel* engine_label_ = nullptr;
+    // The toolbar's actions and the icon each takes from the theme.
+    std::vector<std::pair<QAction*, QString>> themed_actions_;
     QActionGroup* themes_ = nullptr;
     QAction* light_action_ = nullptr;
     QAction* dark_action_ = nullptr;

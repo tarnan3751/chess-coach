@@ -16,22 +16,26 @@
 #include "file_chooser.hpp"
 #include "fonts.hpp"
 #include "help_dialog.hpp"
+#include "icons.hpp"
 #include "profile_worker.hpp"
 #include "repertoire_screen.hpp"
 #include "settings_dialog.hpp"
 #include "spar_screen.hpp"
 #include "spar_worker.hpp"
+#include "study_palette.hpp"
 #include "wording.hpp"
 
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QColor>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDir>
 #include <QEvent>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QKeySequence>
@@ -40,12 +44,25 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QModelIndex>
+#include <QPaintEvent>
+#include <QPainter>
+#include <QPalette>
 #include <QProgressDialog>
+#include <QRect>
+#include <QResizeEvent>
+#include <QSize>
+#include <QSizePolicy>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QStyle>
+#include <QStyleOptionComboBox>
+#include <QStyleOptionViewItem>
+#include <QStyledItemDelegate>
 #include <QTabBar>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <Qt>
@@ -55,6 +72,215 @@
 #include <utility>
 
 namespace chesscoach::app {
+
+namespace {
+
+// The palette the style draws its own parts with (combo arrows, check marks, scroll bars, a
+// native menu) and the move list's rows are painted with, from the theme's colours: the panel
+// for buttons and bases, the selection for highlights, the hairline for Mid, and the muted
+// colour for placeholders and disabled text.
+QPalette qt_palette(const StudyPalette& study) {
+    QPalette palette(study.panel, study.window);
+    for (const auto role : {
+             QPalette::WindowText,
+             QPalette::Text,
+             QPalette::ButtonText,
+             QPalette::ToolTipText,
+             QPalette::HighlightedText,
+         }) {
+        palette.setColor(role, study.text);
+    }
+    palette.setColor(QPalette::Base, study.panel);
+    palette.setColor(QPalette::AlternateBase, study.panel_alt);
+    palette.setColor(QPalette::ToolTipBase, study.panel);
+    palette.setColor(QPalette::Highlight, study.selection);
+    palette.setColor(QPalette::PlaceholderText, study.muted);
+    palette.setColor(QPalette::Link, study.accent);
+    palette.setColor(QPalette::LinkVisited, study.accent);
+    palette.setColor(QPalette::Mid, study.border);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+    palette.setColor(QPalette::Accent, study.accent);
+#endif
+    for (const auto role : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText}) {
+        palette.setColor(QPalette::Disabled, role, study.muted);
+    }
+    return palette;
+}
+
+// The move list's rows, "1. e4 c5": the number in the muted colour (the palette's placeholder
+// text), right-aligned in a column of its own, then each move in its column, the last move of the
+// list, the board's position, marked in the selection colour (its highlight). The item's text
+// stays the plain row, which the tests read.
+class MoveListDelegate : public QStyledItemDelegate {
+  public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override {
+        const QStringList parts = index.data().toString().split(QLatin1Char(' '));
+        const QFontMetrics metrics(option.font);
+        const int number_width = metrics.horizontalAdvance(QStringLiteral("000."));
+        const int move_width = metrics.horizontalAdvance(QStringLiteral("Qxe8=Q+"));
+        const bool last_row = index.row() == index.model()->rowCount() - 1;
+        painter->save();
+        painter->setFont(option.font);
+        QRect cell = option.rect.adjusted(move_padding, 0, 0, 0);
+        cell.setWidth(number_width);
+        painter->setPen(option.palette.color(QPalette::PlaceholderText));
+        painter->drawText(cell, Qt::AlignRight | Qt::AlignVCenter, parts.value(0));
+        for (qsizetype move = 1; move < parts.size(); ++move) {
+            const int left = option.rect.left() + move_padding + number_width + move_gap +
+                             ((static_cast<int>(move) - 1) * (move_width + move_gap));
+            const QRect text(left, option.rect.top(), move_width, option.rect.height());
+            if (last_row && move == parts.size() - 1) {
+                const int width = metrics.horizontalAdvance(parts.at(move));
+                const QRect mark(left - mark_padding, option.rect.top() + 1,
+                                 width + (2 * mark_padding), option.rect.height() - 2);
+                painter->setRenderHint(QPainter::Antialiasing);
+                painter->setPen(Qt::NoPen);
+                painter->setBrush(option.palette.color(QPalette::Highlight));
+                painter->drawRoundedRect(mark, 2, 2);
+            }
+            painter->setPen(option.palette.color(QPalette::Text));
+            painter->drawText(text, Qt::AlignLeft | Qt::AlignVCenter, parts.at(move));
+        }
+        painter->restore();
+    }
+
+    [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
+                                 const QModelIndex& index) const override {
+        QSize size = QStyledItemDelegate::sizeHint(option, index);
+        size.setHeight(QFontMetrics(option.font).height() + 6);
+        return size;
+    }
+
+  private:
+    static constexpr int move_padding = 10; // the panel's inner margin
+    static constexpr int move_gap = 8;
+    static constexpr int mark_padding = 4;
+};
+
+// The Rating chooser: a combo whose arrow is the chevron-down icon in the muted colour (the
+// palette's placeholder text), as the stylesheet, which draws the rest, cannot recolour an image.
+class RatingChooser : public QComboBox {
+  public:
+    using QComboBox::QComboBox;
+
+  protected:
+    void changeEvent(QEvent* event) override {
+        if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+            const QColor muted = palette().color(QPalette::PlaceholderText);
+            chevron_ = tinted_icon(QStringLiteral("chevron-down"), muted, muted);
+        }
+        QComboBox::changeEvent(event);
+    }
+
+    void paintEvent(QPaintEvent* event) override {
+        QComboBox::paintEvent(event);
+        QStyleOptionComboBox option;
+        initStyleOption(&option);
+        QRect chevron(0, 0, 16, 16);
+        chevron.moveCenter(
+            style()
+                ->subControlRect(QStyle::CC_ComboBox, &option, QStyle::SC_ComboBoxArrow, this)
+                .center());
+        QPainter painter(this);
+        chevron_.paint(&painter, chevron);
+    }
+
+  private:
+    QIcon chevron_;
+};
+
+// The evaluation bar and the board side by side, 8 px apart at the row's top left: the board
+// square, the bar exactly its height. Columns sets the side the row asks for; the row is as tall as
+// it is wide, less the bar, so that the move list below takes the rest of the column.
+class BoardRow : public QWidget {
+  public:
+    static constexpr int bar_width = 14;
+    static constexpr int gap = 8;
+    static constexpr int min_side = 300;
+
+    BoardRow(QWidget* bar, QWidget* board) : bar_(bar), board_(board) {
+        bar_->setParent(this);
+        board_->setParent(this);
+        QSizePolicy policy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        policy.setHeightForWidth(true);
+        setSizePolicy(policy);
+    }
+
+    void set_side(int side) {
+        if (side != side_) {
+            side_ = side;
+            updateGeometry();
+        }
+    }
+
+    [[nodiscard]] bool hasHeightForWidth() const override { return true; }
+    [[nodiscard]] int heightForWidth(int width) const override {
+        return std::max(0, width - bar_width - gap);
+    }
+    [[nodiscard]] QSize sizeHint() const override { return {side_ + bar_width + gap, side_}; }
+    [[nodiscard]] QSize minimumSizeHint() const override {
+        return {min_side + bar_width + gap, min_side};
+    }
+
+  protected:
+    void resizeEvent(QResizeEvent* /*event*/) override {
+        const int side = std::max(0, std::min(height(), width() - bar_width - gap));
+        bar_->setGeometry(0, 0, bar_width, side);
+        board_->setGeometry(bar_width + gap, 0, side, side);
+    }
+
+  private:
+    QWidget* bar_;
+    QWidget* board_;
+    int side_ = min_side;
+};
+
+// The window's content: the board column (the board row over the move list) and the screen column
+// (the tabs over the screens), 14 px from the window's edges and from each other, 10 px between a
+// column's parts. The board takes the side the window's height allows, as long as the screen
+// column keeps its minimum, at least screen_min_width; the screen column takes the rest.
+class Columns : public QWidget {
+  public:
+    static constexpr int margin = 14;
+    static constexpr int spacing = 10;
+    static constexpr int screen_min_width = 700;
+
+    Columns(BoardRow* row, QWidget* move_list, QWidget* tabs, QWidget* screens)
+        : row_(row), move_list_(move_list), right_(new QVBoxLayout()) {
+        auto* left = new QVBoxLayout();
+        left->setSpacing(spacing);
+        left->addWidget(row);
+        left->addWidget(move_list, 1);
+        screens->setMinimumWidth(screen_min_width);
+        right_->setSpacing(spacing);
+        right_->addWidget(tabs);
+        right_->addWidget(screens, 1);
+        auto* columns = new QHBoxLayout(this);
+        columns->setContentsMargins(margin, margin, margin, margin);
+        columns->setSpacing(margin);
+        columns->addLayout(left);
+        columns->addLayout(right_, 1);
+    }
+
+  protected:
+    void resizeEvent(QResizeEvent* event) override {
+        QWidget::resizeEvent(event);
+        const int by_height = height() - (2 * margin) - spacing - move_list_->minimumHeight();
+        const int by_width = width() - (3 * margin) - right_->minimumSize().width() -
+                             BoardRow::bar_width - BoardRow::gap;
+        row_->set_side(std::max(BoardRow::min_side, std::min(by_height, by_width)));
+    }
+
+  private:
+    BoardRow* row_;
+    QWidget* move_list_;
+    QVBoxLayout* right_; // owned by the columns' layout
+};
+
+} // namespace
 
 QString MainWindow::tier_text(int tier) { return rating_band(tier); }
 
@@ -67,22 +293,29 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
       profile_worker_(new ProfileWorker(data_dir, db_path_)), board_(new BoardView()),
       eval_bar_(new EvalBar()), explore_(new ExploreScreen()), spar_(new SparScreen()),
       repertoire_(new RepertoireScreen()), drill_(new DrillScreen()), tabs_(new QTabBar()),
-      move_list_(new QListWidget()), tier_selector_(new QComboBox()),
+      move_list_(new QListWidget()), tier_selector_(new RatingChooser()),
       grade_timer_(new QTimer(this)) {
     keep_qt_settings_in(data_dir);
-    install_fonts(); // the bundled fonts, Source Sans 3 the application's
+    // The Study look on every platform: Fusion, which draws what the stylesheet cannot reach
+    // (radio buttons, spin boxes, scroll bars, the tab strip's alignment) in the theme's palette,
+    // where the macOS style draws them in the system's colours; and the bundled fonts.
+    QApplication::setStyle(QStringLiteral("Fusion"));
+    install_fonts();
     register_explore_types();
     register_engine_types();
     register_spar_types();
     register_profile_types();
     setWindowTitle(tr("chess-coach %1").arg(QString::fromStdString(to_string(current_version()))));
-    resize(1100, 720);
+    resize(1200, 780);
     line_keys_.append(Position::start().key());
 
     build_toolbar();
     build_menus();
 
     move_list_->setObjectName(QStringLiteral("move_list"));
+    move_list_->setItemDelegate(new MoveListDelegate(move_list_));
+    move_list_->setSelectionMode(QAbstractItemView::NoSelection);
+    move_list_->setMinimumHeight(96);
     connect(board_, &BoardView::move_played, this, &MainWindow::move_played);
     connect(move_list_, &QListWidget::itemClicked, this, [this](const QListWidgetItem* item) {
         // Explore's line and the repertoire's are lines to go back along; a session's moves and
@@ -99,6 +332,11 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
             [this](const QString& uci) { board_->play_move(uci); });
 
     tabs_->setObjectName(QStringLiteral("screen_tabs"));
+    // The stylesheet draws the tabs and the hairline under the whole strip, which the current
+    // tab's rule covers; the style's own base line is off.
+    tabs_->setAttribute(Qt::WA_StyledBackground);
+    tabs_->setDrawBase(false);
+    tabs_->setExpanding(false);
     auto* screens = new QStackedWidget();
     screens->setObjectName(QStringLiteral("screens"));
     tabs_->addTab(tr("Explore"));
@@ -139,20 +377,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     grade_timer_->setInterval(2000);
     connect(grade_timer_, &QTimer::timeout, this, &MainWindow::drill_record);
 
-    auto* board_row = new QHBoxLayout();
-    board_row->addWidget(eval_bar_);
-    board_row->addWidget(board_, 1);
-    auto* left = new QVBoxLayout();
-    left->addLayout(board_row, 3);
-    left->addWidget(move_list_, 1);
-    auto* right = new QVBoxLayout();
-    right->addWidget(tabs_);
-    right->addWidget(screens, 1);
-    auto* central = new QWidget();
-    auto* columns = new QHBoxLayout(central);
-    columns->addLayout(left, 1);
-    columns->addLayout(right, 1);
-    setCentralWidget(central);
+    setCentralWidget(new Columns(new BoardRow(eval_bar_, board_), move_list_, tabs_, screens));
 
     build_status_bar();
     apply_theme(settings_.theme());
@@ -290,11 +515,16 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::build_toolbar() {
+    // Icon and label buttons, then the Rating chooser, then the icon-only buttons at the right;
+    // apply_theme gives the icons the theme's colours.
     auto* toolbar = addToolBar(tr("Board"));
     toolbar->setObjectName(QStringLiteral("toolbar"));
     toolbar->setMovable(false);
+    toolbar->setIconSize(QSize(16, 16));
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     new_game_action_ = toolbar->addAction(tr("New game"));
     new_game_action_->setObjectName(QStringLiteral("new_game_action"));
+    themed_actions_.emplace_back(new_game_action_, QStringLiteral("plus"));
     connect(new_game_action_, &QAction::triggered, this, [this] {
         if (screen_ == Screen::repertoire) {
             repertoire_jump(0);
@@ -305,6 +535,7 @@ void MainWindow::build_toolbar() {
     back_action_ = toolbar->addAction(tr("Back"));
     back_action_->setObjectName(QStringLiteral("back_action"));
     back_action_->setShortcut(QKeySequence::Back);
+    themed_actions_.emplace_back(back_action_, QStringLiteral("back"));
     connect(back_action_, &QAction::triggered, this, [this] {
         if (screen_ == Screen::repertoire && !repertoire_uci_.empty()) {
             repertoire_jump(static_cast<qsizetype>(repertoire_uci_.size()) - 1);
@@ -314,15 +545,21 @@ void MainWindow::build_toolbar() {
     });
     QAction* flip = toolbar->addAction(tr("Flip board"));
     flip->setObjectName(QStringLiteral("flip_action"));
+    themed_actions_.emplace_back(flip, QStringLiteral("flip"));
     connect(flip, &QAction::triggered, this, [this] {
         board_->flip();
         eval_bar_->set_flipped(board_->flipped());
     });
     toolbar->addSeparator();
-    toolbar->addWidget(new QLabel(tr("Tier") + QLatin1Char(' ')));
+    auto* rating = new QLabel(tr("Rating"));
+    rating->setObjectName(QStringLiteral("rating_label"));
+    toolbar->addWidget(rating);
     tier_selector_->setObjectName(QStringLiteral("tier_selector"));
     for (int index = 0; index < tier_count; ++index) {
-        tier_selector_->addItem(tier_text(index), index);
+        // The chooser's items stand alone, so each starts with a capital: "Under 1200".
+        QString band = tier_text(index);
+        band.replace(0, 1, band.at(0).toUpper());
+        tier_selector_->addItem(band, index);
     }
     tier_selector_->setCurrentIndex(settings_.last_tier().value_or(default_tier));
     connect(tier_selector_, &QComboBox::currentIndexChanged, this, [this](int index) {
@@ -333,6 +570,18 @@ void MainWindow::build_toolbar() {
         }
     });
     toolbar->addWidget(tier_selector_);
+    auto* stretch = new QWidget();
+    stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    toolbar->addWidget(stretch);
+    QAction* settings = toolbar->addAction(tr("Settings"));
+    settings->setObjectName(QStringLiteral("settings_toolbar_action"));
+    connect(settings, &QAction::triggered, this, &MainWindow::show_settings);
+    themed_actions_.emplace_back(settings, QStringLiteral("gear"));
+    if (auto* button = qobject_cast<QToolButton*>(toolbar->widgetForAction(settings))) {
+        button->setObjectName(QStringLiteral("settings_button"));
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setToolTip(tr("Settings"));
+    }
     add_toolbar_tooltips(*this);
 }
 
@@ -1042,13 +1291,20 @@ void MainWindow::choose_theme(const QString& theme) {
 }
 
 void MainWindow::apply_theme(const QString& theme) {
+    // The palette first, so that the stylesheet's polish starts from the theme's colours.
     const bool dark = theme == QStringLiteral("dark");
+    const StudyPalette& palette = StudyPalette::named(theme);
+    QApplication::setPalette(qt_palette(palette));
     QFile stylesheet(dark ? QStringLiteral(":/themes/dark.qss")
                           : QStringLiteral(":/themes/light.qss"));
     if (stylesheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
         qApp->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
     }
     board_->set_theme(dark ? BoardTheme::dark() : BoardTheme::light());
+    eval_bar_->set_palette(palette);
+    for (const auto& [action, icon] : themed_actions_) {
+        action->setIcon(themed_icon(icon, palette));
+    }
     (dark ? dark_action_ : light_action_)->setChecked(true);
 }
 

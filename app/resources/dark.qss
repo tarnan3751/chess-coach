@@ -1,66 +1,235 @@
-/* The dark theme: one stylesheet for the whole app (docs/reference/app.md, **Themes**); the
-   board's own colours are BoardTheme::dark(). */
+/* The dark theme, brown-black: one stylesheet for the whole app (docs/reference/app.md,
+   **Themes**). Its colours are StudyPalette::dark()'s, the visual spec's tokens, kept equal
+   by hand (app_resources_test checks them); the board's are BoardTheme::dark()'s, and the
+   painted parts (the delegates, the evaluation bar, the Rating chooser's chevron) take them from
+   the palette. The style is Fusion, which draws what no rule here reaches (radio buttons, spin
+   boxes, scroll bars) in the same palette. The spacing scale is 4, 8, 12, 16 and 24 px, every
+   corner 2 px, every line a 1 px hairline. Qt takes whole pixels for a font size, so the spec's
+   small size, 11.5 px, is 12 px here; the family is the application font, Source Sans 3, unless
+   a rule names Source Serif 4. */
+
+/* The surfaces */
 QMainWindow, QDialog {
-    background: #26292d;
+    background: #1f1b17;
 }
 QWidget {
-    color: #dcdcdc;
-}
-QToolBar {
-    background: #1f2226;
-    border: none;
-    spacing: 6px;
-}
-QToolButton {
-    color: #dcdcdc;
-}
-QMenuBar {
-    background: #1f2226;
-    color: #dcdcdc;
-}
-QMenuBar::item:selected, QMenu::item:selected {
-    background: #4f6f8f;
-}
-QMenu {
-    background: #1f2226;
-    color: #dcdcdc;
+    color: #e8e1d4;
 }
 QGraphicsView#board {
     background: transparent;
     border: none;
 }
-QStatusBar {
-    background: #1f2226;
+QToolTip {
+    background: #27221e;
+    color: #e8e1d4;
+    border: 1px solid #413930;
+    padding: 4px 8px;
 }
-QComboBox {
-    background: #33373c;
-    color: #dcdcdc;
+
+/* The toolbar: text and icon buttons on the chrome, a hairline below, the Rating chooser */
+QToolBar {
+    background: #2a2521;
+    border: none;
+    border-bottom: 1px solid #413930;
+    padding: 3px 6px;
+    spacing: 4px;
 }
-QTableView, QListWidget {
-    background: #2e3136;
-    alternate-background-color: #33373c;
-    selection-background-color: #4f6f8f;
-    selection-color: #ffffff;
-    gridline-color: #3c4046;
+QToolBar::separator {
+    background: #413930;
+    width: 1px;
+    margin: 4px 4px;
+}
+QToolBar QToolButton {
+    background: transparent;
+    color: #e8e1d4;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 4px 8px;
+}
+QToolBar QToolButton#settings_button {
+    padding: 4px 6px;
+}
+QToolBar QToolButton:hover, QToolBar QToolButton:pressed {
+    background: rgba(255, 255, 255, 15);
+}
+QToolBar QToolButton:disabled {
+    color: #a89e8e;
+}
+QLabel#rating_label {
+    color: #a89e8e;
+    padding-left: 4px;
+}
+
+/* The menus */
+QMenuBar {
+    background: #2a2521;
+    color: #e8e1d4;
+}
+QMenuBar::item:selected {
+    background: rgba(255, 255, 255, 15);
+}
+QMenu {
+    background: #27221e;
+    color: #e8e1d4;
+    border: 1px solid #413930;
+}
+QMenu::item:selected {
+    background: #2f4a3c;
+    color: #e8e1d4;
+}
+QMenu::item:disabled {
+    color: #a89e8e;
+}
+QMenu::separator {
+    height: 1px;
+    background: #413930;
+    margin: 4px 8px;
+}
+
+/* The screen tabs: serif names in muted, the current one in text over a 2 px accent rule that
+   covers the hairline under the whole strip */
+QTabBar#screen_tabs {
+    font-family: "Source Serif 4";
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-bottom: 1px solid #413930;
+}
+QTabBar#screen_tabs::tab {
+    background: transparent;
+    color: #a89e8e;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 6px 2px;
+    margin-right: 18px;
+}
+QTabBar#screen_tabs::tab:selected {
+    color: #e8e1d4;
+    border-bottom-color: #7fb89a;
+}
+
+/* The position's name: the Explore screen's heading */
+QLabel#explore_name {
+    font-family: "Source Serif 4";
+    font-size: 17px;
+    font-weight: 600;
+}
+
+/* Lists, trees and tables: the panel with a hairline frame, the header on the chrome */
+QListView, QTreeView, QTableView {
+    background: #27221e;
+    alternate-background-color: #332c26;
+    border: 1px solid #413930;
+    border-radius: 2px;
+    selection-background-color: #2f4a3c;
+    selection-color: #e8e1d4;
+    gridline-color: #36302a;
+}
+QListWidget#move_list {
+    padding: 4px 0px;
+    outline: none;
 }
 QHeaderView::section {
-    background: #1f2226;
-    color: #dcdcdc;
+    background: #2a2521;
+    color: #a89e8e;
+    font-size: 12px;
+    font-weight: 600;
     border: none;
-    border-right: 1px solid #3c4046;
-    padding: 3px 6px;
+    border-bottom: 1px solid #413930;
+    padding: 6px 10px;
 }
-QTabBar::tab {
-    background: #1f2226;
-    color: #dcdcdc;
-    padding: 5px 14px;
+QTableCornerButton::section {
+    background: #2a2521;
+    border: none;
+    border-bottom: 1px solid #413930;
 }
-QTabBar::tab:selected {
-    background: #33373c;
+
+/* Buttons: secondary by default, primary (outlined in the accent) for a dialog's default button
+   and a screen's start button */
+QPushButton {
+    background: #27221e;
+    color: #e8e1d4;
+    border: 1px solid #413930;
+    border-radius: 2px;
+    padding: 6px 14px;
+    font-weight: 600;
 }
-QLabel#explore_name {
-    font-size: 15px;
+QPushButton:hover, QPushButton:pressed {
+    background: #332c26;
 }
+QPushButton:default, QPushButton#spar_start, QPushButton#drill_start {
+    background: transparent;
+    color: #7fb89a;
+    border-color: #7fb89a;
+}
+QPushButton:default:hover, QPushButton#spar_start:hover, QPushButton#drill_start:hover {
+    background: rgba(255, 255, 255, 15);
+}
+QPushButton:disabled, QPushButton#spar_start:disabled, QPushButton#drill_start:disabled {
+    background: #27221e;
+    color: #a89e8e;
+    border-color: #413930;
+}
+
+/* Inputs: the panel with a hairline, the accent when focused; spin boxes are Fusion's, whose
+   arrows a rule would hide */
+QLineEdit, QComboBox {
+    background: #27221e;
+    color: #e8e1d4;
+    border: 1px solid #413930;
+    border-radius: 2px;
+    padding: 4px 8px;
+    selection-background-color: #2f4a3c;
+    selection-color: #e8e1d4;
+}
+QComboBox {
+    padding: 3px 8px 3px 10px;
+}
+QLineEdit:focus, QComboBox:focus {
+    border-color: #7fb89a;
+}
+QLineEdit:disabled, QComboBox:disabled {
+    color: #a89e8e;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 22px;
+}
+QComboBox QAbstractItemView {
+    background: #27221e;
+    color: #e8e1d4;
+    border: 1px solid #413930;
+    selection-background-color: #2f4a3c;
+    selection-color: #e8e1d4;
+    outline: none;
+}
+
+/* An import's busy bar */
+QProgressBar {
+    background: #27221e;
+    color: #a89e8e;
+    border: 1px solid #413930;
+    border-radius: 2px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background: #7fb89a;
+}
+
+/* The status bar: the chrome, a hairline above, small muted text */
+QStatusBar {
+    background: #2a2521;
+    border-top: 1px solid #413930;
+}
+QStatusBar::item {
+    border: none;
+}
+QStatusBar QLabel {
+    color: #a89e8e;
+    font-size: 12px;
+    padding: 2px 4px;
+}
+
 /* Secondary text, such as a screen's description: the palette's muted. */
 QLabel[muted="true"] {
     color: #a89e8e;

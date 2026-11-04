@@ -1,6 +1,7 @@
 // Unit tests of the Study look's resources (app; unit): the bundled fonts register from the Qt
-// resource and become the application font, and a themed icon is drawn in the palette's colours,
-// on an offscreen QGuiApplication, so no display and no system font is needed.
+// resource and become the application font, each stylesheet carries its palette's colours, and a
+// themed icon is drawn in the palette's colours, on an offscreen QGuiApplication, so no display
+// and no system font is needed.
 #include "fonts.hpp"
 #include "icons.hpp"
 #include "study_palette.hpp"
@@ -8,10 +9,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QColor>
+#include <QFile>
 #include <QFont>
 #include <QFontDatabase>
 #include <QFontInfo>
 #include <QGuiApplication>
+#include <QIODevice>
 #include <QIcon>
 #include <QImage>
 #include <QPixmap>
@@ -19,6 +22,7 @@
 #include <QString>
 #include <QtGlobal>
 #include <array>
+#include <utility>
 
 using chesscoach::app::install_fonts;
 using chesscoach::app::StudyPalette;
@@ -68,6 +72,34 @@ TEST_CASE("The bundled fonts register and Source Sans 3 is the application font"
     QFont bold(chesscoach::app::sans_family);
     bold.setWeight(QFont::Bold);
     CHECK(QFontInfo(bold).family() == chesscoach::app::sans_family);
+}
+
+TEST_CASE("Each stylesheet carries its palette's colours", "[themes]") {
+    for (const auto& [file, palette] : {
+             std::pair{QStringLiteral(":/themes/light.qss"), &StudyPalette::light()},
+             std::pair{QStringLiteral(":/themes/dark.qss"), &StudyPalette::dark()},
+         }) {
+        QFile stylesheet(file);
+        REQUIRE(stylesheet.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QString text = QString::fromUtf8(stylesheet.readAll());
+        for (const QColor& colour : {
+                 palette->window,
+                 palette->chrome,
+                 palette->panel,
+                 palette->panel_alt,
+                 palette->border,
+                 palette->row_line,
+                 palette->text,
+                 palette->muted,
+                 palette->accent,
+                 palette->selection,
+             }) {
+            CHECK(text.contains(colour.name(QColor::HexRgb)));
+        }
+        CHECK(text.contains(QStringLiteral("rgba(%1, %1, %1, %2)")
+                                .arg(palette->hover.red())
+                                .arg(palette->hover.alpha())));
+    }
 }
 
 TEST_CASE("A themed icon is drawn in the palette's text, and muted when disabled", "[icons]") {

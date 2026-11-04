@@ -1,6 +1,7 @@
 // The board's colours: squares, highlights, hints and coordinates, with a light and a dark
-// preset. The board reads one of these; switching between them at run time comes with the
-// settings (docs/reference/app.md, **Board**).
+// preset, the Study look's walnut board (docs/reference/app.md, **Themes**). The board reads one
+// of these; switching between them at run time comes with the settings (docs/reference/app.md,
+// **Board**).
 #pragma once
 
 #include <QColor>

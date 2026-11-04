@@ -2,11 +2,16 @@
 // evaluation of the position (docs/database.md §6.2), empty when there is none. A centipawn
 // score maps to white's winning chances, 1 / (1 + e^(-0.00368208 * cp)), the curve lichess
 // draws its bar with; a mate fills the bar for the mating side. White is at the bottom, or at
-// the top when the board is flipped. GUI thread only.
+// the top when the board is flipped. In the Study look (docs/reference/app.md, **Themes**) it is
+// 14 px wide, black's share #3a3a3a and white's #f4f4f4 in both themes, in a hairline frame of
+// the theme's, with no text; empty, only the frame shows. GUI thread only.
 #pragma once
 
 #include <chesscoach/position.hpp>
 
+#include "study_palette.hpp"
+
+#include <QColor>
 #include <QWidget>
 #include <optional>
 
@@ -24,6 +29,8 @@ class EvalBar : public QWidget {
     void set_evaluation(std::optional<qint64> cp, std::optional<qint64> mate,
                         std::optional<Color> mated = std::nullopt);
     void set_flipped(bool flipped);
+    // The theme's hairline, which frames the bar.
+    void set_palette(const StudyPalette& palette);
 
     // White's share of the bar, 0 to 1, or nullopt when it is empty.
     [[nodiscard]] std::optional<double> white_share() const { return white_share_; }
@@ -37,6 +44,7 @@ class EvalBar : public QWidget {
   private:
     std::optional<double> white_share_;
     bool flipped_ = false;
+    QColor frame_ = StudyPalette::light().border;
 };
 
 } // namespace chesscoach::app

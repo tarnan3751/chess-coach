@@ -78,6 +78,8 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     repertoire_depth_->setValue(repertoire_depth);
 
     auto* form = new QFormLayout();
+    form->setHorizontalSpacing(12);
+    form->setVerticalSpacing(8);
     form->addRow(tr("Engine program"), binary_row);
     form->addRow(tr("Processor cores to use"), threads_);
     form->addRow(tr("Engine memory"), hash_mb_);
@@ -90,6 +92,8 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     auto* column = new QVBoxLayout(this);
+    column->setContentsMargins(16, 16, 16, 16);
+    column->setSpacing(16);
     column->addLayout(form);
     column->addWidget(buttons);
 }

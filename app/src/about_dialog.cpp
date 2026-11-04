@@ -21,6 +21,8 @@ AboutDialog::AboutDialog(const QString& data_version, QWidget* parent) : QDialog
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     auto* column = new QVBoxLayout(this);
+    column->setContentsMargins(16, 16, 16, 16);
+    column->setSpacing(16);
     column->addWidget(label);
     column->addWidget(buttons);
 }

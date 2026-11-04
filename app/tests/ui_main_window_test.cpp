@@ -68,7 +68,7 @@ class MainWindowTest : public QObject {
         const auto& tiers = child<QComboBox>(window, QStringLiteral("tier_selector"));
         QCOMPARE(tiers.count(), chesscoach::tier_count);
         const QStringList bands{
-            QStringLiteral("under 1200"),     QStringLiteral("1200–1399"),
+            QStringLiteral("Under 1200"),     QStringLiteral("1200–1399"),
             QStringLiteral("1400–1599"),      QStringLiteral("1600–1799"),
             QStringLiteral("1800–1999"),      QStringLiteral("2000–2199"),
             QStringLiteral("2200 and above"),

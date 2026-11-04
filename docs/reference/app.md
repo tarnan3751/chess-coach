@@ -47,6 +47,7 @@ state (**Files**).
 | `file_chooser.{hpp,cpp}` | `FileChooser`, the app's own file chooser, and the functions that run it (**Files**) |
 | `locations.{hpp,cpp}` | The app bundle's resources, the opening database the window opens, the message when there is none (**The database**) |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
+| `study_palette.{hpp,cpp}` | `StudyPalette`, the Study look's colours per theme (**Themes**) |
 | `fonts.{hpp,cpp}` | `install_fonts`, the bundled fonts registered and the application font set (**Themes**) |
 | `icons.{hpp,cpp}` | `themed_icon` and `tinted_icon`, the toolbar's icons in a theme's colours (**Themes**) |
 | `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
@@ -70,23 +71,36 @@ which the executable and the UI tests link. The piece set, the two stylesheets
 
 `MainWindow(data_dir, db)` is titled `chess-coach <version>` and holds:
 
-- **A toolbar** (`toolbar`): *New game* (`new_game_action`: back to the start position), *Back*
-  (`back_action`, the platform's Back shortcut: one move back), both working on Explore's line and
-  Repertoire's and disabled on Spar and Drill, *Flip board* (`flip_action`), and the tier selector
-  (`tier_selector`), a `QComboBox` of the seven rating bands (**Wording**) with the tier index as
-  each item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`).
+- **A toolbar** (`toolbar`), icon and label buttons: *New game* (`new_game_action`, the `plus`
+  icon: back to the start position), *Back* (`back_action`, `back`, the platform's Back shortcut:
+  one move back), both working on Explore's line and Repertoire's and disabled on Spar and Drill,
+  *Flip board* (`flip_action`, `flip`); a separator; the label *Rating* (`rating_label`) and the
+  tier selector (`tier_selector`), a `QComboBox` of the seven rating bands (**Wording**), each
+  with its first letter capitalised ("Under 1200", "2200 and above"), with the tier index as each
+  item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`), its
+  arrow the `chevron-down` icon in the muted colour; and at the right an icon-only *Settings*
+  button (`settings_toolbar_action` on the button `settings_button`, `gear`), which opens Edit >
+  Settings….
 - **The menus**: *File* with *Back up your work…* and *Restore a backup…* (`export_action`,
   `import_action`, **Export and import**) and *Import database…* (`import_database_action`, **The
   database**), *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with *Light* and
   *Dark* (`theme_light`, `theme_dark`), and *Help* with *How to use chess-coach* (`help_action`,
   **Help**), *About chess-coach* (`about_action`) and *About Qt* (`about_qt_action`).
-- **The evaluation bar** (`eval_bar`) and **the board** (`board`, a `BoardView`) on the left, and
-  below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
-  `1. e4 e5`.
+- **The evaluation bar** (`eval_bar`, 14 px wide) and **the board** (`board`, a `BoardView`) on
+  the left, 8 px apart at the top of the column, the board square and the bar always exactly its
+  height; below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
+  `1. e4 e5`, which a delegate paints with the move number muted in a column of its own and the
+  last move, the board's, marked in the selection colour. The window opens at 1200 × 780, its
+  content 14 px from its edges and the two columns 14 px apart. The board column is as wide as the
+  board the window's height allows, leaving the screen column at least 700 px, which takes the
+  rest; the board is never less than 300 px, and the window's minimum width is what the two
+  columns' minimums need, so nothing clips. At the default size the board is 436 px.
 - **The screen switcher** on the right: a `QTabBar` (`screen_tabs`) over a `QStackedWidget`
   (`screens`) with Explore (**Explore**), Practice (**Spar**), Repertoire (**Repertoire**) and Drill
-  (**Drill**). The board belongs to the current screen: a move on it goes to that screen's line,
-  session or card, and the evaluation bar and Explore's engine are idle on the other three.
+  (**Drill**), the names in Source Serif 4, the current one over a rule in the accent which covers
+  the hairline under the whole strip. The board belongs to the current screen: a move on it goes
+  to that screen's line, session or card, and the evaluation bar and Explore's engine are idle on
+  the other three.
 - **The status bar**, two labels: `database_status` on the left, the opening database by its
   months (`meta`'s, in English: "October 2026", or "October 2026 to March 2027" for a run) and its
   data version, "Opening database: October 2026, data version 1" ("Opening database: data version
@@ -521,26 +535,43 @@ translation files to give plurals); a loss in pawns with one decimal, "1.1" for 
 
 ## Themes
 
-Each theme is one stylesheet, `app/resources/light.qss` and `dark.qss`, compiled in under
-`:/themes/` and applied to the whole application with `QApplication::setStyleSheet`; the board
-follows with `BoardTheme::light()` or `BoardTheme::dark()` (`BoardView::set_theme`). *View >
-Theme* switches and saves the choice; the window applies the saved one at start. A label whose
-dynamic property `muted` is true, such as a screen's description, takes the palette's muted colour
-(`QLabel[muted="true"]` in both stylesheets).
+The look is **Study** (`PLAN.md` §11, 2026-11-04; the visual spec in the lanes' `briefs/`): paper
+by day and brown-black by night, Source Serif 4 for the screen names and headings over Source Sans
+3 for everything else, 1 px hairlines, 2 px corners, a walnut board and a deep green accent. The
+themes keep their names, *Light* and *Dark*, and their setting values, `light` and `dark`.
 
-The fonts are static TTFs from Adobe's releases under the SIL Open Font License 1.1 (`NOTICE`,
-`legal/source-serif-4.txt`, `legal/source-sans-3.txt`): Source Serif 4 SemiBold 4.005, and Source
-Sans 3 Regular, SemiBold and Bold 3.052, compiled in under `:/fonts/`. `install_fonts`, which the
-window calls at start, registers them with `QFontDatabase` once and makes Source Sans 3 at 13 px
-the application font, so the app needs no font on the system (`app_resources_test` checks both
-families register).
-
-The icons are our own, `app/resources/icons/<name>.svg` under `:/icons/`: 16 by 16, a 1.6 px
-stroke with round caps and joins, no fills, drawn in `#000000` (`plus`, `back`, `flip`,
-`chevron-down`, `gear`, `sound-on`, `sound-off`, `explore`, `spar`, `repertoire`, `drill`).
-`themed_icon(name, palette)` replaces `#000000` with the palette's text colour, and its muted
-colour for the disabled pixmaps, and renders them with `QSvgRenderer` at 16 and 32 px, so one file
-serves both themes; `tinted_icon(name, normal, disabled)` takes the two colours directly.
+- **The colours** are `StudyPalette::light()` and `dark()` (`study_palette.hpp`), the spec's
+  tokens. Each theme is one stylesheet, `app/resources/light.qss` and `dark.qss`, which carries
+  the same values by hand (`app_resources_test` checks that each holds its palette's colours),
+  compiled in under `:/themes/`. `apply_theme` sets the application's `QPalette` from the theme's
+  `StudyPalette` (window, panel for bases and buttons, text, selection for highlights, the
+  hairline for `Mid`, muted for placeholders and disabled text), then the stylesheet with
+  `QApplication::setStyleSheet`, then the board's colours, `BoardTheme::light()` or
+  `BoardTheme::dark()` (`BoardView::set_theme`: the walnut squares, the last move, the pick and the
+  hints in the accent's green, the check in red, each coordinate in the other square's colour),
+  the evaluation bar's frame (`EvalBar::set_palette`) and the toolbar's icons. *View > Theme*
+  switches and saves the choice; the window applies the saved one at start. A label whose
+  dynamic property `muted` is true, such as a screen's description, takes the muted colour
+  (`QLabel[muted="true"]` in both stylesheets).
+- **The style** is Fusion on every platform, set by the window at start: it draws what the
+  stylesheet does not reach (radio buttons, spin boxes, whose arrows a stylesheet rule would hide,
+  scroll bars, and a standalone tab bar's alignment, which the macOS style centres) in the theme's
+  palette, where the macOS style draws them in the system's colours.
+- **The fonts** are static TTFs from Adobe's releases under the SIL Open Font License 1.1
+  (`NOTICE`, `legal/source-serif-4.txt`, `legal/source-sans-3.txt`): Source Serif 4 SemiBold 4.005,
+  and Source Sans 3 Regular, SemiBold and Bold 3.052, compiled in under `:/fonts/`.
+  `install_fonts`, which the window calls at start, registers them with `QFontDatabase` once and
+  makes Source Sans 3 at 13 px the application font, so the app needs no font on the system
+  (`app_resources_test` checks both families register). The stylesheets name Source Serif 4 for
+  the screen tabs (15 px, 600) and the position's name (`explore_name`, 17 px, 600), and the small
+  size for the status bar and the table headers, which is 12 px: Qt takes whole pixels in a
+  stylesheet, where the spec says 11.5.
+- **The icons** are our own, `app/resources/icons/<name>.svg` under `:/icons/`: 16 by 16, a
+  1.6 px stroke with round caps and joins, no fills, drawn in `#000000` (`plus`, `back`, `flip`,
+  `chevron-down`, `gear`, `sound-on`, `sound-off`, `explore`, `spar`, `repertoire`, `drill`).
+  `themed_icon(name, palette)` replaces `#000000` with the palette's text colour, and its muted
+  colour for the disabled pixmaps, and renders them with `QSvgRenderer` at 16 and 32 px, so one
+  file serves both themes; `tinted_icon(name, normal, disabled)` takes the two colours directly.
 
 ## Help
 

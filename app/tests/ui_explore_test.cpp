@@ -392,7 +392,7 @@ class ExploreTest : public QObject {
         child<QAction>(window, QStringLiteral("theme_dark")).trigger();
         QCOMPARE(board.board_scene().theme().dark_square,
                  chesscoach::app::BoardTheme::dark().dark_square);
-        QVERIFY(qApp->styleSheet().contains(QStringLiteral("#26292d")));
+        QVERIFY(qApp->styleSheet().contains(QStringLiteral("#1f1b17")));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("dark"));
         child<QAction>(window, QStringLiteral("theme_light")).trigger();
     }
