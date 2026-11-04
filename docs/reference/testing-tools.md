@@ -52,8 +52,8 @@ and a RapidCheck property's seed) are kept in `build/gate-failures/<UTC timestam
 
 `tools/run_tests.sh [<module> [<regex>]]` configures and builds `dev` and runs every test but
 the benchmarks, or one module's (`-L ^<module>$`), optionally filtered by name (`-R`);
-`--bench` runs the benchmarks in `release`. `tools/format.sh` rewrites every `.cpp`, `.hpp` and
-`.h` under the four modules with clang-format; `--check` is the gate's format step.
+`--bench` runs the benchmarks in `release`. `tools/format.sh` rewrites every `.cpp`, `.hpp`, `.h`
+and `.mm` under the four modules with clang-format; `--check` is the gate's format step.
 
 ## Tests
 

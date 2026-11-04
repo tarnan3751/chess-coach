@@ -2,10 +2,21 @@
 # docs/reference/app.md). The only module that finds or links Qt, which comes from the system
 # through CMAKE_PREFIX_PATH, never from vcpkg. The window, the board and the screens are app_lib,
 # which the executable and the UI tests link; main.cpp only parses the command line. The piece
-# set, the stylesheets, the fonts and the icons are compiled in as Qt resources, so the app needs
-# no files beside it, nor any font on the system, to draw itself.
+# set, the stylesheets, the fonts, the icons and the sounds are compiled in as Qt resources, so the
+# app needs no files beside it, nor any font on the system, to draw itself and play its sounds.
+# The sounds play through NSSound on macOS, an Objective-C++ source linking the AppKit system
+# framework, and through a null backend elsewhere (src/sounds.hpp); never Qt Multimedia, which
+# links QtNetwork.
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Svg SvgWidgets Test)
 set(CMAKE_AUTOMOC ON)
+if(APPLE)
+  # The C++ compiler for the Objective-C++ too, so that a sanitized build (Homebrew's clang on
+  # macOS, the root CMakeLists.txt) instruments and links both alike.
+  if(NOT DEFINED CMAKE_OBJCXX_COMPILER)
+    set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")
+  endif()
+  enable_language(OBJCXX)
+endif()
 
 add_library(app_lib STATIC
   src/about_dialog.cpp
@@ -60,6 +71,8 @@ add_library(app_lib STATIC
   src/settings.hpp
   src/settings_dialog.cpp
   src/settings_dialog.hpp
+  src/sounds.cpp
+  src/sounds.hpp
   src/spar_data.hpp
   src/spar_screen.cpp
   src/spar_screen.hpp
@@ -77,6 +90,11 @@ add_library(chesscoach::app_lib ALIAS app_lib)
 target_include_directories(app_lib PUBLIC src)
 target_link_libraries(app_lib PUBLIC chesscoach::core Qt6::Widgets Qt6::Svg Qt6::SvgWidgets
                               PRIVATE chesscoach::warnings)
+if(APPLE)
+  target_sources(app_lib PRIVATE src/sounds_mac.mm)
+  target_compile_options(app_lib PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
+  target_link_libraries(app_lib PRIVATE "-framework AppKit")
+endif()
 
 set(chesscoach_pieces wK wQ wR wB wN wP bK bQ bR bB bN bP)
 list(TRANSFORM chesscoach_pieces PREPEND "${PROJECT_SOURCE_DIR}/data/pieces/cburnett/")
@@ -105,6 +123,13 @@ qt_add_resources(app_lib "icons"
   PREFIX "/icons"
   BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
   FILES ${chesscoach_icons})
+# The five sounds, 16-bit 44.1 kHz mono WAVs written by tools/make_sounds.py (docs/reference/app.md,
+# **Sounds**).
+qt_add_resources(app_lib "sounds"
+  PREFIX "/sounds"
+  BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds"
+  FILES resources/sounds/move.wav resources/sounds/capture.wav resources/sounds/check.wav
+        resources/sounds/wrong.wav resources/sounds/interruption.wav)
 
 add_executable(app
   src/main.cpp)
@@ -128,6 +153,10 @@ if(BUILD_TESTING)
   # The wording of numbers, ratings, losses, days and months (wording.hpp).
   chesscoach_add_test(app_wording_test MODULE app KIND unit
                       SOURCES tests/wording_test.cpp
+                      LIBS chesscoach::app_lib)
+  # The sounds' unit tests, on app_lib without a window.
+  chesscoach_add_test(app_sounds_test MODULE app KIND unit
+                      SOURCES tests/sounds_test.cpp
                       LIBS chesscoach::app_lib)
 
   # Each UI test saves its screenshots here, as <test>-<state>.png (tools/ui_tests.sh).

@@ -4,7 +4,7 @@
 covers the main window, the board, the database worker, the engine worker, the Explore screen,
 the Spar screen (labelled Practice) and its worker, the profile worker, the Repertoire and Drill
 screens, export and import, the settings, the files, the wording, the themes, the Help and About
-dialogs, and the UI harness.
+dialogs, the sounds, and the UI harness.
 
 Every widget lives on the GUI thread. The opening database, the file the window found at start or an
 import put in place (**The database**), is opened read-only and read only by the database worker on
@@ -50,6 +50,7 @@ state (**Files**).
 | `study_palette.{hpp,cpp}` | `StudyPalette`, the Study look's colours per theme (**Themes**) |
 | `fonts.{hpp,cpp}` | `install_fonts`, the bundled fonts registered and the application font set (**Themes**) |
 | `icons.{hpp,cpp}` | `themed_icon` and `tinted_icon`, the toolbar's icons in a theme's colours (**Themes**) |
+| `sounds.{hpp,cpp}`, `sounds_mac.mm` | `Sounds` and its backends, `NSSound` on macOS and the null one, and the SAN rule (**Sounds**) |
 | `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
 | `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings (**Settings**) |
 | `about_dialog.{hpp,cpp}` | `AboutDialog`, the versions and the attributions (**About**) |
@@ -64,8 +65,9 @@ state (**Files**).
 
 All but `main.cpp` are the static library `app_lib` (namespace `chesscoach::app`, `AUTOMOC`),
 which the executable and the UI tests link. The piece set, the two stylesheets
-(`app/resources/light.qss`, `dark.qss`), the fonts (`app/resources/fonts/`) and the icons
-(`app/resources/icons/`) are compiled into it as Qt resources.
+(`app/resources/light.qss`, `dark.qss`), the fonts (`app/resources/fonts/`), the icons
+(`app/resources/icons/`) and the sounds (`app/resources/sounds/`) are compiled into it as Qt
+resources.
 
 ## Shell
 
@@ -676,6 +678,34 @@ Qt under the LGPL, chess-library under MIT, the cburnett pieces by Colin M.L. Bu
 Wikimedia Commons under CC BY-SA 3.0, the Lichess data under CC0, the Source Serif 4 and Source
 Sans 3 fonts by Adobe under the SIL Open Font License 1.1 with their versions, SQLite in the public
 domain, and the other libraries with their licences. *About Qt* is Qt's own dialog.
+
+## Sounds
+
+Five sounds, one per `SoundEvent`: `move`, a wooden thunk; `capture`, a heavier one, lower and
+longer; `check`, a short rising two-tone; `wrong`, a soft low tone falling; and `interruption`, a
+gentle double knock. They are WAV files, 16-bit 44.1 kHz mono, each under 300 ms with its peak at
+−12 dBFS, compiled in under `:/sounds/<event>.wav` from `app/resources/sounds/`.
+`tools/make_sounds.py` synthesises them (resonances rung by a short noise burst over a damped low
+thud for the thunks, sines for the tones) from a fixed seed: they are the project's own work under
+its licence and need no notice.
+
+`move_sound(san)` is a move's sound: `check` when its SAN carries `+` or `#`, else `capture` when
+it carries `x`, else `move`. `Sounds` plays them, `play(event)` doing nothing after
+`set_enabled(false)`, through a backend of its own rather than Qt Multimedia, which links
+QtNetwork (`PLAN.md` §11, 2026-11-04):
+
+- on macOS, `MacSoundBackend` (`sounds_mac.mm`, Objective-C++ under ARC, linking the AppKit system
+  framework): one `NSSound` per event, made with `initWithData:` from the resource's bytes when the
+  window starts; a play stops the event's sound and starts it again, since `NSSound` will not play
+  a sound that is still playing, so a quick run of moves drops none, while different events
+  overlap;
+- on other platforms, and whenever the environment variable `CHESS_COACH_SILENT` is set,
+  `NullSoundBackend`, which plays nothing and records the last event and how often it was given
+  each, for the tests (`Sounds::null_backend`).
+
+`app_sounds_test`, a unit test, checks the SAN rule, the null backend playing only while enabled,
+the five files' format, length and peak, and on macOS that `NSSound` decodes all five, which it
+does not play.
 
 ## Board
 
