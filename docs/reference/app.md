@@ -272,9 +272,9 @@ theme (the light one until then):
   and "No opening name" deeper when the line has none. Under them one muted line
   (`explore_summary`): "White to move · 1,000 games by players rated 1600–1799 · the database's
   evaluation +0.2 for White", and off book, where the games were too few to keep, "Black to move ·
-  too few games by players rated 1600–1799 to show". The side to move comes from the stored FEN and
-  is left out when the position has none (the line then starts with a capital); the band is the
-  tier's (**Wording**); the evaluation, from white's side ("+0.3" for centipawns as pawns, "mate in
+  too few games by players rated 1600–1799 to show". The side to move is the window's, from the
+  length of its line, so it shows where the database holds no row for the position; the band is
+  the tier's (**Wording**); the evaluation, from white's side ("+0.3" for centipawns as pawns, "mate in
   3" when white mates, "mated in 2" when white is mated), is left out when the position has none,
   and the line's tooltip gives its depth ("The database's evaluation comes from a search to depth
   40.").

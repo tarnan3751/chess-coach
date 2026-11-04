@@ -32,9 +32,9 @@ class MoveTable;
 // The line under the position's name, the tier named by its rating band (wording.hpp's
 // rating_band): "White to move · 1,000 games by players rated 1600–1799 · the database's
 // evaluation +0.2 for White", or off book "Black to move · too few games by players rated
-// 1600–1799 to show". The side to move is left out when the position has no stored FEN, and the
-// evaluation when it has none.
-[[nodiscard]] QString position_summary(const ExploreData& explore, const QString& band);
+// 1600–1799 to show". The evaluation is left out when the position has none.
+[[nodiscard]] QString position_summary(const ExploreData& explore, const QString& band,
+                                       Color side_to_move);
 // An engine line's score as score_text writes it; a checkmated side to move reads "mate" when
 // black is mated and "mated" when white is.
 [[nodiscard]] QString engine_score_text(const EngineLine& line);
@@ -51,8 +51,10 @@ class ExploreScreen : public QWidget {
     void set_palette(const StudyPalette& palette);
     [[nodiscard]] const StudyPalette& study_palette() const { return palette_; }
 
-    // Shows a position at a tier, the tier named by its rating band (wording.hpp's rating_band).
-    void show_data(const ExploreData& explore, const QString& band);
+    // Shows a position at a tier, the tier named by its rating band (wording.hpp's rating_band),
+    // with its side to move, which the window knows from the line even where the database holds
+    // no row for the position.
+    void show_data(const ExploreData& explore, const QString& band, Color side_to_move);
     // The empty state, without a database; message says why, else a plain one.
     void show_no_database(const QString& message = QString());
 

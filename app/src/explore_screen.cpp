@@ -366,15 +366,10 @@ QString score_text(std::optional<qint64> cp, std::optional<qint64> mate) {
     return pawns > 0 && text != QStringLiteral("0.0") ? QLatin1Char('+') + text : text;
 }
 
-QString position_summary(const ExploreData& explore, const QString& band) {
+QString position_summary(const ExploreData& explore, const QString& band, Color side_to_move) {
     QStringList parts;
-    if (!explore.fen.isEmpty()) {
-        if (const auto position = Position::from_fen(explore.fen.toStdString())) {
-            parts << (position->side_to_move() == Color::white
-                          ? ExploreScreen::tr("White to move")
-                          : ExploreScreen::tr("Black to move"));
-        }
-    }
+    parts << (side_to_move == Color::white ? ExploreScreen::tr("White to move")
+                                           : ExploreScreen::tr("Black to move"));
     // Off book there are games, too few to have been kept, so there is no count to give.
     parts << (explore.node
                   ? counted(explore.node->games, ExploreScreen::tr("%1 game by players rated %2"),
@@ -385,12 +380,7 @@ QString position_summary(const ExploreData& explore, const QString& band) {
         parts << ExploreScreen::tr("the database's evaluation %1 for White")
                      .arg(score_text(explore.position->eval_cp, explore.position->eval_mate));
     }
-    // A line without its side to move starts with the games, which may start in lower case.
-    QString summary = parts.join(QStringLiteral(" · "));
-    if (!summary.isEmpty()) {
-        summary.front() = summary.front().toUpper();
-    }
-    return summary;
+    return parts.join(QStringLiteral(" · "));
 }
 
 QString engine_score_text(const EngineLine& line) {
@@ -518,7 +508,7 @@ void ExploreScreen::set_palette(const StudyPalette& palette) {
     engine_lines_->viewport()->update();
 }
 
-void ExploreScreen::show_data(const ExploreData& explore, const QString& band) {
+void ExploreScreen::show_data(const ExploreData& explore, const QString& band, Color side_to_move) {
     // The worker writes the ECO code, a space and the name; the code may be missing.
     const qsizetype space = explore.name.indexOf(QLatin1Char(' '));
     const QString eco = space > 0 ? explore.name.left(space) : QString();
@@ -532,7 +522,7 @@ void ExploreScreen::show_data(const ExploreData& explore, const QString& band) {
                                                        : tr("No opening name");
     }
     name_->setText(shown);
-    summary_->setText(position_summary(explore, band));
+    summary_->setText(position_summary(explore, band, side_to_move));
     // The evaluation's depth, which the line leaves out.
     summary_->setToolTip(explore.position && explore.position->eval_depth
                              ? tr("The database's evaluation comes from a search to depth %1.")

@@ -657,7 +657,8 @@ void MainWindow::position_ready(const ExploreData& explore) {
     if (explore.key != line_keys_.back() || explore.tier != tier()) {
         return;
     }
-    explore_->show_data(explore, tier_text(explore.tier));
+    explore_->show_data(explore, tier_text(explore.tier),
+                        line_uci_.size() % 2 == 0 ? Color::white : Color::black);
     stored_score_.reset();
     if (explore.position && explore.position->eval_depth) {
         stored_score_ = Score{

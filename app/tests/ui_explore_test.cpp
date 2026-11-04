@@ -533,9 +533,11 @@ class ExploreTest : public QObject {
         QVERIFY(!child<QTableView>(window, QStringLiteral("explore_table")).isVisible());
         QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("King's Pawn Game"));
         QCOMPARE(label(window, QStringLiteral("explore_eco")), QStringLiteral("B00"));
-        // The database has no row for 1. e4 e6, so neither its side to move nor an evaluation.
-        QCOMPARE(label(window, QStringLiteral("explore_summary")),
-                 QStringLiteral("Too few games by players rated 1600–1799 to show"));
+        // The database has no row for 1. e4 e6: the side to move is the line's, and there is no
+        // evaluation.
+        QCOMPARE(
+            label(window, QStringLiteral("explore_summary")),
+            QStringLiteral("White to move · too few games by players rated 1600–1799 to show"));
         QTRY_VERIFY(!board.animating());
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("off-book"));
     }
