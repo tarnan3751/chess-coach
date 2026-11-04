@@ -417,20 +417,25 @@ class SparTest : public QObject {
         const Session session(*db_);
         MainWindow& window = *session.window;
         const auto& board = child<BoardView>(window, QStringLiteral("board"));
-        // Explore's engine, asked for the start before the window turned to Practice, has started
-        // by now or never will; the coach's starts with the session, before any move.
-        QTest::qWait(300);
-        const int handshakes = count(QStringLiteral("uci"));
+        // Explore's engine, asked for the start as the window opened, may or may not have started
+        // before the window turned to Practice; Explore again makes it start, if it has not, and
+        // answer, so that it is the one engine running and its handshake the one logged.
+        auto& tabs = child<QTabBar>(window, QStringLiteral("screen_tabs"));
+        tabs.setCurrentIndex(0);
+        QTRY_VERIFY(child<QListWidget>(window, QStringLiteral("engine_lines")).count() > 0);
+        tabs.setCurrentIndex(1);
+        QCOMPARE(count(QStringLiteral("uci")), 1);
         const int searches = count(QStringLiteral("go"));
+        // The coach's engine starts with the session, before any move.
         press(window, QStringLiteral("spar_start"));
         QTRY_VERIFY(board.isEnabled());
-        QTRY_COMPARE(count(QStringLiteral("uci")), handshakes + 1);
-        QTest::qWait(200);
-        QCOMPARE(count(QStringLiteral("uci")), handshakes + 1);
+        QTRY_COMPARE(count(QStringLiteral("uci")), 2);
         QCOMPARE(count(QStringLiteral("go")), searches);
         QCOMPARE(move_rows(window), 0);
         press(window, QStringLiteral("spar_end"));
         QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
+        // The session's end came after its start on the spar worker's thread: one start, no more.
+        QCOMPARE(count(QStringLiteral("uci")), 2);
         qunsetenv("CHESSCOACH_FAKE_UCI_LOG");
     }
 
