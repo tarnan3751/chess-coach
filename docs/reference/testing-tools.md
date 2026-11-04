@@ -1,8 +1,9 @@
 # Tests and tools
 
 How the build is configured, how the tests are declared and selected, what the gate runs, the
-module boundary check, the compiler, format and tidy settings, CI, the macOS package and the
-release workflow, the pinned dependencies, and how lanes deliver and land a series. The commands
+measurements, the module boundary check, the compiler, format and tidy settings, CI, the macOS
+package and the release workflow, the pinned dependencies, and how lanes deliver and land a
+series. The commands
 are in `CLAUDE.md`, **Commands**; the rules they enforce are in `CLAUDE.md`, **Architecture
 rules**.
 
@@ -98,7 +99,105 @@ chesscoach_add_test(<target> MODULE <core|pipeline|cli|app>
   test links `app_lib`, the library the executable links, and saves screenshots under
   `build/<preset>/ui-screenshots/`; `tools/ui_tests.sh` runs these tests in the `dev` preset and
   lists the screenshots (`docs/reference/app.md`, **UI harness**).
+- **`app_measure`**, the one test not declared through `chesscoach_add_test`: a program with a
+  command line of its own (**Measuring**), so `app/CMakeLists.txt` adds it with `add_test`,
+  labelled `app;bench`, under the offscreen platform.
 - Every test target links `chesscoach::warnings`, like every other target of ours.
+
+## Measuring
+
+Phase 8 changes nothing for speed without a number before and after (`PLAN.md` §11,
+2026-11-04), and the numbers come from `tools/measure.sh`. It builds the `release` preset, waits
+for the one-minute load average to fall under 4 (`MEASURE_MAX_LOAD`), measures each section over
+`--runs` runs (5), and prints one markdown table: each metric's median, its spread (min to max),
+the number of samples, the unit and how it was measured, under a header with the commit, the
+machine, the database, the engine and the load before and after. `--db` names the database, read
+only (the release database for a baseline; without it the sample is built through the pipeline
+into a scratch directory), `--engine` the Stockfish (else `CHESS_COACH_STOCKFISH` or the `PATH`),
+`--tier` the tier (2, the app's default), `--out` a file for the table, and the sections to run
+follow: `startup`, `explore`, `practice`, `board`, `memory`, `pipeline` and `cli`. The script's
+header says what each section runs.
+
+**The app** is measured by `app_measure` (`app/tests/measure.cpp`), a program linking `app_lib`
+that opens the real `MainWindow` on a scratch data directory of its own (a `QTemporaryDir`) and
+drives it as a user would: QTest's clicks on the board's squares, the first picking the piece and
+painting before the timed second one, and the screens' buttons, found by object name as the UI
+tests find them. It times with `QElapsedTimer` to the end of the paint pass that shows the
+answer: its `QApplication` subclass's `notify` sees every event of the GUI thread, and a pass ends
+when the outermost event that painted (an update request, or an expose) has returned, flush
+included. Every wait runs the event loop until such an event; `QTest::qWait` and `qWaitFor` sleep
+10 ms between passes, which delayed what was measured (a slide's first frame by a frame). Its own
+read-only connection to the database chooses the moves and gives the summary line the Explore
+screen must show, and core's `sampler_candidates` tells a coach's reply from the book from one
+from the engine as the session does. It adds nothing to the app's code paths. Its scenarios:
+`startup` (once per process: the process's start to `main` from the kernel's record on macOS,
+`QApplication` with `configure_application`, the window's constructor, then the first paint, the
+database named in the status bar and the start's rows), `explore` (the second click to the new
+rows at the start, after 1. e4 c5 2. Nf3 d6, on the move that leaves book there and on a move off
+book, the engine off or searching, and with it the engine's lines), `practice` (a game as white at
+a fixed seed: replies from the book, the process's first reply from the engine, which starts it,
+and later ones), `board` (the move's first paint, the slide's frames, a full repaint, Flip board
+and `set_position`, at the device pixel ratio the platform gives: `QT_SCALE_FACTOR=2` stands in
+for a Retina display) and `memory` (the resident size and the physical footprint after the start,
+after each 50 of 200 Explore steps, after each of three practice games and after a drill of five
+cards). The engines run at one thread and 16 MB of hash, at the settings' 2 s for Explore and
+Practice's 0.5 s. ctest runs `app_measure all --fixture` on the fixture database with the fake
+engine (labels `app;bench`), so the gate's bench step runs every scenario once in seconds; it
+fails when a step never completes and has no time budget.
+
+What the numbers are, and are not:
+
+- **Offscreen.** The window paints into its backing store as it does on macOS, raster, but no
+  window server composites it and no display's refresh paces it. The cocoa platform's share is
+  not measured; `QT_QPA_PLATFORM=cocoa tools/measure.sh startup` on a display would.
+- **A warm file cache.** Nothing here can empty it, so the database's pages and the libraries are
+  in memory; a cold boot is slower. The first start of a freshly linked binary also pays the
+  system's check of its signature (190 to 370 ms more before `main`), which is why the startup
+  section discards one run.
+- **The cores' power states.** On Apple silicon a step measured on an idle machine includes the
+  cores waking: the Explore steps run two to three times faster while another core is busy (the
+  engine searching, or a `yes > /dev/null`). The medians are an idle machine's, the user's case;
+  compare a change's numbers with a baseline measured the same way, and read the spread.
+
+### Baseline, 2026-11-04
+
+The app, the CLI and the pipeline of `main` at `3849af9`, measured by `tools/measure.sh --db
+openings-2026-10.db --engine stockfish --runs 5` on the development machine (an Apple M5, ten
+cores, 24 GB, macOS 26.5.1): the release database (286 MB, data version 1) at tier 2, Stockfish
+19, offscreen, the load average 2.1 before and 2.6 after. Medians over the runs, the spread in
+brackets; times in milliseconds.
+
+| What | Engine off | Engine on |
+|---|---:|---:|
+| Start to the window's first paint | 79.9 (79.1–82.3) | 81.7 (81.4–82.2) |
+| Start to the Explore table's first rows | 87.2 (86.0–89.3) | 88.8 (88.4–89.3) |
+| of which before `main`; `QApplication`; `MainWindow`'s constructor | 14.8; 10.1; 39.8 | 14.8; 10.1; 39.8 |
+| Explore step: 1. e4 from the start | 6.7 (4.4–7.4) | 7.7 (5.6–10.1) |
+| Explore step: 3. d4 after 1. e4 c5 2. Nf3 d6 | 4.1 (2.5–5.7) | 2.2 (2.1–2.4) |
+| Explore step: a move that leaves book there (3. a4) | 16.7 (12.6–18.2) | 5.2 (4.8–7.5) |
+| Explore step: a move off book | 4.7 (3.5–5.2) | 7.1 (3.6–10.2) |
+| Explore's engine lines: a 2 s search; from the cache (the four steps' medians) | | 2004.7–2022.3; 4.4–16.1 |
+| Practice: a reply from the book | | 3.4 (3.2–4.5) |
+| Practice: the first reply from the engine; a later one (0.5 s searches) | | 607.8 (607.5–609.8); 502.5 (501.4–503.4) |
+
+| The board | Device pixel ratio 1 | Device pixel ratio 2 |
+|---|---:|---:|
+| A clicked move to its first paint | 2.8 (1.7–3.0) | 4.6 (3.6–4.9) |
+| The 150 ms slide: frames per second; the longest gap | 58.5; 24.4 | 58.9; 23.8 |
+| A full repaint; Flip board painted; `set_position` and a repaint | 1.7; 5.5; 2.8 | 3.3; 8.0; 6.9 |
+
+| Memory, one session | Resident | Physical footprint |
+|---|---:|---:|
+| The start shown | 60.2 MB | 21.2 MB |
+| After 50 Explore steps; after 200 | 66.5 MB; 66.6 MB | 21.9 MB; 22.1 MB |
+| After one practice game; after three | 68.9 MB; 69.0 MB | 22.7 MB; 22.7 MB |
+| After a drill of five cards | 69.2 MB | 22.9 MB |
+
+The pipeline's benchmark built the sample in 29 ms (28–29), 69,565 games per second, 14.2 MB at
+its peak. The CLI's `explore` took 3.2 to 4.6 ms a process and `stats` 722 ms (719–727). In the
+app nothing a user waits for takes 100 ms but what the settings ask (a search) and, the first time
+a practice game leaves book in a run, the coach's engine starting (about 105 ms more); memory
+grows while the first steps read the database in and then holds.
 
 ## The module boundary
 
