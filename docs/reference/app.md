@@ -34,7 +34,7 @@ state (**Files**).
 | `explore_data.hpp` | `ExploreData` and `ExploreMove`, the worker's answer for a position |
 | `explore_model.{hpp,cpp}` | `ExploreModel`, the table model of the Explore screen (**Explore**) |
 | `explore_screen.{hpp,cpp}` | `ExploreScreen`, the Explore screen |
-| `result_delegate.{hpp,cpp}` | The results bar and the badge pills; `ResultDelegate`, the bar of Spar's better choices (**Tables**) |
+| `result_delegate.{hpp,cpp}` | The results bar, the badge pills and `StudyCellDelegate`, the cells of Explore's and Spar's move tables (**Tables**) |
 | `spar_worker.{hpp,cpp}` | `SparWorker`, the live session, its store connections and its engine on their own thread (**Spar**) |
 | `spar_data.hpp` | The spar worker's answers: `SparState`, `SparInterruption`, `SparSummary`, the saved sessions, a replay |
 | `spar_screen.{hpp,cpp}` | `SparScreen`, the Spar screen (**Spar**) |
@@ -338,10 +338,13 @@ The Study look's parts for a table that paints itself (`tables.{hpp,cpp}`,
   (`header_note_role`) after it in the regular weight; the sections' tooltips are the model's.
 - **The rows**: the body `panel` inside a hairline frame, no grid and no alternate colours; a cell
   has 10 px of padding left and right and 5 px above and below, a `row_line` rule under every row
-  but the last, whose edge is the frame's hairline, and the selected row filled with `selection`
-  (`paint_row`). Type sizes are in pixels, fractions
+  but where a row meets the frame, which is a line already, and the selected row filled with
+  `selection` (`paint_row`); a row is `study_row_height` tall. Type sizes are in pixels, fractions
   included, through the point size at the device's DPI (`sized_font`); numbers take tabular
   figures where Qt can ask the font for them (6.7 and later, `tabular`).
+- **The cells** (`StudyCellDelegate`, one per column, of a kind): the row's selection and rule,
+  then a move in bold, a number right-aligned in tabular figures, the badges' pills, or the
+  results bar.
 - **The pills** (`badge_pills`, `paint_badge_pills`): Book, Popular and Dubious in that order,
   each in its badge's colours, 11.5 px semibold, 1 px by 7 px of padding, 2 px corners, 4 px
   apart; a pill's tooltip is its badge's sentence (**Wording**'s `badge_sentence`,
@@ -351,10 +354,10 @@ The Study look's parts for a table that paints itself (`tables.{hpp,cpp}`,
   percentages inside their segments in 10 px bold, and the draws' only in a segment 18 px wide or
   more (in the white segment's text colour); a percentage that does not fit its segment is left
   out; a Results header's note is `results_note`, "white · draw · black".
-- **Spar's better choices** paint the same things through delegates of their own over the style's
-  cells: `TableHeader` with the Results note, `BadgeDelegate` for the pills (from the choice's
-  `badge_bits`) and `ResultDelegate` for the bar, in the palette the window hands the Spar screen
-  when it applies a theme (`SparScreen::set_palette`).
+- **Spar's better choices** are the same table: `TableHeader` with the Results note and the Games
+  label at the right, no grid, `study_row_height` rows, and a `StudyCellDelegate` per column (the
+  move, the pills from the choice's `badge_bits`, the games, the bar), in the palette the window
+  hands the Spar screen when it applies a theme (`SparScreen::set_palette`).
 
 ## Spar
 
@@ -431,9 +434,9 @@ replay's up to its ply, and clicking a row does nothing on Spar.
   the two evaluations the worker reads from the store, **Wording**, or that the database has no
   evaluation for it), never its badges, which beside "too few games" would read as a
   contradiction; the better choices (`spar_better`: Move, Badges by name, "Book,
-  Popular", painted as pills, Games and Results, with the result bar, under the Study header with
-  the Results note, as **Tables** says, the Badges header's tooltip `badges_tooltip` and the Results
-  header's saying what the bar's three parts are); and *Keep playing*
+  Popular", painted as pills, Games and Results, with the result bar, painted as Explore's table
+  is, as **Tables** says, the Badges header's tooltip `badges_tooltip` and the Results header's
+  saying what the bar's three parts are); and *Keep playing*
   (`spar_continue`). The move stands; Keep
   playing closes the panel and gives the board back;
 - **the summary** (`spar_summary`, `spar_summary_text`), when a session ends: how it ended ("You
@@ -904,9 +907,9 @@ the UI tests run silent on every platform, their sounds going to the null backen
 - `ui_spar_test`, on the fixture database's tier-4 tree (the start position's e4, a Dubious a3 and
   d4, black's e5 after 1. a3, and white's Nf3 alone after 1. a3 e5) with the fake engine's `legal`
   script as the coach off book, a fixed seed and a move limit of four: a session as white
-  interrupted on 1. a3 with its better choices, their pills and Study header, their results bar
-  repainted in the dark palette, Keep playing, interrupted again on 2. h4 off book and answered by
-  the engine, ended at its move limit with the summary and the saved session listed, and replayed
+  interrupted on 1. a3 with its better choices, their pills, rows and Study header, their results
+  bar repainted in the dark palette, Keep playing, interrupted again on 2. h4 off book and answered
+  by the engine, ended at its move limit with the summary and the saved session listed, and replayed
   with the interruptions at plies one and three, each live interruption sounding once and the
   replay's none; a session as black, where the coach moves first and the board turns; End the game
   saving a stopped session, and closing the window saving one; a second session sending the coach's

@@ -5,7 +5,6 @@
 #include "wording.hpp"
 
 #include <QAbstractItemView>
-#include <QApplication>
 #include <QColor>
 #include <QCoreApplication>
 #include <QFontMetrics>
@@ -15,10 +14,10 @@
 #include <QPainter>
 #include <QRect>
 #include <QRectF>
-#include <QStyle>
 #include <QStyleOptionViewItem>
 #include <QToolTip>
 #include <QVariant>
+#include <algorithm>
 #include <array>
 #include <cstddef>
 
@@ -210,57 +209,88 @@ void paint_badge_pills(QPainter& painter, const QStyleOptionViewItem& option, Ba
     }
 }
 
-ResultDelegate::ResultDelegate(QObject* parent, const StudyPalette* palette)
-    : QStyledItemDelegate(parent), palette_(palette != nullptr ? palette : &StudyPalette::light()) {
+int study_row_height(const QFont& font, const QPaintDevice& device) {
+    QFont bold = font;
+    bold.setWeight(QFont::Bold);
+    const int content = std::max({
+        QFontMetrics(bold).height(),
+        badge_pill_height(font, device),
+        results_bar_size.height(),
+    });
+    return content + (2 * cell_padding_vertical) + 1;
 }
 
-void ResultDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
-                           const QModelIndex& index) const {
-    // The cell as the style paints it (its selection, no text), then the bar over it.
-    QStyledItemDelegate::paint(painter, option, index);
+StudyCellDelegate::StudyCellDelegate(Kind kind, const StudyPalette* palette, QObject* parent)
+    : QStyledItemDelegate(parent), kind_(kind), palette_(palette) {}
+
+QFont StudyCellDelegate::font_of(const QStyleOptionViewItem& option) const {
+    if (kind_ == Kind::move) {
+        QFont bold = option.font;
+        bold.setWeight(QFont::Bold);
+        return bold;
+    }
+    return tabular(option.font);
+}
+
+void StudyCellDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
+                              const QModelIndex& index) const {
     painter->save();
-    paint_results_bar(*painter, option, index.data(shares_role).value<QList<double>>(), *palette_);
+    painter->setClipRect(option.rect, Qt::IntersectClip);
+    paint_row(*painter, option, *palette_);
+    switch (kind_) {
+    case Kind::badges:
+        paint_badge_pills(*painter, option, badges_of(index), *palette_);
+        break;
+    case Kind::results:
+        paint_results_bar(*painter, option, index.data(shares_role).value<QList<double>>(),
+                          *palette_);
+        break;
+    case Kind::move:
+    case Kind::number: {
+        const QFont font = font_of(option);
+        const QRect content = content_of(option.rect);
+        const Qt::Alignment alignment =
+            (kind_ == Kind::number ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter;
+        painter->setFont(font);
+        painter->setPen(palette_->text);
+        painter->drawText(content, text_flags(alignment),
+                          QFontMetrics(font).elidedText(index.data().toString(), Qt::ElideRight,
+                                                        content.width()));
+        break;
+    }
+    }
     painter->restore();
 }
 
-QSize ResultDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    const QSize text = QStyledItemDelegate::sizeHint(option, index);
-    return {results_bar_size.width() + (2 * cell_padding),
-            qMax(text.height(), results_bar_size.height() + (2 * cell_padding_vertical))};
-}
-
-BadgeDelegate::BadgeDelegate(QObject* parent, const StudyPalette* palette)
-    : QStyledItemDelegate(parent), palette_(palette != nullptr ? palette : &StudyPalette::light()) {
-}
-
-void BadgeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
-                          const QModelIndex& index) const {
-    QStyleOptionViewItem cell = option;
-    initStyleOption(&cell, index);
-    cell.text.clear();
-    const QStyle* style = option.widget != nullptr ? option.widget->style() : QApplication::style();
-    style->drawControl(QStyle::CE_ItemViewItem, &cell, painter, option.widget);
-    painter->save();
-    paint_badge_pills(*painter, option, badges_of(index), *palette_);
-    painter->restore();
-}
-
-QSize BadgeDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    const QSize text = QStyledItemDelegate::sizeHint(option, index);
+QSize StudyCellDelegate::sizeHint(const QStyleOptionViewItem& option,
+                                  const QModelIndex& index) const {
     if (option.widget == nullptr) {
-        return text;
+        return QStyledItemDelegate::sizeHint(option, index);
     }
-    return {badge_pills_width(badges_of(index), option.font, *option.widget),
-            qMax(text.height(),
-                 badge_pill_height(option.font, *option.widget) + (2 * cell_padding_vertical))};
+    const QPaintDevice& device = *option.widget;
+    int width = 0;
+    switch (kind_) {
+    case Kind::badges:
+        width = badge_pills_width(badges_of(index), option.font, device);
+        break;
+    case Kind::results:
+        width = results_bar_size.width() + (2 * cell_padding);
+        break;
+    case Kind::move:
+    case Kind::number:
+        width = QFontMetrics(font_of(option)).horizontalAdvance(index.data().toString()) +
+                (2 * cell_padding);
+        break;
+    }
+    return {width, study_row_height(option.font, device)};
 }
 
-bool BadgeDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
-                              const QStyleOptionViewItem& option, const QModelIndex& index) {
-    if (event == nullptr || view == nullptr) {
-        return QStyledItemDelegate::helpEvent(event, view, option, index);
+bool StudyCellDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
+                                  const QStyleOptionViewItem& option, const QModelIndex& index) {
+    if (kind_ == Kind::badges && event != nullptr && view != nullptr) {
+        return show_pill_tooltip(*event, *view, option, index);
     }
-    return show_pill_tooltip(*event, *view, option, index);
+    return QStyledItemDelegate::helpEvent(event, view, option, index);
 }
 
 } // namespace chesscoach::app

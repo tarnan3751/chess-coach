@@ -18,6 +18,7 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 #include <QVariant>
+#include <utility>
 
 namespace chesscoach::app {
 
@@ -108,13 +109,27 @@ SparScreen::SparScreen(QWidget* parent)
     summary_text_->setWordWrap(true);
     summary_text_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     // The better choices paint as Explore's table does (docs/reference/app.md, **Tables**): the
-    // Study header with the Results note, the badges as pills, the results bar.
+    // Study header with the Results note, rows with their rules and no grid, the move in bold,
+    // the games right-aligned, the badges as pills, the results bar.
     auto* better_header = new TableHeader(&palette_, better_);
     better_->setHorizontalHeader(better_header);
     better_header->setSectionResizeMode(QHeaderView::ResizeToContents);
+    better_->horizontalHeaderItem(2)->setData(
+        Qt::TextAlignmentRole,
+        QVariant::fromValue(Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter)));
     better_->horizontalHeaderItem(3)->setData(header_note_role, results_note());
-    better_->setItemDelegateForColumn(1, new BadgeDelegate(better_, &palette_));
-    better_->setItemDelegateForColumn(3, new ResultDelegate(better_, &palette_));
+    better_->setShowGrid(false);
+    better_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    better_->verticalHeader()->setDefaultSectionSize(study_row_height(better_->font(), *better_));
+    using Kind = StudyCellDelegate::Kind;
+    for (const auto& [column, kind] : {
+             std::pair{0, Kind::move},
+             std::pair{1, Kind::badges},
+             std::pair{2, Kind::number},
+             std::pair{3, Kind::results},
+         }) {
+        better_->setItemDelegateForColumn(column, new StudyCellDelegate(kind, &palette_, better_));
+    }
     better_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
     better_->horizontalHeaderItem(1)->setToolTip(badges_tooltip());
     better_->horizontalHeaderItem(3)->setToolTip(

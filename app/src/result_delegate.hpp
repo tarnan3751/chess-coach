@@ -4,9 +4,9 @@
 // from the cell's shares_role data (a QList<double> of three fractions summing to 1). The badge
 // pills: Book, Popular and Dubious by name in their colours, or a muted dash for none, from the
 // cell's badges_role data (the bits, as Badges::raw holds them), each pill's tooltip the sentence
-// saying what its badge means (wording.hpp's badge_sentence). ResultDelegate and BadgeDelegate are
-// the bar and the pills as delegates of their own, as Spar's better choices use them; Explore's
-// table paints both through its own delegate. GUI thread only.
+// saying what its badge means (wording.hpp's badge_sentence). StudyCellDelegate paints a cell of
+// either kind, a move or a number, with its row's selection and rule: Explore's move table and
+// Practice's better choices paint every cell through it. GUI thread only.
 #pragma once
 
 #include <chesscoach/badges.hpp>
@@ -20,6 +20,7 @@
 #include <QString>
 #include <QStyledItemDelegate>
 #include <QtGlobal>
+#include <cstdint>
 #include <vector>
 
 class QAbstractItemView;
@@ -69,34 +70,32 @@ void paint_badge_pills(QPainter& painter, const QStyleOptionViewItem& option, Ba
 [[nodiscard]] int badge_pills_width(Badges badges, const QFont& font, const QPaintDevice& device);
 [[nodiscard]] int badge_pill_height(const QFont& font, const QPaintDevice& device);
 
-class ResultDelegate : public QStyledItemDelegate {
+// A Study table row's height in the font (the table's) on the device: the tallest of a bold line,
+// a pill and the results bar, with the cell's padding and the rule under it.
+[[nodiscard]] int study_row_height(const QFont& font, const QPaintDevice& device);
+
+// A Study table's cell (docs/reference/app.md, **Tables**): its row's selection and rule, then its
+// kind's content: a move in bold, a number right-aligned in tabular figures, the badges' pills,
+// whose tooltips say what they mean, or the results bar.
+class StudyCellDelegate : public QStyledItemDelegate {
   public:
-    // palette is the owner's, which outlives the delegate; nullptr for the light theme's.
-    explicit ResultDelegate(QObject* parent, const StudyPalette* palette = nullptr);
+    enum class Kind : std::uint8_t { move, number, badges, results };
+
+    // palette is the owner's, which outlives the delegate.
+    StudyCellDelegate(Kind kind, const StudyPalette* palette, QObject* parent);
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option,
                const QModelIndex& index) const override;
     [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
                                  const QModelIndex& index) const override;
-
-  private:
-    const StudyPalette* palette_;
-};
-
-class BadgeDelegate : public QStyledItemDelegate {
-  public:
-    // palette is the owner's, which outlives the delegate; nullptr for the light theme's.
-    explicit BadgeDelegate(QObject* parent, const StudyPalette* palette = nullptr);
-
-    // The cell as the style paints it without its text (the badges' names), then the pills.
-    void paint(QPainter* painter, const QStyleOptionViewItem& option,
-               const QModelIndex& index) const override;
-    [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
-                                 const QModelIndex& index) const override;
+    // Over a pill, its badge's sentence; elsewhere the cell's tooltip, if any.
     bool helpEvent(QHelpEvent* event, QAbstractItemView* view, const QStyleOptionViewItem& option,
                    const QModelIndex& index) override;
 
   private:
+    [[nodiscard]] QFont font_of(const QStyleOptionViewItem& option) const;
+
+    Kind kind_;
     const StudyPalette* palette_;
 };
 

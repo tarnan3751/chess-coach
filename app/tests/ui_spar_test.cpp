@@ -15,6 +15,7 @@
 #include "eval_bar.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
+#include "result_delegate.hpp"
 #include "settings.hpp"
 #include "sounds.hpp"
 #include "spar_screen.hpp"
@@ -196,6 +197,14 @@ void meet_a_dubious_move(MainWindow& window, const BoardView& board) {
     QVERIFY(painted(window, better, 0, 1, StudyPalette::light().popular_bg));
     QVERIFY(painted(window, better, 1, 1, StudyPalette::light().book_bg));
     QVERIFY(!painted(window, better, 1, 1, StudyPalette::light().popular_bg));
+    // Its rows as Explore's: no grid, the rule under each row, the cells painted by the same
+    // delegate.
+    QVERIFY(!choices.showGrid());
+    QVERIFY(painted(window, better, 0, 2, StudyPalette::light().row_line));
+    for (int column = 0; column < choices.columnCount(); ++column) {
+        QVERIFY(dynamic_cast<const chesscoach::app::StudyCellDelegate*>(
+                    choices.itemDelegateForColumn(column)) != nullptr);
+    }
     press(window, QStringLiteral("spar_continue"));
     QVERIFY(!interruption_shown(window));
     QVERIFY(board.isEnabled());

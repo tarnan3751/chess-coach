@@ -39,6 +39,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace chesscoach::app {
 
@@ -70,108 +71,10 @@ QFont weighted(QFont font, QFont::Weight weight) {
     return font;
 }
 
-// A row of the move table: the tallest of a bold line of text, a pill and the results bar, its
-// padding, and its rule.
-int row_height(const QFont& font, const QPaintDevice& device) {
-    const int content = std::max({
-        QFontMetrics(weighted(font, QFont::Bold)).height(),
-        badge_pill_height(font, device),
-        results_bar_size.height(),
-    });
-    return content + (2 * cell_padding_vertical) + 1;
-}
-
 // A line of the engine's panel.
 int engine_line_height(const QFont& font) {
     return QFontMetrics(weighted(font, QFont::Bold)).height() + (2 * engine_line_padding);
 }
-
-// Paints every cell of the move table in the screen's palette (docs/reference/app.md,
-// **Tables**): the row's selection and rule, then the move in bold, the badges' pills, the
-// results bar, or a number right-aligned in tabular figures.
-class MoveDelegate : public QStyledItemDelegate {
-  public:
-    MoveDelegate(const StudyPalette* palette, QObject* parent)
-        : QStyledItemDelegate(parent), palette_(palette) {}
-
-    void paint(QPainter* painter, const QStyleOptionViewItem& option,
-               const QModelIndex& index) const override {
-        painter->save();
-        painter->setClipRect(option.rect, Qt::IntersectClip);
-        paint_row(*painter, option, index, *palette_);
-        switch (index.column()) {
-        case ExploreModel::badges_column:
-            paint_badge_pills(*painter, option, badges_of(index), *palette_);
-            break;
-        case ExploreModel::result_column:
-            paint_results_bar(*painter, option,
-                              index.data(ExploreModel::shares_role).value<QList<double>>(),
-                              *palette_);
-            break;
-        default: {
-            const QFont font = font_of(option, index.column());
-            const QRect content = option.rect.adjusted(cell_padding, 0, -cell_padding, -1);
-            painter->setFont(font);
-            painter->setPen(palette_->text);
-            painter->drawText(content, text_flags(alignment_of(index)),
-                              QFontMetrics(font).elidedText(index.data().toString(), Qt::ElideRight,
-                                                            content.width()));
-            break;
-        }
-        }
-        painter->restore();
-    }
-
-    [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
-                                 const QModelIndex& index) const override {
-        if (option.widget == nullptr) {
-            return QStyledItemDelegate::sizeHint(option, index);
-        }
-        const QPaintDevice& device = *option.widget;
-        int width = 0;
-        switch (index.column()) {
-        case ExploreModel::badges_column:
-            width = badge_pills_width(badges_of(index), option.font, device);
-            break;
-        case ExploreModel::result_column:
-            width = results_bar_size.width() + (2 * cell_padding);
-            break;
-        default:
-            width = QFontMetrics(font_of(option, index.column()))
-                        .horizontalAdvance(index.data().toString()) +
-                    (2 * cell_padding);
-            break;
-        }
-        return {width, row_height(option.font, device)};
-    }
-
-    // Over a pill, its badge's sentence; elsewhere the cell's tooltip, if any.
-    bool helpEvent(QHelpEvent* event, QAbstractItemView* view, const QStyleOptionViewItem& option,
-                   const QModelIndex& index) override {
-        if (event != nullptr && view != nullptr && index.column() == ExploreModel::badges_column) {
-            return show_pill_tooltip(*event, *view, option, index);
-        }
-        return QStyledItemDelegate::helpEvent(event, view, option, index);
-    }
-
-  private:
-    [[nodiscard]] static Badges badges_of(const QModelIndex& index) {
-        return Badges(static_cast<std::uint8_t>(index.data(ExploreModel::badges_role).toUInt()));
-    }
-
-    [[nodiscard]] static QFont font_of(const QStyleOptionViewItem& option, int column) {
-        return column == ExploreModel::move_column ? weighted(option.font, QFont::Bold)
-                                                   : tabular(option.font);
-    }
-
-    [[nodiscard]] static Qt::Alignment alignment_of(const QModelIndex& index) {
-        const QVariant alignment = index.data(Qt::TextAlignmentRole);
-        return alignment.isValid() ? alignment.value<Qt::Alignment>()
-                                   : Qt::Alignment(Qt::AlignLeft | Qt::AlignVCenter);
-    }
-
-    const StudyPalette* palette_;
-};
 
 // Paints a line of the engine's panel: its score bold in the accent, in a column of its own,
 // then its moves.
@@ -431,7 +334,17 @@ ExploreScreen::ExploreScreen(QWidget* parent)
     auto* header = new TableHeader(&palette_, table_);
     table_->setHorizontalHeader(header);
     table_->setModel(model_);
-    table_->setItemDelegate(new MoveDelegate(&palette_, table_));
+    using Kind = StudyCellDelegate::Kind;
+    for (const auto& [column, kind] : {
+             std::pair{ExploreModel::move_column, Kind::move},
+             std::pair{ExploreModel::badges_column, Kind::badges},
+             std::pair{ExploreModel::games_column, Kind::number},
+             std::pair{ExploreModel::result_column, Kind::results},
+             std::pair{ExploreModel::score_column, Kind::number},
+             std::pair{ExploreModel::top_tier_column, Kind::number},
+         }) {
+        table_->setItemDelegateForColumn(column, new StudyCellDelegate(kind, &palette_, table_));
+    }
     table_->setShowGrid(false);
     table_->setAlternatingRowColors(false);
     table_->setWordWrap(false);
@@ -440,7 +353,7 @@ ExploreScreen::ExploreScreen(QWidget* parent)
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->verticalHeader()->hide();
     table_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    table_->verticalHeader()->setDefaultSectionSize(row_height(table_->font(), *table_));
+    table_->verticalHeader()->setDefaultSectionSize(study_row_height(table_->font(), *table_));
     header->setStretchLastSection(false);
     header->setSectionResizeMode(QHeaderView::Fixed); // MoveTable::fit sizes the columns
     connect(table_, &QTableView::activated, this, [this](const QModelIndex& index) {
