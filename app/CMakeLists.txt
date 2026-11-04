@@ -191,4 +191,23 @@ if(BUILD_TESTING)
                                PRIVATE CHESSCOACH_FAKE_UCI="$<TARGET_FILE:fake-uci>"
                                        CHESSCOACH_FAKE_STOCKFISH="${PROJECT_SOURCE_DIR}/core/tests/support/fake-stockfish.sh")
   endforeach()
+
+  # The app's measurements (tests/measure.cpp; docs/reference/testing-tools.md, **Measuring**): a
+  # program with its own command line, which tools/measure.sh drives on any database, so it is
+  # declared here rather than through chesscoach_add_test, whose bench kind is Catch2's. ctest runs
+  # every scenario once on the fixture database with the fake engine, a smoke run that fails only
+  # when a step never completes; labelled bench, it runs in the release preset's bench step. It
+  # uses the UI harness, so it is given the harness's screenshot directory like the UI tests.
+  add_executable(app_measure tests/measure.cpp tests/ui_harness.hpp)
+  target_link_libraries(app_measure PRIVATE chesscoach::warnings chesscoach::app_lib
+                                            app_test_fixture Qt6::Test)
+  target_compile_definitions(app_measure
+                             PRIVATE "CHESSCOACH_UI_SCREENSHOT_DIR=\"${chesscoach_screenshots}\"")
+  add_dependencies(app_measure fake-uci)
+  add_test(NAME app_measure
+           COMMAND app_measure all --fixture --runs 1 --tier 4
+                   --engine "${PROJECT_SOURCE_DIR}/core/tests/support/fake-stockfish.sh")
+  set_tests_properties(app_measure PROPERTIES
+                       LABELS "app;bench"
+                       ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CHESSCOACH_FAKE_UCI=$<TARGET_FILE:fake-uci>;CHESSCOACH_FAKE_UCI_SCRIPT=legal")
 endif()
