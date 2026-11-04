@@ -194,7 +194,7 @@ class MainWindow : public QMainWindow {
     void rebuild_move_list();
     void request_query();
     void request_evaluation();
-    void engine_state(EngineState state, const QString& name, const QString& detail);
+    void engine_state(EngineState state, const QString& name);
     void lines_ready(quint64 key, int request_id, const QVector<EngineLine>& lines, bool cached);
     void engine_failed(const QString& message);
     void update_eval_bar();

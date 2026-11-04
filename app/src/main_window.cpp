@@ -685,7 +685,7 @@ void MainWindow::request_evaluation() {
     emit evaluate_requested(position.key(), QString::fromStdString(position.fen()), request_id_);
 }
 
-void MainWindow::engine_state(EngineState state, const QString& name, const QString& /*detail*/) {
+void MainWindow::engine_state(EngineState state, const QString& name) {
     engine_label_->setText(engine_words(state, name, false));
     explore_->show_engine_state(state, name);
 }

@@ -123,12 +123,12 @@ resources.
   cleared after five seconds (`show_message`; the window never uses `QStatusBar::showMessage`,
   which would draw over the labels in another type); and `engine_status` on the right, the engine
   as the engine worker reports it by `EngineState` (`not_started`, `starting`, `ready`,
-  `searching`, `not_found`, `failed`) beside the engine's name, never by the worker's words:
+  `searching`, `not_found`, `failed`) beside the engine's name:
   "Engine not started" until then, "Engine starting…", "<name> ready" when idle ("Stockfish 17
   ready"), "<name> thinking…" while it searches, "No engine found", "The engine did not start"
   for a binary that does not answer the handshake, or "<name> did not answer" for a search that
   failed (it timed out, or the engine died), in `engine_words`' short form; Explore's engine panel
-  says the same state with the way forward (**Explore**); the worker's `detail` is no longer shown.
+  says the same state with the way forward (**Explore**).
   The three labels share the status bar's muted 12 px type.
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
@@ -220,20 +220,20 @@ the window, deleted on its thread when the thread finishes. It owns one core `En
 | Slot | What it does |
 |---|---|
 | `configure(EngineSettings)` | Keeps the settings for the next search and drops the running engine, which quits, so the next search starts one with them |
-| `evaluate(key, fen, request_id)` | Answers `lines_ready(key, request_id, lines, cached)`, from the cache or a search, unless the request is stale; reports `engine_state(state, name, detail)` and `engine_failed(message)` |
+| `evaluate(key, fen, request_id)` | Answers `lines_ready(key, request_id, lines, cached)`, from the cache or a search, unless the request is stale; reports `engine_state(state, name)` and `engine_failed(message)` |
 
 **An evaluation.** First the cache: `cache_lookup(key, lines, 12)`, a hit needing every line at
 depth 12 or more, as the CLI's `eval`; a hit is answered with `cached` set and the engine is not
 touched. On a miss the worker finds the engine: the settings' binary, else `CHESS_COACH_STOCKFISH`,
 else `stockfish` on the `PATH`, else the app bundle's `Contents/Resources/engine/stockfish`, where
-the packaging puts it (**The bundle**), and reports "not found" when there is none
-(`find_engine_binary`, which the spar worker shares), and "failed to start" when the binary does not
-answer the UCI handshake. The engine starts at the first search (Threads and Hash from the settings)
-and again after it dies or times out, the worker reporting "starting" meanwhile and the engine's
-name once it has started. The worker reports "searching", runs `search` for the settings' line
-count and seconds, reports the engine's name when the search succeeded, or a failure with what
-went wrong when it did not, and stores a full result with `cache_store`, answering with what the
-cache then holds. `profiles.db` is opened only when it exists, for a lookup, or when a search is
+the packaging puts it (**The bundle**), and reports `not_found` when there is none
+(`find_engine_binary`, which the spar worker shares), and `failed` when the binary does not answer
+the UCI handshake. The engine starts at the first search (Threads and Hash from the settings) and
+again after it dies or times out, the worker reporting `starting` meanwhile and `ready` with the
+engine's name once it has started. The worker reports `searching`, runs `search` for the settings'
+line count and seconds, reports `ready` when the search succeeded, or `failed` and what went wrong
+(`engine_failed`) when it did not, and stores a full result with `cache_store`, answering with what
+the cache then holds. `profiles.db` is opened only when it exists, for a lookup, or when a search is
 to be stored, so it is created by the first stored search and a run that searches nothing writes
 nothing.
 

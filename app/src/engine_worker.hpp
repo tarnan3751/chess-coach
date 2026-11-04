@@ -101,11 +101,8 @@ class EngineWorker : public QObject {
 
   signals:
     // The engine's state; name is the engine's own, from its handshake, once it has started
-    // (ready, searching, and failed after a search), else empty; detail is the state in the
-    // worker's words, which Explore's engine panel shows: "starting", "searching", "not found",
-    // "failed to start", what went wrong with a search, or the name when ready.
-    void engine_state(chesscoach::app::EngineState state, const QString& name,
-                      const QString& detail);
+    // (ready, searching, and failed after a search), else empty.
+    void engine_state(chesscoach::app::EngineState state, const QString& name);
     void lines_ready(quint64 key, int request_id, const QVector<chesscoach::app::EngineLine>& lines,
                      bool cached);
     void engine_failed(const QString& message);
