@@ -15,7 +15,6 @@
 #include "sounds.hpp"
 #include "wording.hpp"
 
-#include <QStatusBar>
 #include <QStringList>
 
 namespace chesscoach::app {
@@ -165,7 +164,7 @@ void MainWindow::cards_synced(bool white, int created, int reset, int deleted) {
 }
 
 void MainWindow::review_recorded(qint64 /*card_id*/, qint64 due_at) {
-    statusBar()->showMessage(tr("You will see this card again on %1.").arg(day(due_at)), 5000);
+    show_message(tr("You will see this card again on %1.").arg(day(due_at)));
 }
 
 void MainWindow::profile_failed(const QString& message) {

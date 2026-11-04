@@ -53,6 +53,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTabBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -112,7 +113,8 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
       profile_worker_(new ProfileWorker(data_dir, db_path_)), board_(new BoardView()),
       eval_bar_(new EvalBar()), explore_(new ExploreScreen()), spar_(new SparScreen()),
       repertoire_(new RepertoireScreen()), drill_(new DrillScreen()), tabs_(new QTabBar()),
-      move_list_(new QListWidget()), tier_selector_(new RatingChooser()) {
+      move_list_(new QListWidget()), tier_selector_(new RatingChooser()),
+      message_timer_(new QTimer(this)) {
     keep_qt_settings_in(data_dir);
     register_explore_types();
     register_engine_types();
@@ -297,7 +299,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(profile_worker_, &ProfileWorker::cards_ready, this, &MainWindow::cards_ready);
     connect(profile_worker_, &ProfileWorker::review_recorded, this, &MainWindow::review_recorded);
     connect(profile_worker_, &ProfileWorker::profiles_exported, this, [this](const QString& path) {
-        statusBar()->showMessage(tr("Your work is backed up in %1.").arg(path), 5000);
+        show_message(tr("Your work is backed up in %1.").arg(path));
     });
     connect(profile_worker_, &ProfileWorker::export_failed, this, &MainWindow::show_profile_error);
     connect(profile_worker_, &ProfileWorker::profile_failed, this, &MainWindow::profile_failed);
@@ -490,17 +492,28 @@ void MainWindow::build_menus() {
 }
 
 void MainWindow::build_status_bar() {
-    // The opening database on the left, by its months and data version, and the engine on the
-    // right.
+    // The opening database on the left, by its months and data version, a passing message beside
+    // it (show_message), and the engine on the right.
     database_label_ = new QLabel();
     database_label_->setObjectName(QStringLiteral("database_status"));
     show_database_label();
+    message_label_ = new QLabel();
+    message_label_->setObjectName(QStringLiteral("message_status"));
     engine_label_ = new QLabel(engine_status(EngineState::not_started, QString()));
     engine_label_->setObjectName(QStringLiteral("engine_status"));
     statusBar()->setContentsMargins(8, 0, 8, 0);
     statusBar()->setSizeGripEnabled(false);
-    statusBar()->addWidget(database_label_, 1);
+    statusBar()->addWidget(database_label_);
+    statusBar()->addWidget(message_label_, 1);
     statusBar()->addPermanentWidget(engine_label_);
+    message_timer_->setSingleShot(true);
+    message_timer_->setInterval(5000);
+    connect(message_timer_, &QTimer::timeout, message_label_, &QLabel::clear);
+}
+
+void MainWindow::show_message(const QString& text) {
+    message_label_->setText(text);
+    message_timer_->start();
 }
 
 int MainWindow::tier() const { return tier_selector_->currentIndex(); }
@@ -788,7 +801,7 @@ void MainWindow::profile_import_done(const QString& path, const QString& error) 
     if (!error.isEmpty()) {
         show_profile_error(error);
     } else {
-        statusBar()->showMessage(tr("Your work is restored from %1.").arg(path), 5000);
+        show_message(tr("Your work is restored from %1.").arg(path));
     }
     // Every screen reads the profile again.
     switch (screen_) {

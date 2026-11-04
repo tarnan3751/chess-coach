@@ -181,6 +181,11 @@ class DrillTest : public QObject {
         press(window, QStringLiteral("drill_next"));
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
                      QStringLiteral("1 due now, out of your 2 cards."));
+        // The status bar says when, in its message label, beside the database.
+        QVERIFY(QTest::qWaitFor([&window] {
+            return text(window, QStringLiteral("message_status"))
+                .startsWith(QStringLiteral("You will see this card again on "));
+        }));
         for (const chesscoach::Card& card : session.cards()) {
             if (card.key == first.key()) {
                 QCOMPARE(card.state.repetitions, 1);

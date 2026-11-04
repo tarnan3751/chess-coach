@@ -112,18 +112,22 @@ resources.
   the hairline under the whole strip. The board belongs to the current screen: a move on it goes
   to that screen's line, session or card, and the evaluation bar and Explore's engine are idle on
   the other three.
-- **The status bar**, two labels: `database_status` on the left, the opening database by its
+- **The status bar**, three labels: `database_status` on the left, the opening database by its
   months (`meta`'s, in English: "October 2026", or "October 2026 to March 2027" for a run) and its
   data version, "Opening database: October 2026, data version 1" ("Opening database: data version
   1" when `meta` names no months), "Loading the opening database…" until the worker answers, or
   "No opening database", its tooltip the file's full path and where it was found, "… (data
-  directory)", "(--db)" or "(app bundle)"; and `engine_status` on the right, the engine as the
-  engine worker reports it by `EngineState` (`not_started`, `starting`, `ready`, `searching`,
-  `not_found`, `failed`) beside the engine's name, never by the worker's words: "Engine not
-  started" until then, "Engine starting…", "<name> ready" when idle ("Stockfish 17 ready"),
-  "<name> thinking…" while it searches, "No engine found", or "The engine did not start" for a
-  binary that does not answer the handshake. Explore's engine panel says the same state with the
-  way forward (**Explore**, `engine_words`); the worker's `detail` is no longer shown.
+  directory)", "(--db)" or "(app bundle)"; beside it `message_status`, a passing message ("Your
+  work is backed up in …", "Your work is restored from …", "You will see this card again on …"),
+  cleared after five seconds (`show_message`; the window never uses `QStatusBar::showMessage`,
+  which would draw over the labels in another type); and `engine_status` on the right, the engine
+  as the engine worker reports it by `EngineState` (`not_started`, `starting`, `ready`,
+  `searching`, `not_found`, `failed`) beside the engine's name, never by the worker's words:
+  "Engine not started" until then, "Engine starting…", "<name> ready" when idle ("Stockfish 17
+  ready"), "<name> thinking…" while it searches, "No engine found", or "The engine did not start"
+  for a binary that does not answer the handshake. Explore's engine panel says the same state with
+  the way forward (**Explore**, `engine_words`); the worker's `detail` is no longer shown. The
+  three labels share the status bar's muted 12 px type.
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
 every position along them. On Explore, a move on the board (`move_played`) appends to it (on the
