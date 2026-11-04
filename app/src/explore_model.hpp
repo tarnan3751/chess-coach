@@ -1,6 +1,8 @@
 // The Explore screen's table model: one row per move of the position at the tier, in the order
-// the worker gives them (most played first), with the columns Move, Badges, Games, Result,
-// Score % , Top tier % and In book (docs/reference/app.md, **Explore**). GUI thread only.
+// the worker gives them (most played first), with the columns Move, Badges, Games, Results, Score
+// for White and Top players, their tooltips, and the cells as text, the badges' bits and the
+// results' shares for the delegate that paints them (docs/reference/app.md, **Explore**). GUI
+// thread only.
 #pragma once
 
 #include "explore_data.hpp"
@@ -24,13 +26,14 @@ class ExploreModel : public QAbstractTableModel {
     static constexpr int result_column = 3;
     static constexpr int score_column = 4;
     static constexpr int top_tier_column = 5;
-    static constexpr int in_book_column = 6;
-    static constexpr int column_count = 7;
+    static constexpr int column_count = 6;
     // The row's UCI move, under every column.
     static constexpr int uci_role = Qt::UserRole;
-    // The Result column's shares of white wins, draws and black wins, a QList<double> of three
-    // fractions summing to 1, as the result bar reads them.
+    // The Results column's shares of white wins, draws and black wins, a QList<double> of three
+    // fractions summing to 1, as the results bar reads them.
     static constexpr int shares_role = chesscoach::app::shares_role;
+    // The Badges column's badges, the bits as an unsigned int, as the pills read them.
+    static constexpr int badges_role = chesscoach::app::badges_role;
 
     explicit ExploreModel(QObject* parent = nullptr);
 
@@ -48,9 +51,7 @@ class ExploreModel : public QAbstractTableModel {
     QVector<ExploreMove> moves_;
 };
 
-// The badges as the letters B, P and D in that order, empty for none.
-[[nodiscard]] QString badge_letters(Badges badges);
-// The badges by name, "Book, Popular", for a tooltip.
+// The badges by name, "Book, Popular", empty for none.
 [[nodiscard]] QString badge_names(Badges badges);
 
 } // namespace chesscoach::app

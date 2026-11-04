@@ -1,8 +1,10 @@
 // UI tests of the Explore screen on a fixture database (app; ui): opening it and seeing the start
-// position's moves with their badges and bars, switching tiers, playing moves on the board and
-// from the table, jumping back through the move list, an off-book position, the evaluation bar,
-// a database that does not open, the settings file, the themes and the About dialog, with
-// screenshots of Explore in both themes (ui_harness.hpp, fixture_db.hpp).
+// position's moves with their badges and bars, the header's columns, tooltips and the line under
+// the name, the pills, the results bar and the selection as painted, switching tiers, playing
+// moves on the board and from the table, jumping back through the move list, an off-book
+// position, the evaluation bar, a database that does not open, the settings file, the themes
+// repainting the table and the About dialog, with screenshots of Explore in both themes
+// (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/version.hpp>
 
@@ -12,21 +14,30 @@
 #include "explore_screen.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
+#include "study_palette.hpp"
+#include "tables.hpp"
 #include "ui_harness.hpp"
 
+#include <QAbstractItemView>
 #include <QAction>
+#include <QColor>
 #include <QComboBox>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHeaderView>
+#include <QImage>
 #include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QObject>
+#include <QPoint>
+#include <QRect>
 #include <QStringList>
 #include <QTableView>
 #include <QTemporaryDir>
 #include <QTest>
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -39,6 +50,7 @@ using chesscoach::app::EvalBar;
 using chesscoach::app::ExploreModel;
 using chesscoach::app::ExploreScreen;
 using chesscoach::app::MainWindow;
+using chesscoach::app::StudyPalette;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
 using chesscoach::app::test::FixtureDb;
@@ -93,6 +105,31 @@ bool message_shown(const MainWindow& window) {
     return child<QLabel>(window, QStringLiteral("explore_message")).isVisible();
 }
 
+QString label(const MainWindow& window, const QString& name) {
+    return child<QLabel>(window, name).text();
+}
+
+QVariant header(const MainWindow& window, int column, int role = Qt::DisplayRole) {
+    return model(window).headerData(column, Qt::Horizontal, role);
+}
+
+// Whether a pixel of the widget's rendering in the rect (the widget's coordinates) has the colour.
+bool painted(QWidget& widget, const QRect& rect, const QColor& colour) {
+    const QImage image = widget.grab().toImage();
+    const qreal ratio = image.devicePixelRatio();
+    const QRect pixels(
+        QPoint(qRound(rect.left() * ratio), qRound(rect.top() * ratio)),
+        QPoint(qRound((rect.right() + 1) * ratio) - 1, qRound((rect.bottom() + 1) * ratio) - 1));
+    for (int y = pixels.top(); y <= pixels.bottom(); ++y) {
+        for (int x = pixels.left(); x <= pixels.right(); ++x) {
+            if (image.pixelColor(x, y).rgb() == colour.rgb()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 class ExploreTest : public QObject {
     Q_OBJECT
 
@@ -117,16 +154,22 @@ class ExploreTest : public QObject {
                     .endsWith(QStringLiteral("openings.db (--db)")));
         // Tier 2 to start, where the fixture has no games: the start position is off book.
         QCOMPARE(window.tier(), MainWindow::default_tier);
-        QTRY_COMPARE(message(window), QStringLiteral("Off book at 1400–1599: 0 games"));
+        QTRY_COMPARE(
+            message(window),
+            QStringLiteral(
+                "No games at this rating after this move. The engine is your guide from here."));
         QVERIFY(message_shown(window));
 
         select_tier(window, 3);
         QTRY_COMPARE(model(window).rowCount(), 4);
         QCOMPARE(table_moves(window), (QStringList{QStringLiteral("e4"), QStringLiteral("d4"),
                                                    QStringLiteral("Nf3"), QStringLiteral("f3")}));
-        QCOMPARE(cell(window, 0, ExploreModel::badges_column), QStringLiteral("BP"));
+        QCOMPARE(cell(window, 0, ExploreModel::badges_column), QStringLiteral("Book, Popular"));
         QCOMPARE(model(window).index(0, ExploreModel::badges_column).data(Qt::ToolTipRole),
                  QStringLiteral("Book, Popular"));
+        QCOMPARE(
+            model(window).index(0, ExploreModel::badges_column).data(ExploreModel::badges_role),
+            QVariant(3U));
         QCOMPARE(cell(window, 0, ExploreModel::games_column), QStringLiteral("600"));
         QCOMPARE(cell(window, 0, ExploreModel::result_column),
                  QStringLiteral("43.3 / 10.0 / 46.7"));
@@ -135,28 +178,172 @@ class ExploreTest : public QObject {
                                 .data(ExploreModel::shares_role)
                                 .value<QList<double>>();
         QCOMPARE(shares.size(), 3);
-        QCOMPARE(cell(window, 0, ExploreModel::score_column), QStringLiteral("48.3"));
-        QCOMPARE(cell(window, 0, ExploreModel::top_tier_column), QStringLiteral("45.0"));
-        QCOMPARE(cell(window, 2, ExploreModel::top_tier_column), QStringLiteral("0.0"));
-        QCOMPARE(cell(window, 0, ExploreModel::in_book_column), QStringLiteral("yes"));
+        QCOMPARE(cell(window, 0, ExploreModel::score_column), QStringLiteral("48.3%"));
+        QCOMPARE(cell(window, 0, ExploreModel::top_tier_column), QStringLiteral("45%"));
+        QCOMPARE(cell(window, 2, ExploreModel::top_tier_column), QStringLiteral("0%"));
         QCOMPARE(cell(window, 3, ExploreModel::badges_column), QString());
-        QCOMPARE(cell(window, 3, ExploreModel::in_book_column), QStringLiteral("no"));
-        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_name")).text(),
-                 QStringLiteral("Unnamed"));
-        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_evaluation")).text(),
-                 QStringLiteral("Evaluation: +0.2"));
-        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_games")).text(),
-                 QStringLiteral("1000 games at 1600–1799"));
+        QCOMPARE(
+            model(window).index(3, ExploreModel::badges_column).data(ExploreModel::badges_role),
+            QVariant(0U));
+        QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("Unnamed"));
+        QVERIFY(!child<QLabel>(window, QStringLiteral("explore_eco")).isVisible());
+        QCOMPARE(label(window, QStringLiteral("explore_summary")),
+                 QStringLiteral("White to move · 1,000 games by players rated 1600–1799 · the "
+                                "database's evaluation +0.2 at depth 40"));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("start-tier3"));
 
         // Tier 4: 1. a3 is Popular and Dubious, losing 109 cp.
         select_tier(window, 4);
         QTRY_COMPARE(table_moves(window), (QStringList{QStringLiteral("e4"), QStringLiteral("a3"),
                                                        QStringLiteral("d4")}));
-        QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("PD"));
+        QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("Popular, Dubious"));
         QCOMPARE(model(window).index(1, ExploreModel::badges_column).data(Qt::ToolTipRole),
                  QStringLiteral("Popular, Dubious"));
-        QCOMPARE(cell(window, 2, ExploreModel::badges_column), QStringLiteral("B"));
+        QCOMPARE(cell(window, 2, ExploreModel::badges_column), QStringLiteral("Book"));
+    }
+
+    void the_screen_says_what_it_is_for() {
+        const Session session(QString::fromStdString(db_->path()));
+        const MainWindow& window = *session.window;
+        const auto& description = child<QLabel>(window, QStringLiteral("explore_description"));
+        QCOMPARE(description.text(),
+                 QStringLiteral("See what players at your rating play here, and what the engine "
+                                "thinks. Play moves on the board to go deeper."));
+        QVERIFY(description.property("muted").toBool()); // the stylesheets' muted colour
+        // A screen told of no database without a reason says so plainly.
+        const ExploreScreen screen;
+        QCOMPARE(
+            child<QLabel>(screen, QStringLiteral("explore_message")).text(),
+            QStringLiteral("No opening database is open. Import one with File > Import database."));
+    }
+
+    void the_header_names_the_columns_in_plain_words() {
+        const Session session(QString::fromStdString(db_->path()));
+        const MainWindow& window = *session.window;
+        QTRY_VERIFY(opened(window));
+        QCOMPARE(model(window).columnCount(), 6);
+        QStringList names;
+        for (int column = 0; column < model(window).columnCount(); ++column) {
+            names << header(window, column).toString();
+        }
+        QCOMPARE(names,
+                 (QStringList{QStringLiteral("Move"), QStringLiteral("Badges"),
+                              QStringLiteral("Games"), QStringLiteral("Results"),
+                              QStringLiteral("Score for White"), QStringLiteral("Top players")}));
+        QCOMPARE(header(window, ExploreModel::result_column, chesscoach::app::header_note_role),
+                 QVariant(QStringLiteral("white · draw · black")));
+        QCOMPARE(header(window, ExploreModel::games_column, Qt::ToolTipRole),
+                 QVariant(QStringLiteral("How many games at this rating reached this move")));
+        QCOMPARE(
+            header(window, ExploreModel::result_column, Qt::ToolTipRole),
+            QVariant(QStringLiteral("White wins · draws · Black wins, as a share of the games")));
+        QCOMPARE(header(window, ExploreModel::score_column, Qt::ToolTipRole),
+                 QVariant(QStringLiteral("Wins plus half the draws, for White")));
+        QCOMPARE(
+            header(window, ExploreModel::top_tier_column, Qt::ToolTipRole),
+            QVariant(QStringLiteral("How often players rated 2200 and above choose this move")));
+        QVERIFY(!header(window, ExploreModel::move_column, Qt::ToolTipRole).isValid());
+        // The numbers read right-aligned, under right-aligned labels.
+        for (const int column : {
+                 ExploreModel::games_column,
+                 ExploreModel::score_column,
+                 ExploreModel::top_tier_column,
+             }) {
+            QVERIFY(header(window, column, Qt::TextAlignmentRole)
+                        .value<Qt::Alignment>()
+                        .testFlag(Qt::AlignRight));
+        }
+        QVERIFY(!header(window, ExploreModel::result_column, Qt::TextAlignmentRole)
+                     .value<Qt::Alignment>()
+                     .testFlag(Qt::AlignRight));
+    }
+
+    void the_table_fits_its_rows_and_shares_out_the_width() {
+        const Session session(QString::fromStdString(db_->path()));
+        MainWindow& window = *session.window;
+        QTRY_VERIFY(opened(window));
+        select_tier(window, 3);
+        QTRY_COMPARE(model(window).rowCount(), 4);
+        const auto& screen = child<ExploreScreen>(window, QStringLiteral("explore_screen"));
+        const auto& table = child<QTableView>(window, QStringLiteral("explore_table"));
+        const auto& columns = *table.horizontalHeader();
+        // QTableView keeps the content's width protected; QAbstractItemView gives it.
+        const QAbstractItemView& view = table;
+        // The rows fill the table with no empty body under them, and the engine's panel sits
+        // right below it.
+        QTRY_COMPARE(table.viewport()->height(), model(window).rowCount() * table.rowHeight(0));
+        const int table_bottom = table.mapTo(&screen, QPoint(0, table.height())).y();
+        const int panel_top = child<QWidget>(window, QStringLiteral("engine_panel")).y();
+        QVERIFY(panel_top >= table_bottom && panel_top <= table_bottom + 10);
+        // The columns fill the width with none narrower than its content; Move and Results keep
+        // theirs, and the others share the rest.
+        QCOMPARE(columns.length(), table.viewport()->width());
+        int spare = 0;
+        for (int column = 0; column < model(window).columnCount(); ++column) {
+            const int content =
+                std::max(columns.sectionSizeHint(column), view.sizeHintForColumn(column));
+            QVERIFY(columns.sectionSize(column) >= content);
+            const bool fixed =
+                column == ExploreModel::move_column || column == ExploreModel::result_column;
+            if (fixed) {
+                QCOMPARE(columns.sectionSize(column), content);
+            }
+            spare += columns.sectionSize(column) - content;
+        }
+        QVERIFY(spare > 0); // the window is wider than the columns need
+        save_screenshot(window, QStringLiteral("explore"), QStringLiteral("fitted-tier3"));
+    }
+
+    void the_table_paints_pills_bars_and_the_selection() {
+        const Session session(QString::fromStdString(db_->path()));
+        MainWindow& window = *session.window;
+        QTRY_VERIFY(opened(window));
+        select_tier(window, 4); // e4 Book and Popular, a3 Popular and Dubious, d4 Book
+        QTRY_COMPARE(table_moves(window), (QStringList{QStringLiteral("e4"), QStringLiteral("a3"),
+                                                       QStringLiteral("d4")}));
+        auto& table = child<QTableView>(window, QStringLiteral("explore_table"));
+        table.clearSelection();
+        QWidget& rows = *table.viewport();
+        const StudyPalette& light = StudyPalette::light();
+        const auto rect = [&](int row, int column) {
+            return table.visualRect(model(window).index(row, column));
+        };
+        // The pills in their colours, one per badge.
+        QVERIFY(painted(rows, rect(0, ExploreModel::badges_column), light.book_bg));
+        QVERIFY(painted(rows, rect(0, ExploreModel::badges_column), light.popular_bg));
+        QVERIFY(!painted(rows, rect(0, ExploreModel::badges_column), light.dubious_bg));
+        QVERIFY(painted(rows, rect(1, ExploreModel::badges_column), light.popular_bg));
+        QVERIFY(painted(rows, rect(1, ExploreModel::badges_column), light.dubious_bg));
+        QVERIFY(!painted(rows, rect(1, ExploreModel::badges_column), light.book_bg));
+        QVERIFY(painted(rows, rect(2, ExploreModel::badges_column), light.book_bg));
+        QVERIFY(!painted(rows, rect(2, ExploreModel::badges_column), light.popular_bg));
+        // The results bar: the three segments in a hairline frame, 150 px wide after the cell's
+        // padding and nothing of it beyond.
+        const QRect results = rect(0, ExploreModel::result_column);
+        QVERIFY(results.width() >= 170);
+        const QRect bar(results.left() + 10, results.top(), 150, results.height() - 1);
+        QVERIFY(painted(rows, bar, light.result_white));
+        QVERIFY(painted(rows, bar, light.result_draw));
+        QVERIFY(painted(rows, bar, light.result_black));
+        QVERIFY(painted(rows, bar, light.border));
+        for (const QRect& outside : {
+                 QRect(results.left(), results.top(), 10, bar.height()),
+                 QRect(bar.right() + 1, results.top(), results.right() - bar.right(), bar.height()),
+             }) {
+            QVERIFY(!painted(rows, outside, light.result_black));
+            QVERIFY(!painted(rows, outside, light.border));
+        }
+        // Each row's rule, and the selected row's fill.
+        QVERIFY(painted(rows, rect(0, ExploreModel::games_column), light.row_line));
+        QVERIFY(!painted(rows, rect(1, ExploreModel::games_column), light.selection));
+        table.selectRow(1);
+        QVERIFY(painted(rows, rect(1, ExploreModel::games_column), light.selection));
+        QVERIFY(!painted(rows, rect(0, ExploreModel::games_column), light.selection));
+        // The header in the chrome, with its hairline.
+        const QHeaderView& columns = *table.horizontalHeader();
+        QVERIFY(painted(*columns.viewport(), columns.viewport()->rect(), light.chrome));
+        QVERIFY(painted(*columns.viewport(), columns.viewport()->rect(), light.border));
+        save_screenshot(window, QStringLiteral("explore"), QStringLiteral("pills-tier4"));
     }
 
     void switching_tiers_changes_the_table() {
@@ -169,12 +356,12 @@ class ExploreTest : public QObject {
         QTRY_COMPARE(model(window).rowCount(), 2);
         QCOMPARE(table_moves(window), (QStringList{QStringLiteral("d4"), QStringLiteral("e4")}));
         // At the top tier a move's top-tier share is its share.
-        QCOMPARE(cell(window, 0, ExploreModel::top_tier_column), QStringLiteral("55.0"));
+        QCOMPARE(cell(window, 0, ExploreModel::top_tier_column), QStringLiteral("55%"));
         select_tier(window, 0);
         QTRY_COMPARE(table_moves(window),
                      (QStringList{QStringLiteral("e4"), QStringLiteral("f3")}));
-        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_games")).text(),
-                 QStringLiteral("20 games at under 1200"));
+        QVERIFY(label(window, QStringLiteral("explore_summary"))
+                    .contains(QStringLiteral(" · 20 games by players rated under 1200 · ")));
     }
 
     void moves_on_the_board_show_the_replies_and_the_name() {
@@ -188,19 +375,23 @@ class ExploreTest : public QObject {
         click(board, "e4");
         QTRY_COMPARE(table_moves(window), (QStringList{QStringLiteral("e5"), QStringLiteral("c5"),
                                                        QStringLiteral("e6")}));
-        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_name")).text(),
-                 QStringLiteral("B00 King's Pawn Game"));
-        // Black to move: the score is black's.
-        QCOMPARE(cell(window, 0, ExploreModel::score_column), QStringLiteral("48.3"));
-        QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("BP"));
+        QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("King's Pawn Game"));
+        QCOMPARE(label(window, QStringLiteral("explore_eco")), QStringLiteral("B00"));
+        QVERIFY(child<QLabel>(window, QStringLiteral("explore_eco")).isVisible());
+        QCOMPARE(label(window, QStringLiteral("explore_summary")),
+                 QStringLiteral("Black to move · 600 games by players rated 1600–1799 · the "
+                                "database's evaluation +0.3 at depth 36"));
+        // Black to move: the score is still white's, 140 wins and 30 draws in 300 games.
+        QCOMPARE(cell(window, 0, ExploreModel::score_column), QStringLiteral("51.7%"));
+        QCOMPARE(cell(window, 1, ExploreModel::badges_column), QStringLiteral("Book, Popular"));
         QCOMPARE(cell(window, 2, ExploreModel::badges_column), QString()); // 8%, unevaluated
 
         click(board, "c7");
         click(board, "c5");
         QTRY_COMPARE(table_moves(window),
                      (QStringList{QStringLiteral("Nf3"), QStringLiteral("Nc3")}));
-        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_name")).text(),
-                 QStringLiteral("B20 Sicilian Defense"));
+        QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("Sicilian Defense"));
+        QCOMPARE(label(window, QStringLiteral("explore_eco")), QStringLiteral("B20"));
         QTRY_VERIFY(!board.animating());
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("sicilian-light"));
     }
@@ -253,8 +444,8 @@ class ExploreTest : public QObject {
         QCOMPARE(board.position().fen(), expected.fen());
         QCOMPARE(moves.count(), 1);
         // The node at the depth the fixture stops: in book, named, no moves.
-        QTRY_COMPARE(child<QLabel>(window, QStringLiteral("explore_name")).text(),
-                     QStringLiteral("C20 King's Pawn Game"));
+        QTRY_COMPARE(label(window, QStringLiteral("explore_eco")), QStringLiteral("C20"));
+        QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("King's Pawn Game"));
         QCOMPARE(model(window).rowCount(), 0);
 
         child<QAction>(window, QStringLiteral("back_action")).trigger();
@@ -276,11 +467,17 @@ class ExploreTest : public QObject {
         click(board, "e4");
         click(board, "e7");
         click(board, "e6");
-        QTRY_COMPARE(message(window), QStringLiteral("Off book at 1600–1799: 0 games"));
+        QTRY_COMPARE(
+            message(window),
+            QStringLiteral(
+                "No games at this rating after this move. The engine is your guide from here."));
         QVERIFY(message_shown(window));
         QVERIFY(!child<QTableView>(window, QStringLiteral("explore_table")).isVisible());
-        QCOMPARE(child<QLabel>(window, QStringLiteral("explore_name")).text(),
-                 QStringLiteral("B00 King's Pawn Game"));
+        QCOMPARE(label(window, QStringLiteral("explore_name")), QStringLiteral("King's Pawn Game"));
+        QCOMPARE(label(window, QStringLiteral("explore_eco")), QStringLiteral("B00"));
+        // The database has no row for 1. e4 e6, so neither its side to move nor an evaluation.
+        QCOMPARE(label(window, QStringLiteral("explore_summary")),
+                 QStringLiteral("0 games by players rated 1600–1799"));
         QTRY_VERIFY(!board.animating());
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("off-book"));
     }
@@ -305,8 +502,9 @@ class ExploreTest : public QObject {
         click(board, "e5");
         click(board, "g2");
         click(board, "g4");
-        QTRY_COMPARE(child<QLabel>(window, QStringLiteral("explore_evaluation")).text(),
-                     QStringLiteral("Evaluation: -M1"));
+        QTRY_COMPARE(label(window, QStringLiteral("explore_summary")),
+                     QStringLiteral("Black to move · 10 games by players rated under 1200 · the "
+                                    "database's evaluation -M1 at depth 99"));
         QCOMPARE(bar.white_share(), std::optional(0.0));
         QVERIFY(bar.isVisible());
         // 1. Nf3 d5 has no evaluation: the bar empties, keeping its width beside the board.
@@ -315,8 +513,8 @@ class ExploreTest : public QObject {
         click(board, "f3");
         click(board, "d7");
         click(board, "d5");
-        QTRY_COMPARE(child<QLabel>(window, QStringLiteral("explore_evaluation")).text(),
-                     QStringLiteral("Evaluation: no evaluation"));
+        QTRY_COMPARE(label(window, QStringLiteral("explore_summary")),
+                     QStringLiteral("White to move · 0 games by players rated under 1200"));
         QVERIFY(bar.isVisible());
         QCOMPARE(bar.width(), width);
         QCOMPARE(bar.white_share(), std::nullopt);
@@ -385,14 +583,31 @@ class ExploreTest : public QObject {
         click(board, "e4");
         QTRY_COMPARE(model(window).rowCount(), 3);
         QTRY_VERIFY(!board.animating());
+        const auto& screen = child<ExploreScreen>(window, QStringLiteral("explore_screen"));
+        const auto& columns =
+            *child<QTableView>(window, QStringLiteral("explore_table")).horizontalHeader();
         child<QAction>(window, QStringLiteral("theme_light")).trigger();
         QCOMPARE(board.board_scene().theme().dark_square,
                  chesscoach::app::BoardTheme::light().dark_square);
+        QCOMPARE(screen.study_palette().chrome, StudyPalette::light().chrome);
+        QVERIFY(
+            painted(*columns.viewport(), columns.viewport()->rect(), StudyPalette::light().chrome));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("light"));
         child<QAction>(window, QStringLiteral("theme_dark")).trigger();
         QCOMPARE(board.board_scene().theme().dark_square,
                  chesscoach::app::BoardTheme::dark().dark_square);
         QVERIFY(qApp->styleSheet().contains(QStringLiteral("#1f1b17")));
+        // The table repaints in the dark palette: its header, and the pills of 1... c5.
+        QCOMPARE(screen.study_palette().chrome, StudyPalette::dark().chrome);
+        QVERIFY(
+            painted(*columns.viewport(), columns.viewport()->rect(), StudyPalette::dark().chrome));
+        QVERIFY(!painted(*columns.viewport(), columns.viewport()->rect(),
+                         StudyPalette::light().chrome));
+        auto& table = child<QTableView>(window, QStringLiteral("explore_table"));
+        table.clearSelection();
+        QVERIFY(painted(*table.viewport(),
+                        table.visualRect(model(window).index(1, ExploreModel::badges_column)),
+                        StudyPalette::dark().book_bg));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("dark"));
         child<QAction>(window, QStringLiteral("theme_light")).trigger();
     }

@@ -1,6 +1,11 @@
 // The Explore screen's table model (explore_model.hpp).
 #include "explore_model.hpp"
 
+#include "tables.hpp"
+#include "wording.hpp"
+
+#include <QLatin1Char>
+
 #include <QCoreApplication>
 #include <QList>
 #include <QStringList>
@@ -28,32 +33,30 @@ QList<double> shares_of(const ExploreMove& move) {
     };
 }
 
-} // namespace
-
-QString badge_letters(Badges badges) {
-    QString letters;
-    if (badges.has(Badge::book)) {
-        letters += QLatin1Char('B');
+// White's score in the move's plays, wins plus half the draws, as a percentage, whichever side
+// is to move.
+double white_score(const ExploreMove& move) {
+    if (move.total <= 0) {
+        return 0;
     }
-    if (badges.has(Badge::popular)) {
-        letters += QLatin1Char('P');
-    }
-    if (badges.has(Badge::dubious)) {
-        letters += QLatin1Char('D');
-    }
-    return letters;
+    return 100.0 * (static_cast<double>(move.white) + (static_cast<double>(move.draws) / 2)) /
+           static_cast<double>(move.total);
 }
+
+// The columns of numbers, which read right-aligned.
+bool numeric(int column) {
+    return column == ExploreModel::games_column || column == ExploreModel::score_column ||
+           column == ExploreModel::top_tier_column;
+}
+
+} // namespace
 
 QString badge_names(Badges badges) {
     QStringList names;
-    if (badges.has(Badge::book)) {
-        names << translate("Book");
-    }
-    if (badges.has(Badge::popular)) {
-        names << translate("Popular");
-    }
-    if (badges.has(Badge::dubious)) {
-        names << translate("Dubious");
+    for (const Badge badge : {Badge::book, Badge::popular, Badge::dubious}) {
+        if (badges.has(badge)) {
+            names << badge_word(badge);
+        }
     }
     return names.join(QStringLiteral(", "));
 }
@@ -93,8 +96,10 @@ QVariant ExploreModel::data(const QModelIndex& index, int role) const {
     if (role == shares_role) {
         return QVariant::fromValue(shares_of(move));
     }
-    if (role == Qt::TextAlignmentRole && index.column() != move_column &&
-        index.column() != badges_column && index.column() != in_book_column) {
+    if (role == badges_role) {
+        return static_cast<uint>(move.badges.raw());
+    }
+    if (role == Qt::TextAlignmentRole && numeric(index.column())) {
         return QVariant::fromValue(Qt::Alignment(Qt::AlignRight | Qt::AlignVCenter));
     }
     if (role == Qt::ToolTipRole && index.column() == badges_column) {
@@ -107,9 +112,9 @@ QVariant ExploreModel::data(const QModelIndex& index, int role) const {
     case move_column:
         return move.san;
     case badges_column:
-        return badge_letters(move.badges);
+        return badge_names(move.badges);
     case games_column:
-        return move.total;
+        return number(move.total);
     case result_column: {
         const QList<double> shares = shares_of(move);
         return QStringLiteral("%1 / %2 / %3")
@@ -117,18 +122,41 @@ QVariant ExploreModel::data(const QModelIndex& index, int role) const {
                  percent(100 * shares.at(2)));
     }
     case score_column:
-        return percent(move.score_percent);
+        return percent(white_score(move)) + QLatin1Char('%');
     case top_tier_column:
-        return move.top_share ? percent(*move.top_share) : QStringLiteral("—");
-    case in_book_column:
-        return move.child_in_book ? translate("yes") : translate("no");
+        return move.top_share ? QString::number(*move.top_share, 'f', 0) + QLatin1Char('%')
+                              : QStringLiteral("–");
     default:
         return {};
     }
 }
 
 QVariant ExploreModel::headerData(int section, Qt::Orientation orientation, int role) const {
-    if (orientation != Qt::Horizontal || role != Qt::DisplayRole) {
+    if (orientation != Qt::Horizontal) {
+        return QAbstractTableModel::headerData(section, orientation, role);
+    }
+    if (role == Qt::TextAlignmentRole) {
+        return QVariant::fromValue(
+            Qt::Alignment((numeric(section) ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter));
+    }
+    if (role == header_note_role) {
+        return section == result_column ? translate("white · draw · black") : QVariant();
+    }
+    if (role == Qt::ToolTipRole) {
+        switch (section) {
+        case games_column:
+            return translate("How many games at this rating reached this move");
+        case result_column:
+            return translate("White wins · draws · Black wins, as a share of the games");
+        case score_column:
+            return translate("Wins plus half the draws, for White");
+        case top_tier_column:
+            return translate("How often players rated 2200 and above choose this move");
+        default:
+            return {};
+        }
+    }
+    if (role != Qt::DisplayRole) {
         return QAbstractTableModel::headerData(section, orientation, role);
     }
     switch (section) {
@@ -139,13 +167,11 @@ QVariant ExploreModel::headerData(int section, Qt::Orientation orientation, int 
     case games_column:
         return translate("Games");
     case result_column:
-        return translate("Result");
+        return translate("Results");
     case score_column:
-        return translate("Score %");
+        return translate("Score for White");
     case top_tier_column:
-        return translate("Top tier %");
-    case in_book_column:
-        return translate("In book");
+        return translate("Top players");
     default:
         return {};
     }

@@ -241,27 +241,57 @@ when black is mated and "-M0" when white is, and the evaluation bar fills for th
 
 ## Explore
 
-`ExploreScreen` shows the worker's answer:
+`ExploreScreen` shows the worker's answer, in the colours of the theme's `StudyPalette`
+(`app/src/study_palette.hpp`), which the window hands it with `set_palette` whenever it applies a
+theme (the light one until then):
 
-- **Above the table**: the opening name (`explore_name`, or "Unnamed"); the stored evaluation
-  (`explore_evaluation`), "+0.3" for centipawns as pawns from white's side, "M3" or "-M3" for a
-  mate for white or black, or "no evaluation"; and the node's games at the tier (`explore_games`).
-- **The table** (`explore_table`, a `QTableView` over `ExploreModel`): Move (SAN), Badges (the
-  letters B, P and D, with a tooltip naming them), Games, Result (a delegate painting the white,
-  draw and black shares as a bar with their percentages), Score % (one decimal), Top tier % (one
-  decimal, or an em dash without a tier-6 node), and In book (yes or no). The rows keep the
-  worker's order. Activating a row, by double-click or by Return or Enter, plays its move on the
-  board (`BoardView::play_move`), which then goes through the line like any other move.
+- **Its description** (`explore_description`), muted: "See what players at your rating play here,
+  and what the engine thinks. Play moves on the board to go deeper."
+- **The position's header**: the ECO code in a chip (`explore_eco`, hidden when the line has no
+  named position) before the opening's name (`explore_name`, "Unnamed" when there is none; Source
+  Serif 4 17 px semibold where the family is installed, else the application's font), the deepest
+  name along the line as the worker sends it, the code and the name split at the first space. Under
+  them one muted line (`explore_summary`): "White to move · 1,000 games by players rated
+  1600–1799 · the database's evaluation +0.2 at depth 40". The side to move comes from the stored
+  FEN and is left out when the position has none; the games are the node's at the tier (0 without
+  one), with the tier's rating band (**Wording**); the evaluation, from white's side ("+0.3" for
+  centipawns as pawns, "M3" or "-M3" for a mate for white or black), is left out when the position
+  has none.
+- **The table** (`explore_table`, a `QTableView` over `ExploreModel`, painted as **Tables** says):
+  Move (SAN, bold); Badges (the pills Book, Popular and Dubious, a muted "–" for none; the cell's
+  text and tooltip name them, and `badges_role` holds the bits); Games (with thousands
+  separators); Results (the results bar; the header adds "white · draw · black"); Score for White
+  (white's wins plus half the draws, with one decimal and a percent sign, whichever side is to
+  move); and Top players (the move's share of the plays at tier 6, rounded, or "–" without a tier-6
+  node). The numbers are right-aligned in tabular figures. The headers of Games, Results, Score for
+  White and Top players carry tooltips in plain words ("How many games at this rating reached this
+  move", "White wins · draws · Black wins, as a share of the games", "Wins plus half the draws, for
+  White", "How often players rated 2200 and above choose this move"). The rows keep the worker's
+  order. Activating a row, by double-click or by Return or Enter, plays its move on the board
+  (`BoardView::play_move`), which then goes through the line like any other move.
 - **Off book**: when the position has no node at the tier, a label (`explore_message`) replaces
-  the table: "Off book at <tier>: 0 games". The same label holds the empty state without a
-  database.
-- **The engine's lines**, below: a label (`engine_label`), "Engine", "Engine (cached)", or
-  "Engine: searching", "Engine: not found" or the failure, and a short list (`engine_lines`) with
-  one line per multipv, "1: depth 18 -0.3 Nc6 Bb5 Nf6", the score from white's side written as
-  the stored evaluation is.
+  the table: "No games at this rating after this move. The engine is your guide from here." The
+  same label holds the empty state without a database, the window's message, or "No opening
+  database is open. Import one with File > Import database." when it gives none.
+- **The engine's panel** (`engine_panel`), below: a head with the engine's name (`engine_label`,
+  bold) at the left and, muted at the right (`engine_detail`), "depth 18 · 3 lines" ("depth 20
+  (cached) · 3 lines" when the lines came from the cache), "thinking…" while it searches, or
+  another state ("not found", "failed to start") or the failure; then one line per multipv
+  (`engine_lines`), the score from white's side as the stored evaluation is written, bold in the
+  accent in a 44 px column, then the moves (an item's text is both, "-0.3 Nc6 Bb5 Nf6"). The name
+  is the state the worker reports when a search ends (**Engine worker**), so the head reads
+  "Engine" until a search has run. The panel keeps room for three lines, or for the most it has
+  shown, so that the table above does not move while the engine thinks.
 
 The model updates by removing and inserting rows rather than resetting, so the view keeps its
-column settings (Result stretches; the others fit their contents).
+column settings. The table asks for its rows' height, so the engine's panel sits right under the
+last row and the space left over is below the panel; when the rows need more room than there is,
+the table scrolls. Each column takes its content's width (its header's label or its widest cell);
+Move and Results keep theirs, and the spare width is shared among Badges, Games, Score for White
+and Top players in proportion to their contents', again whenever the rows or the width change. The
+table asks for the width of every column at its widest likely content (the header's label, or a
+sample such as the Popular and Dubious pills or "999,999" games) as its minimum, so the window
+gives the screen its room, and the board's column the rest, whatever the rows.
 
 `EvalBar` is the vertical bar beside the board: white's share of it is
 `1 / (1 + e^(-0.00368208 * cp))` for a centipawn score, the curve lichess draws its bar with, and
@@ -715,12 +745,17 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
 - `ui_explore_test`, on a fixture database the test writes into `core`'s schema with real keys
   (`app/tests/fixture_db.cpp`, the CLI fixture's rows, with the badges §7.3 gives them): opening it,
   with the data version, the start position off book at tier 2 and its moves with badges, bars,
-  scores and top-tier shares at tier 3; switching tiers; moves on the board showing the replies and
-  the deepest name; playing a row by double-click and by Return; going back by the move list, *Back*
-  and *New game*; an off-book position; the evaluation bar for a centipawn score, a mate and no
-  evaluation, its width kept; the Dubious 1. a3 at tier 4; a database that does not open;
-  `settings.ini` appearing only after a theme change, alone in the data directory; both themes; the
-  About dialog. Screenshots: `explore-start-tier3`, `explore-sicilian-light`, `explore-off-book`,
+  scores and top-tier shares at tier 3, and the line under the name; the header's names, note,
+  tooltips and alignments; the table as tall as its rows with the engine's panel under it, and its
+  columns filling the width, none narrower than its content; the pills, the results bar, the rules
+  and the selection as painted, read from the table's pixels; switching tiers; moves on the board
+  showing the replies, the ECO chip and the deepest name; playing a row by double-click and by
+  Return; going back by the move list, *Back* and *New game*; an off-book position; the evaluation
+  bar for a centipawn score, a mate and no evaluation, its width kept; the Dubious 1. a3 at tier 4;
+  a database that does not open; `settings.ini` appearing only after a theme change, alone in the
+  data directory; both themes, the table repainting in each palette; the screen's muted description
+  and its plain empty state; the About dialog. Screenshots: `explore-start-tier3`,
+  `explore-fitted-tier3`, `explore-pills-tier4`, `explore-sicilian-light`, `explore-off-book`,
   `explore-light`, `explore-dark`, `about-dialog`.
 - `ui_engine_test`, with core's fake engine (`fake-uci`) set as the binary through
   `app/tests/fake-stockfish.sh`, its script, delay and log chosen by environment variables: the

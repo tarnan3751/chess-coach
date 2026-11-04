@@ -1300,6 +1300,7 @@ void MainWindow::apply_theme(const QString& theme) {
     if (stylesheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
         qApp->setStyleSheet(QString::fromUtf8(stylesheet.readAll()));
     }
+    explore_->set_palette(palette);
     board_->set_theme(dark ? BoardTheme::dark() : BoardTheme::light());
     eval_bar_->set_palette(palette);
     for (const auto& [action, icon] : themed_actions_) {

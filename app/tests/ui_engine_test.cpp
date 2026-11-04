@@ -128,10 +128,12 @@ class EngineTest : public QObject {
         // Qt 6.4's expansion of this macro mixes / and + without parentheses.
         // NOLINTNEXTLINE(readability-math-missing-parentheses)
         QTRY_COMPARE_WITH_TIMEOUT(line_count(window), 3, first_wait_ms);
-        QCOMPARE(line_text(window, 0), QStringLiteral("1: depth 3 +0.3 e4 e5"));
-        QCOMPARE(line_text(window, 1), QStringLiteral("2: depth 3 +0.3 d4 e5"));
-        QCOMPARE(line_text(window, 2), QStringLiteral("3: depth 3 +0.3 Nf3 e5"));
-        QCOMPARE(text_of(window, QStringLiteral("engine_label")), QStringLiteral("Engine"));
+        QCOMPARE(line_text(window, 0), QStringLiteral("+0.3 e4 e5"));
+        QCOMPARE(line_text(window, 1), QStringLiteral("+0.3 d4 e5"));
+        QCOMPARE(line_text(window, 2), QStringLiteral("+0.3 Nf3 e5"));
+        QCOMPARE(text_of(window, QStringLiteral("engine_label")), QStringLiteral("FakeUCI 1.0"));
+        QCOMPARE(text_of(window, QStringLiteral("engine_detail")),
+                 QStringLiteral("depth 3 · 3 lines"));
         QCOMPARE(text_of(window, QStringLiteral("engine_status")),
                  QStringLiteral("FakeUCI 1.0 ready"));
         // The stored evaluation feeds the bar where there is one.
@@ -148,7 +150,7 @@ class EngineTest : public QObject {
         click(board, "e2");
         click(board, "e4");
         QTRY_VERIFY(line_count(window) == 3 &&
-                    line_text(window, 0).startsWith(QStringLiteral("1: depth 3 -0.3")));
+                    line_text(window, 0).startsWith(QStringLiteral("-0.3 ")));
 
         // Without a stored evaluation (1. Nf3 d5), the engine's first line feeds the bar.
         child<QAction>(window, QStringLiteral("new_game_action")).trigger();
@@ -178,16 +180,14 @@ class EngineTest : public QObject {
         for (const auto* square : {"f2", "f3", "e7", "e5", "g2", "g4", "d8", "h4"}) {
             click(board, square);
         }
-        QTRY_VERIFY(line_count(window) == 1 &&
-                    line_text(window, 0) == QStringLiteral("1: depth 0 -M0"));
+        QTRY_VERIFY(line_count(window) == 1 && line_text(window, 0) == QStringLiteral("-M0"));
         QCOMPARE(bar.white_share(), std::optional(0.0));
         // 1. e4 g5 2. d4 f6 3. Qh5#: black, to move, is mated; the bar is white's.
         child<QAction>(window, QStringLiteral("new_game_action")).trigger();
         for (const auto* square : {"e2", "e4", "g7", "g5", "d2", "d4", "f7", "f6", "d1", "h5"}) {
             click(board, square);
         }
-        QTRY_VERIFY(line_count(window) == 1 &&
-                    line_text(window, 0) == QStringLiteral("1: depth 0 M0"));
+        QTRY_VERIFY(line_count(window) == 1 && line_text(window, 0) == QStringLiteral("M0"));
         QCOMPARE(bar.white_share(), std::optional(1.0));
     }
 
@@ -215,10 +215,12 @@ class EngineTest : public QObject {
         qputenv("CHESSCOACH_FAKE_UCI_LOG", log.toUtf8());
         Settings(data_dir).set_engine(fake(0.1));
         const MainWindow window(data_dir, QString::fromStdString(db_->path()));
-        QTRY_COMPARE(text_of(window, QStringLiteral("engine_label")),
-                     QStringLiteral("Engine (cached)"));
+        QTRY_COMPARE(text_of(window, QStringLiteral("engine_detail")),
+                     QStringLiteral("depth 20 (cached) · 3 lines"));
+        // No engine has answered yet to give its name.
+        QCOMPARE(text_of(window, QStringLiteral("engine_label")), QStringLiteral("Engine"));
         QCOMPARE(line_count(window), 3);
-        QCOMPARE(line_text(window, 0), QStringLiteral("1: depth 20 +0.2 d4 d5"));
+        QCOMPARE(line_text(window, 0), QStringLiteral("+0.2 d4 d5"));
         // The engine never started.
         QVERIFY(!QFile::exists(log));
         QCOMPARE(text_of(window, QStringLiteral("engine_status")),
@@ -230,8 +232,8 @@ class EngineTest : public QObject {
         MainWindow& window = *session->window;
         // Qt 6.4's expansion of this macro mixes / and + without parentheses.
         // NOLINTNEXTLINE(readability-math-missing-parentheses)
-        QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_label")),
-                                  QStringLiteral("Engine: searching"), first_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_detail")),
+                                  QStringLiteral("thinking…"), first_wait_ms);
         QCOMPARE(text_of(window, QStringLiteral("engine_status")),
                  QStringLiteral("FakeUCI 1.0 thinking\u2026"));
 
@@ -253,8 +255,7 @@ class EngineTest : public QObject {
         QTRY_VERIFY(session->received().count(QStringLiteral("stop")) >= 1);
         QTRY_COMPARE(session->received().filter(QStringLiteral("go movetime")).size(), 2);
         QCOMPARE(line_count(window), 0); // the stopped search's lines never show
-        QTRY_COMPARE(text_of(window, QStringLiteral("engine_label")),
-                     QStringLiteral("Engine: searching"));
+        QTRY_COMPARE(text_of(window, QStringLiteral("engine_detail")), QStringLiteral("thinking…"));
         QTRY_VERIFY(ticks >= 3); // NOLINT(readability-math-missing-parentheses)
 
         // Closing the window stops the second search too, without waiting for its 30 s.
@@ -272,8 +273,8 @@ class EngineTest : public QObject {
         const MainWindow& window = *session.window;
         QTRY_COMPARE(text_of(window, QStringLiteral("engine_status")),
                      QStringLiteral("No engine found"));
-        QCOMPARE(text_of(window, QStringLiteral("engine_label")),
-                 QStringLiteral("Engine: not found"));
+        QCOMPARE(text_of(window, QStringLiteral("engine_label")), QStringLiteral("Engine"));
+        QCOMPARE(text_of(window, QStringLiteral("engine_detail")), QStringLiteral("not found"));
         QCOMPARE(line_count(window), 0);
         // Nothing was searched, so nothing was cached: settings.ini is all there is.
         QCOMPARE(QDir(session.data_dir).entryList(QDir::AllEntries | QDir::NoDotAndDotDot),
@@ -289,8 +290,9 @@ class EngineTest : public QObject {
         // NOLINTNEXTLINE(readability-math-missing-parentheses)
         QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_status")),
                                   QStringLiteral("The engine did not start"), first_wait_ms);
-        QVERIFY(
-            text_of(window, QStringLiteral("engine_label")).startsWith(QStringLiteral("Engine: ")));
+        // The panel's head says so, under no engine's name.
+        QCOMPARE(text_of(window, QStringLiteral("engine_label")), QStringLiteral("Engine"));
+        QVERIFY(!text_of(window, QStringLiteral("engine_detail")).isEmpty());
         QCOMPARE(line_count(window), 0);
     }
 
