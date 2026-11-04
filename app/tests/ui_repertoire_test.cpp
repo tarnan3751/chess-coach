@@ -2,8 +2,9 @@
 // by a board move and shown in the tree, the coverage equal to core's compute_coverage on the same
 // stores, a choice replaced by another move, the gap it leaves listed and Go to taking the board
 // there, Save this move setting a recommended move, Remove this move clearing it, and a PGN import
-// with its counts; the black repertoire; and File > Back up your work and Restore a backup
-// restoring a repertoire.
+// with its counts; the black repertoire; File > Back up your work and Restore a backup restoring a
+// repertoire; and a backup with nothing to back up, a backup to a folder it cannot write and a
+// restore of a file that is not a backup, each saying so for its file.
 // Screenshots of the repertoire and its gaps (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
@@ -279,6 +280,56 @@ class RepertoireTest : public QObject {
         QVERIFY(
             QFile::exists(QDir(session.data_dir).filePath(QStringLiteral("profiles.db.previous"))));
         QVERIFY(window.findChild<QWidget*>(QStringLiteral("profile_error")) == nullptr);
+    }
+
+    void a_backup_or_restore_that_fails_says_why_for_its_file() {
+        const Session session(*db_);
+        MainWindow& window = *session.window;
+        // The box's text, once it shows, which closes it for the next.
+        const auto error = [&window] {
+            QMessageBox* box = nullptr;
+            const bool shown = QTest::qWaitFor([&] {
+                box = window.findChild<QMessageBox*>(QStringLiteral("profile_error"));
+                return box != nullptr;
+            });
+            if (!shown) {
+                return QStringLiteral("no message");
+            }
+            const QString text = box->text();
+            delete box;
+            return text;
+        };
+        // Nothing saved yet, so there is no profiles.db to back up.
+        window.export_profile(session.root.filePath(QStringLiteral("first.db")));
+        QCOMPARE(error(), QStringLiteral("There is nothing to back up yet. Save a move to your "
+                                         "repertoire or play a practice game first."));
+
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        click(board, "e2");
+        click(board, "e4");
+        QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. e4")});
+        // A folder the backup cannot be written to.
+        const QString locked = session.root.filePath(QStringLiteral("locked"));
+        QVERIFY(QDir().mkpath(locked));
+        QVERIFY(QFile::setPermissions(locked, QFile::ReadOwner | QFile::ExeOwner));
+        window.export_profile(QDir(locked).filePath(QStringLiteral("backup.db")));
+        QCOMPARE(error(), QStringLiteral("The backup could not be written to %1. Choose another "
+                                         "folder.")
+                              .arg(QDir::toNativeSeparators(locked)));
+        QVERIFY(
+            QFile::setPermissions(locked, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+
+        // A file that is not a backup is refused by its name.
+        const QString junk = session.root.filePath(QStringLiteral("junk.db"));
+        {
+            QFile file(junk);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write("not a backup");
+        }
+        window.import_profile(junk);
+        QCOMPARE(error(), QStringLiteral("Your work was not restored. junk.db is not a chess-coach "
+                                         "backup. Choose a file saved with File > Back up your "
+                                         "work."));
     }
 };
 

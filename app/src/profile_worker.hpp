@@ -30,9 +30,6 @@ class ProfileWorker : public QObject {
     ~ProfileWorker() override;
     Q_DISABLE_COPY_MOVE(ProfileWorker)
 
-    // What a profile store error says, for a message.
-    [[nodiscard]] static QString describe(ProfileError error);
-
     // Closes the profile store, so that another may replace profiles.db; the next slot reopens it.
     Q_SLOT void close_stores();
     // The opening database to read coverage and scores from now on.
@@ -78,6 +75,20 @@ class ProfileWorker : public QObject {
     void profile_failed(const QString& message);
 
   private:
+    // What the user was doing when a profile store error came, which its message names.
+    enum class Task : std::uint8_t {
+        use,     // reading or changing the data folder's profiles.db
+        back_up, // File > Back up your work, to a file
+        restore, // File > Restore a backup, from a file
+    };
+
+    // What a profile store error says while task ran, the way forward included: file is the
+    // backup's destination or the restore's source, and every other error is about the data
+    // folder's profiles.db.
+    [[nodiscard]] QString describe(ProfileError error, Task task = Task::use,
+                                   const QString& file = QString()) const;
+    // The data folder's profiles.db, as the messages name it.
+    [[nodiscard]] QString saved_file() const;
     // The store, or nullptr: without create, when profiles.db does not exist yet.
     [[nodiscard]] ProfileStore* open_profiles(bool create);
     [[nodiscard]] const OpeningStore* open_store();

@@ -445,9 +445,14 @@ that reaches a position with a choice. A position is walked once, by the first l
 it, so a transposition shows under one line only, and a card is named to follow "Your move" by
 that line ("after 1. e4 e5 2. Nf3"), "in the starting position", or "here" when the tree does not
 reach it, never by its FEN. "Now" is the clock's seconds, given to the store for the due cards and each
-review. A message says what happened and then one way forward, a profile store error in its own
-sentences ("That file is not a chess-coach backup. Choose a file saved with File > Back up your
-work."), and a read that throws names `profiles.db` and the restore.
+review. A message says what happened and then one way forward, a profile store error worded for
+what the user was doing (`describe(error, task, file)`) and naming the file it is about: on a
+backup, the folder it could not be written to ("The backup could not be written to …. Choose
+another folder.") or that there is nothing to back up yet when no `profiles.db` exists; on a
+restore, the chosen file ("junk.db is not a chess-coach backup. Choose a file saved with File >
+Back up your work."); otherwise the data folder's own `profiles.db`, by its path ("Your saved work
+in … could not be opened. Restore a backup with File > Restore a backup, or move the file away to
+start afresh.", or the program that has it open). A read that throws says the same of the file.
 
 ## Repertoire
 
@@ -800,9 +805,11 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   then replaced by 1. a3, each time with the coverage equal to core's `compute_coverage` on the same
   stores; the gap 1. a3 e5 listed and Go to this position taking the board there; Save this move
   setting Nf3 there from the recommendation panel and Remove this move clearing it; a PGN import
-  with its counts, a move left out among them; the black repertoire, the board turned and white's move only followed; and an export,
-  refused a second time over the same file, imported back after the choice was removed. Screenshots:
-  `repertoire-gaps`, `repertoire-tree`.
+  with its counts, a move left out among them; the black repertoire, the board turned and white's
+  move only followed; an export, refused a second time over the same file, imported back after the
+  choice was removed; and the messages of a backup with nothing to back up, a backup to a folder
+  it cannot write, and a restore of a file that is not a backup. Screenshots: `repertoire-gaps`,
+  `repertoire-tree`.
 - `ui_lookup_test`, with a scratch folder as the bundle's resources
   (`CHESS_COACH_BUNDLE_RESOURCES`): the database `--db` names, a `--db` that names no file reported
   in the error box, the bundle's when the data directory has none, and the empty state naming the

@@ -30,53 +30,12 @@ QString translate(const char* text) {
     return QCoreApplication::translate("chesscoach::app::ProfileWorker", text);
 }
 
-} // namespace
-
-QString ProfileWorker::describe(ProfileError error) {
-    switch (error) {
-    case ProfileError::unwritable:
-        return translate("chess-coach cannot write profiles.db in its data folder. Check that the "
-                         "folder exists and that you may write to it.");
-    case ProfileError::not_profiles:
-        return translate("That file is not a chess-coach backup. Choose a file saved with File > "
-                         "Back up your work.");
-    case ProfileError::newer_version:
-        return translate("That file comes from a newer chess-coach. Update chess-coach to open "
-                         "it.");
-    case ProfileError::migration_failed:
-        return translate("That file could not be brought up to date for this chess-coach. Choose "
-                         "another backup.");
-    case ProfileError::invalid_name:
-    case ProfileError::duplicate_name:
-    case ProfileError::no_such_profile:
-    case ProfileError::last_profile:
-        return translate("Your saved work could not be found. Restart chess-coach and try again.");
-    case ProfileError::storage:
-        return translate("Writing to the disk failed. Check that it has free space.");
-    case ProfileError::invalid_choice:
-        return translate("That move is not one your repertoire's colour plays here. Play a move "
-                         "for your own side.");
-    case ProfileError::no_such_card:
-        return translate("That card is no longer there. Press Update cards from your "
-                         "repertoire.");
-    case ProfileError::busy:
-        return translate("Another program has the file open, so nothing was changed. Close it "
-                         "and try again.");
-    }
-    return {};
+// A read of the data folder's profiles.db, saved, that threw.
+QString unreadable(const QString& saved) {
+    return translate("Your saved work in %1 could not be read. Restore a backup with File > "
+                     "Restore a backup, or move the file away to start afresh.")
+        .arg(saved);
 }
-
-namespace {
-
-// A read of profiles.db that threw.
-QString unreadable() {
-    return translate("Your saved work in profiles.db could not be read. Restore a backup with "
-                     "File > Restore a backup.");
-}
-
-} // namespace
-
-namespace {
 
 std::int64_t now() { return QDateTime::currentSecsSinceEpoch(); }
 
@@ -187,6 +146,91 @@ TreeWalk walk_repertoire(const Repertoire& choices, Color colour) {
 
 } // namespace
 
+QString ProfileWorker::saved_file() const {
+    return QDir::toNativeSeparators(
+        QDir(QString::fromStdString(data_dir_.string())).filePath(QStringLiteral("profiles.db")));
+}
+
+QString ProfileWorker::describe(ProfileError error, Task task, const QString& file) const {
+    // A backup and a restore name their own file where the error is about it; the rest is about
+    // the data folder's profiles.db, whatever the task.
+    if (task == Task::back_up) {
+        const QString folder = QDir::toNativeSeparators(QFileInfo(file).absolutePath());
+        switch (error) {
+        case ProfileError::unwritable:
+            return translate("The backup could not be written to %1. Choose another folder.")
+                .arg(folder);
+        case ProfileError::not_profiles:
+            return translate("There is nothing to back up yet. Save a move to your repertoire or "
+                             "play a practice game first.");
+        case ProfileError::storage:
+            return translate("The backup could not be written to %1. Check that the disk has free "
+                             "space.")
+                .arg(folder);
+        case ProfileError::busy:
+            return translate("Another program has %1 open, so nothing was backed up. Close it and "
+                             "try again.")
+                .arg(saved_file());
+        default:
+            break;
+        }
+    } else if (task == Task::restore) {
+        const QString name = QFileInfo(file).fileName();
+        switch (error) {
+        case ProfileError::not_profiles:
+            return translate("%1 is not a chess-coach backup. Choose a file saved with File > Back "
+                             "up your work.")
+                .arg(name);
+        case ProfileError::newer_version:
+            return translate("%1 comes from a newer chess-coach. Update chess-coach to restore it.")
+                .arg(name);
+        case ProfileError::migration_failed:
+            return translate("%1 could not be brought up to date for this chess-coach. Choose "
+                             "another backup.")
+                .arg(name);
+        case ProfileError::unwritable:
+            return translate("chess-coach cannot write to its data folder, %1. Check that you may "
+                             "write there.")
+                .arg(QDir::toNativeSeparators(QString::fromStdString(data_dir_.string())));
+        default:
+            break;
+        }
+    }
+    switch (error) {
+    case ProfileError::unwritable:
+        return translate("Your saved work cannot be written to %1. Check that the folder exists "
+                         "and that you may write to it.")
+            .arg(QDir::toNativeSeparators(QString::fromStdString(data_dir_.string())));
+    case ProfileError::not_profiles:
+    case ProfileError::migration_failed:
+    case ProfileError::invalid_name:
+    case ProfileError::duplicate_name:
+    case ProfileError::no_such_profile:
+    case ProfileError::last_profile:
+        return translate("Your saved work in %1 could not be opened. Restore a backup with File > "
+                         "Restore a backup, or move the file away to start afresh.")
+            .arg(saved_file());
+    case ProfileError::newer_version:
+        return translate("Your saved work in %1 comes from a newer chess-coach. Update chess-coach "
+                         "to open it.")
+            .arg(saved_file());
+    case ProfileError::storage:
+        return translate("Writing to %1 failed. Check that the disk has free space.")
+            .arg(saved_file());
+    case ProfileError::invalid_choice:
+        return translate("That move is not one your repertoire's colour plays here. Play a move "
+                         "for your own side.");
+    case ProfileError::no_such_card:
+        return translate("That card is no longer there. Press Update cards from your "
+                         "repertoire.");
+    case ProfileError::busy:
+        return translate("Another program has %1 open, so nothing was changed. Close it and try "
+                         "again.")
+            .arg(saved_file());
+    }
+    return {};
+}
+
 void register_profile_types() {
     qRegisterMetaType<RepertoireData>();
     qRegisterMetaType<CoverageData>();
@@ -210,7 +254,7 @@ ProfileStore* ProfileWorker::open_profiles(bool create) {
     }
     auto profiles = ProfileStore::open(data_dir_);
     if (!profiles) {
-        fail(tr("Your saved work could not be opened. %1").arg(describe(profiles.error())));
+        fail(describe(profiles.error()));
         return nullptr;
     }
     return &profiles_.emplace(std::move(*profiles));
@@ -237,8 +281,7 @@ std::optional<ProfileWorker::Writable> ProfileWorker::writable_profile() {
     }
     const auto profile = default_profile(*profiles);
     if (!profile) {
-        fail(tr("Your saved work could not be found. Restore a backup with File > Restore a "
-                "backup."));
+        fail(describe(ProfileError::no_such_profile));
         return std::nullopt;
     }
     return Writable{.store = profiles, .profile = *profile};
@@ -274,7 +317,7 @@ void ProfileWorker::set_choice(bool white, quint64 key, const QString& fen, cons
                                            : tr("Saved to your repertoire."));
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(unreadable());
+        fail(unreadable(saved_file()));
     }
 }
 
@@ -294,7 +337,7 @@ void ProfileWorker::remove_choice(bool white, quint64 key) {
                                                 : tr("There was no move saved here."));
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(unreadable());
+        fail(unreadable(saved_file()));
     }
 }
 
@@ -314,7 +357,7 @@ void ProfileWorker::load_repertoire(bool white) {
         }
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(unreadable());
+        fail(unreadable(saved_file()));
     }
     emit repertoire_ready(data);
 }
@@ -391,7 +434,7 @@ void ProfileWorker::score_position(quint64 key, int tier) {
         }
     } catch (const std::exception&) {
         store_.reset();
-        fail(tr("The opening database could not be read. Import it again with File > Import "
+        fail(tr("The opening database could not be read. Import another one with File > Import "
                 "database."));
     }
     emit scores_ready(data);
@@ -433,7 +476,7 @@ void ProfileWorker::import_pgn(const QString& path, bool white) {
         emit repertoire_changed(white, QString()); // pgn_imported says what changed
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(unreadable());
+        fail(unreadable(saved_file()));
     }
 }
 
@@ -455,7 +498,7 @@ void ProfileWorker::sync_cards(bool white) {
         emit cards_synced(white, synced->created, synced->reset, synced->deleted);
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(unreadable());
+        fail(unreadable(saved_file()));
     }
 }
 
@@ -511,7 +554,7 @@ void ProfileWorker::due_cards(bool white) {
         }
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(unreadable());
+        fail(unreadable(saved_file()));
     }
     emit cards_ready(data);
 }
@@ -543,16 +586,17 @@ void ProfileWorker::record_review(qint64 card_id, bool white, quint64 key, int g
         emit review_recorded(card_id, card->state.due_at);
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(unreadable());
+        fail(unreadable(saved_file()));
     }
 }
 
 void ProfileWorker::import_profiles(const QString& path) {
     profiles_.reset();
     const auto imported = ProfileStore::import_profiles(data_dir_, path.toStdString());
-    emit profiles_imported(
-        path, imported ? QString()
-                       : tr("Your work was not restored. %1").arg(describe(imported.error())));
+    emit profiles_imported(path, imported
+                                     ? QString()
+                                     : tr("Your work was not restored. %1")
+                                           .arg(describe(imported.error(), Task::restore, path)));
 }
 
 void ProfileWorker::export_profiles(const QString& path) {
@@ -566,7 +610,7 @@ void ProfileWorker::export_profiles(const QString& path) {
     const auto exported =
         ProfileStore::export_profiles(data_dir_, std::filesystem::path(path.toStdString()));
     if (!exported) {
-        emit export_failed(tr("The backup was not saved. %1").arg(describe(exported.error())));
+        emit export_failed(describe(exported.error(), Task::back_up, path));
         return;
     }
     emit profiles_exported(path);

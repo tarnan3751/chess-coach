@@ -185,7 +185,7 @@ void DbWorker::query(const QVector<quint64>& line_keys, int tier) {
         // file corrupted on disk); the database is then closed.
         store_.reset();
         emit database_failed(tr("The opening database could not be read. It may be damaged. "
-                                "Import it again with File > Import database."));
+                                "Import another one with File > Import database."));
     }
 }
 
