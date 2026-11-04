@@ -43,8 +43,8 @@ if(BUILD_TESTING)
     tests/fixture.cpp
     tests/fixture.hpp)
   target_include_directories(cli_test_fixture PUBLIC tests)
-  target_link_libraries(cli_test_fixture PUBLIC chesscoach::core PRIVATE SQLiteCpp
-                                                                          chesscoach::warnings)
+  target_link_libraries(cli_test_fixture PUBLIC chesscoach::core core_test_fixture
+                                         PRIVATE chesscoach::warnings)
   chesscoach_assert_no_qt(cli_test_fixture)
 
   chesscoach_add_test(cli_commands_test MODULE cli KIND unit

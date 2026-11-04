@@ -697,4 +697,8 @@ directory of their own, `file_swap_test`, `names_test`, `opening_locator_test` a
 `opening_store_test` here and the CLI's `cli_database_command_test`, `cli_engine_commands_test`,
 `cli_repertoire_commands_test` and `cli_spar_test`, make it a `ScratchDir`
 (`core/tests/support/scratch_dir.hpp`, the `core_test_support` target), emptied when it is made
-and removed when the test case ends.
+and removed when the test case ends. The CLI's and the app's fixture databases
+(`cli/tests/fixture.cpp`, `app/tests/fixture_db.cpp`) share their writer,
+`core/tests/support/fixture_writer.hpp` (the `core_test_fixture` target), and differ in their rows
+on purpose: the app's badges follow §7.3, the CLI's are set by hand for its expected outputs and
+its scripted spar session, and only the app's hold a tier-4 tree.

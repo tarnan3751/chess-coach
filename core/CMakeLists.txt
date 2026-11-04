@@ -66,6 +66,15 @@ if(BUILD_TESTING)
   # links it defines CHESSCOACH_TEST_SCRATCH_DIR.
   add_library(core_test_support INTERFACE tests/support/scratch_dir.hpp)
   target_include_directories(core_test_support INTERFACE tests/support)
+  # The opening-database writer the CLI's and the app's test fixtures share, each with rows of its
+  # own (tests/support/fixture_writer.hpp).
+  add_library(core_test_fixture STATIC
+    tests/support/fixture_writer.cpp
+    tests/support/fixture_writer.hpp)
+  target_include_directories(core_test_fixture PUBLIC tests/support)
+  target_link_libraries(core_test_fixture PUBLIC chesscoach::core PRIVATE SQLiteCpp
+                                                                           chesscoach::warnings)
+  chesscoach_assert_no_qt(core_test_fixture)
 
   chesscoach_add_test(core_badges_test MODULE core KIND unit
                       SOURCES tests/badges_test.cpp

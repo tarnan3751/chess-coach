@@ -147,14 +147,14 @@ set_target_properties(app PROPERTIES OUTPUT_NAME chess-coach)
 target_link_libraries(app PRIVATE chesscoach::app_lib chesscoach::warnings)
 
 if(BUILD_TESTING)
-  # The fixture opening database the Explore tests open, written into core's schema with
-  # SQLiteCpp, as the CLI's tests write theirs.
+  # The fixture opening database the Explore tests open, written into core's schema by the writer
+  # it shares with the CLI's tests (core_test_fixture); its helpers edit files with SQLiteCpp.
   add_library(app_test_fixture STATIC
     tests/fixture_db.cpp
     tests/fixture_db.hpp)
   target_include_directories(app_test_fixture PUBLIC tests)
-  target_link_libraries(app_test_fixture PUBLIC chesscoach::core PRIVATE SQLiteCpp
-                                                                          chesscoach::warnings)
+  target_link_libraries(app_test_fixture PUBLIC chesscoach::core core_test_fixture
+                                         PRIVATE SQLiteCpp chesscoach::warnings)
 
   # The bundled fonts, the stylesheets and the themed icons; the window's column split; each on
   # an offscreen application of the test's own (tests/offscreen_application.hpp).
