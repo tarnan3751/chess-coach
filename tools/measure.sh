@@ -11,6 +11,9 @@
 #   practice  app_measure practice: --runs processes of one game each, with the engine
 #   board     app_measure board: one process of --runs repetitions, at a device pixel ratio of 1
 #             and of 2 (QT_SCALE_FACTOR=2, as on a Retina display)
+#   repertoire  app_measure repertoire: one process, --runs windows at each coverage depth (10 and
+#             20 plies) over ten saved moves, entering the screen, changing colour, saving a move
+#   drill     app_measure drill: one process, --runs windows, each a drill of five cards synced back
 #   memory    app_measure memory: --runs processes, each one session of Explore steps, practice
 #             games and a drill, the resident size read along it
 #   pipeline  build/release/pipeline/pipeline_bench_test, the sample built --runs times
@@ -19,6 +22,8 @@
 #
 #   tools/measure.sh [--db <file>] [--engine <binary>] [--runs <n>] [--tier <0-6>] [--out <file>]
 #                    [<section>...]
+# Sections: startup explore practice board repertoire drill memory pipeline cli (all of them by
+# default).
 #
 # --db is the opening database, read only (the release database for the baseline); without it the
 # sample is built through the pipeline into a scratch directory. --engine is the Stockfish for the
@@ -46,16 +51,16 @@ while [ $# -gt 0 ]; do
     --runs) runs="${2:-}"; shift 2 ;;
     --tier) tier="${2:-}"; shift 2 ;;
     --out) out="${2:-}"; shift 2 ;;
-    startup|explore|practice|board|memory|pipeline|cli) sections+=("$1"); shift ;;
+    startup|explore|practice|board|repertoire|drill|memory|pipeline|cli) sections+=("$1"); shift ;;
     *)
       echo "usage: tools/measure.sh [--db <file>] [--engine <binary>] [--runs <n>] [--tier <0-6>]" \
-        "[--out <file>] [startup|explore|practice|board|memory|pipeline|cli]..." >&2
+        "[--out <file>] [startup|explore|practice|board|repertoire|drill|memory|pipeline|cli]..." >&2
       exit 2
       ;;
   esac
 done
 case "$runs" in ''|*[!0-9]*|0) echo "measure: --runs must be a positive number" >&2; exit 2 ;; esac
-[ ${#sections[@]} -gt 0 ] || sections=(startup explore practice board memory pipeline cli)
+[ ${#sections[@]} -gt 0 ] || sections=(startup explore practice board repertoire drill memory pipeline cli)
 if [ -z "$engine" ]; then
   engine="$(command -v stockfish || true)"
 fi
@@ -162,6 +167,12 @@ for section in "${sections[@]}"; do
     board)
       app board --db "$db" --tier "$tier" --runs "$runs"
       QT_SCALE_FACTOR=2 app board --db "$db" --tier "$tier" --runs "$runs"
+      ;;
+    repertoire)
+      app repertoire --db "$db" --tier "$tier" --runs "$runs"
+      ;;
+    drill)
+      app drill --db "$db" --tier "$tier" --runs "$runs"
       ;;
     memory)
       for ((i = 0; i < runs; i++)); do

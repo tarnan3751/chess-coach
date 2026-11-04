@@ -6,27 +6,30 @@
 // and times with QElapsedTimer what the user waits for: the cold start to the first paint and to
 // the Explore table's first rows, an Explore step to the new rows painted (and the engine's lines),
 // a Practice reply to the coach's move painted, the board's repaints and its animation's frames,
-// and the resident memory along a session. "Painted" is the end of the paint pass in which a
-// widget showing the answer painted: the application's notify sees every event of the GUI thread,
-// so a pass ends when the outermost event that held the paint (an update request, or an expose)
-// has returned, flush included. Every wait is driven by those events, never by sleeping between
-// polls as QTest::qWait does, which would delay what is measured.
+// the Repertoire screen's tree and coverage on entering, on changing colour and after saving a
+// move, Drill's cards synced, shown, answered and graded, and the resident memory along a session.
+// "Painted" is the end of the paint pass in which a widget showing the answer painted: the
+// application's notify sees every event of the GUI thread, so a pass ends when the outermost event
+// that held the paint (an update request, or an expose) has returned, flush included. Every wait is
+// driven by those events, never by sleeping between polls as QTest::qWait does, which would delay
+// what is measured.
 //
-//   app_measure <startup|explore|practice|board|memory|all> (--db <file> | --fixture)
-//               [--engine <binary>] [--runs <n>] [--tier <0-6>]
+//   app_measure <startup|explore|practice|board|repertoire|drill|memory|all>
+//               (--db <file> | --fixture) [--engine <binary>] [--runs <n>] [--tier <0-6>]
 //
 // --engine names the Stockfish both engines use, at one thread and 16 MB of hash; without it the
 // engine is off (a binary that is not there), Explore shows no lines and Practice ends a game at
 // the first position where it cannot stay in book. --runs is the repetitions inside one process
-// (5): of each Explore step, of the board's measures, of the practice games; startup measures once
-// per process, and memory follows one fixed session. It prints tab-separated lines that
-// tools/measure.sh gathers over runs into medians and spreads: "info <key> <value>", "method
-// <metric> <unit> <how>" once per metric before its first sample, and "sample <metric> <value>".
-// Nothing of it is in the app's own code paths: it finds the window's widgets by their object
-// names, as the UI tests do (ui_harness.hpp, which also makes it silent), and chooses its moves
-// and computes what the window should show from its own read-only connection to the database.
-// ctest runs every scenario once on the fixture with the fake engine (app; bench, release preset):
-// a smoke run, which fails only when a step never completes, never on a time.
+// (5): of each Explore step, of the board's measures, of the practice games, of the Repertoire
+// screen's steps at each coverage depth and of the drills, each of those two on a window of its
+// own; startup measures once per process, and memory follows one fixed session. It prints
+// tab-separated lines that tools/measure.sh gathers over runs into medians and spreads: "info <key>
+// <value>", "method <metric> <unit> <how>" once per metric before its first sample, and "sample
+// <metric> <value>". Nothing of it is in the app's own code paths: it finds the window's widgets by
+// their object names, as the UI tests do (ui_harness.hpp, which also makes it silent), and chooses
+// its moves and computes what the window should show from its own read-only connection to the
+// database. ctest runs every scenario once on the fixture with the fake engine (app; bench, release
+// preset): a smoke run, which fails only when a step never completes, never on a time.
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
@@ -54,6 +57,7 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QEventLoop>
@@ -65,10 +69,12 @@
 #include <QSettings>
 #include <QStringList>
 #include <QTabBar>
+#include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QThread>
 #include <QTimer>
+#include <QTreeView>
 #include <QWidget>
 #include <QtGlobal>
 
@@ -82,6 +88,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -126,6 +133,12 @@ constexpr const char* missing_engine = "/nonexistent/chess-coach-measure-engine"
 constexpr int practice_seed = 7;
 constexpr int practice_end_move = 10;
 constexpr int practice_book_moves = 4;
+// How long the user looks at the board after Start a practice game before the first move, as a
+// user does: what the spar worker does as a session starts is not in the first reply's time.
+constexpr int practice_look_ms = 500;
+// The coverage depths, in plies, that the Repertoire scenario measures (the setting's default is
+// 20).
+constexpr std::array<int, 2> repertoire_depths{10, 20};
 // Memory: the Explore steps between two readings, the readings, a line's longest stretch before
 // New game, and the practice games.
 constexpr int memory_steps = 50;
@@ -133,12 +146,44 @@ constexpr int memory_rounds = 4;
 constexpr std::size_t memory_line_plies = 12;
 constexpr int memory_games = 3;
 
-// The drill's repertoire: white's moves along the Ruy Lopez, one card each.
-const std::vector<std::string>& drill_line() {
-    static const std::vector<std::string> line{
-        "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6", "e1g1", "f8e7",
+// A saved move: the colour's choice in the position after the line.
+struct Choice {
+    Color colour;
+    std::vector<std::string> line;
+    std::string move;
+};
+
+// White's moves along the Ruy Lopez, one card each: the memory session's drill.
+std::vector<Choice> white_repertoire() {
+    const std::vector<std::string> ruy{
+        "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6", "e1g1",
     };
-    return line;
+    std::vector<Choice> choices;
+    for (std::size_t ply = 0; ply < ruy.size(); ply += 2) {
+        choices.push_back(Choice{
+            .colour = Color::white,
+            .line = std::vector<std::string>(ruy.begin(),
+                                             ruy.begin() + static_cast<std::ptrdiff_t>(ply)),
+            .move = ruy.at(ply),
+        });
+    }
+    return choices;
+}
+
+// Those and five of black's, ten saved moves across both colours: the Repertoire and Drill
+// scenarios' repertoire.
+std::vector<Choice> both_repertoires() {
+    std::vector<Choice> choices = white_repertoire();
+    const auto black = [&choices](std::vector<std::string> line, std::string move) {
+        choices.push_back(
+            Choice{.colour = Color::black, .line = std::move(line), .move = std::move(move)});
+    };
+    black({"e2e4"}, "c7c5");
+    black({"e2e4", "c7c5", "g1f3"}, "d7d6");
+    black({"d2d4"}, "g8f6");
+    black({"d2d4", "g8f6", "c2c4"}, "e7e6");
+    black({"c2c4"}, "e7e5");
+    return choices;
 }
 
 // A step that never completed, which ends the run with status 1.
@@ -563,10 +608,12 @@ class Book {
 
 // A scratch data directory set up as a measured run wants it: the engine (or none) at one thread
 // and 16 MB of hash, its seconds and lines the app's defaults; the tier; Practice's fixed seed and
-// short games; and, when asked, a white repertoire of drill_line's moves, each a card due now.
+// short games; the repertoire's coverage depth when one is given (plies; 0 keeps the default);
+// and the choices, saved through the profile store, each a card due now.
 class Scratch {
   public:
-    Scratch(const Options& options, bool repertoire) {
+    explicit Scratch(const Options& options, const std::vector<Choice>& choices = {},
+                     int depth = 0) {
         if (!root_.isValid()) {
             throw std::runtime_error("no scratch directory");
         }
@@ -583,8 +630,11 @@ class Scratch {
         QSettings ini(settings.file(), QSettings::IniFormat);
         ini.setValue(QStringLiteral("spar/seed"), practice_seed);
         ini.sync();
-        if (repertoire) {
-            seed_repertoire();
+        if (depth > 0) {
+            settings.set_repertoire_depth(depth);
+        }
+        if (!choices.empty()) {
+            save(choices);
         }
     }
 
@@ -593,35 +643,41 @@ class Scratch {
     // The cards' answers: the repertoire's move at each of its positions, by key.
     [[nodiscard]] const std::map<Key, std::string>& answers() const { return answers_; }
 
+    // Takes the cards away, leaving the choices, as no store call does (the app tests'
+    // drop_cards), so that entering Drill syncs them back.
+    void drop_cards() {
+        chesscoach::app::test::drop_cards(
+            QDir(data_dir_).filePath(QStringLiteral("profiles.db")).toStdString());
+        dropped_ = true;
+    }
+    [[nodiscard]] bool dropped() const { return dropped_; }
+
   private:
-    void seed_repertoire() {
+    void save(const std::vector<Choice>& choices) {
         auto profiles = ProfileStore::open(data_dir_.toStdString());
         if (!profiles) {
             throw std::runtime_error("profiles.db does not open");
         }
         const std::int64_t profile = profiles->profiles().front().id;
-        Position position = Position::start();
-        for (std::size_t ply = 0; ply < drill_line().size(); ++ply) {
-            const std::string& move = drill_line().at(ply);
-            if (ply % 2 == 0) {
-                const auto set = profiles->set_choice(profile, Color::white,
-                                                      chesscoach::RepertoireChoice{
-                                                          .key = position.key(),
-                                                          .fen = position.fen(),
-                                                          .move = move,
-                                                      });
-                if (!set) {
-                    throw std::runtime_error("the drill's repertoire is not saved");
-                }
-                answers_.emplace(position.key(), move);
+        for (const Choice& choice : choices) {
+            const Position position = after(choice.line);
+            const auto set = profiles->set_choice(profile, choice.colour,
+                                                  chesscoach::RepertoireChoice{
+                                                      .key = position.key(),
+                                                      .fen = position.fen(),
+                                                      .move = choice.move,
+                                                  });
+            if (!set) {
+                throw std::runtime_error("the measured repertoire is not saved");
             }
-            static_cast<void>(position.play_uci(move));
+            answers_.emplace(position.key(), choice.move);
         }
     }
 
     QTemporaryDir root_;
     QString data_dir_ = root_.filePath(QStringLiteral("data"));
     std::map<Key, std::string> answers_;
+    bool dropped_ = false;
 };
 
 // The process's start as main measured it: its age at main, and the application's construction.
@@ -679,7 +735,7 @@ void explore_to(const Session& session, const std::vector<std::string>& line) {
 void startup(MeasureApplication& application, Report& report, const Options& options,
              const Launch& launch) {
     // Untimed: what the real app does not do, the scratch directory and the expected summary.
-    const Scratch scratch(options, false);
+    const Scratch scratch(options);
     const Book book(options.db, options.tier);
     const QString expected = book.summary(Position::start(), 0);
     const double before = launch.before_main.value_or(0) + launch.application;
@@ -722,7 +778,7 @@ void startup(MeasureApplication& application, Report& report, const Options& opt
 }
 
 void explore(MeasureApplication& application, Report& report, const Options& options) {
-    const Scratch scratch(options, false);
+    const Scratch scratch(options);
     const Book book(options.db, options.tier);
     MainWindow window(scratch.data_dir(), options.db);
     window.show();
@@ -818,6 +874,7 @@ void practice_game(const Session& session, Report* report, bool& first_engine) {
     child<QAbstractButton>(window, QStringLiteral("spar_white")).click();
     child<QAbstractButton>(window, QStringLiteral("spar_start")).click();
     wait_for(*session.application, turn, "the practice game's start");
+    pause(practice_look_ms);
     bool in_book = book.in_book(Position::start());
     int moves = 0;
     while (end.isEnabled() && board.isEnabled()) {
@@ -884,7 +941,7 @@ void practice_game(const Session& session, Report* report, bool& first_engine) {
 }
 
 void practice(MeasureApplication& application, Report& report, const Options& options) {
-    const Scratch scratch(options, false);
+    const Scratch scratch(options);
     const Book book(options.db, options.tier);
     MainWindow window(scratch.data_dir(), options.db);
     window.show();
@@ -903,7 +960,7 @@ void practice(MeasureApplication& application, Report& report, const Options& op
 }
 
 void board(MeasureApplication& application, Report& report, const Options& options) {
-    const Scratch scratch(options, false);
+    const Scratch scratch(options);
     const Book book(options.db, options.tier);
     MainWindow window(scratch.data_dir(), options.db);
     window.show();
@@ -994,47 +1051,212 @@ void report_memory(Report& report, const std::string& checkpoint, const std::str
     }
 }
 
-// The drill over the repertoire Scratch saved: every card answered right and graded About right.
-void drill(const Session& session, const Scratch& scratch) {
+// A drill of the white cards over the repertoire Scratch saved: Drill's tab (its cards synced back
+// when Scratch dropped them), Start the drill, and every card answered right and graded About
+// right; each step timed into report when one is given.
+void drill_session(const Session& session, const Scratch& scratch, Report* report) {
+    MeasureApplication& application = *session.application;
     MainWindow& window = *session.window;
     const auto& board = child<BoardView>(window, QStringLiteral("board"));
-    child<QTabBar>(window, QStringLiteral("screen_tabs")).setCurrentIndex(3);
     const auto& due = child<QLabel>(window, QStringLiteral("drill_due"));
-    wait_for(
-        *session.application, [&due] { return due.text().contains(QStringLiteral("due now,")); },
-        "the drill's cards");
-    child<QAbstractButton>(window, QStringLiteral("drill_start")).click();
-    const auto& summary = child<QWidget>(window, QStringLiteral("drill_summary"));
+    const auto& status = child<QLabel>(window, QStringLiteral("drill_status"));
     const auto& verdict = child<QLabel>(window, QStringLiteral("drill_verdict"));
+    const auto& message = child<QLabel>(window, QStringLiteral("message_status"));
+    const auto& summary = child<QWidget>(window, QStringLiteral("drill_summary"));
     auto& good = child<QAbstractButton>(window, QStringLiteral("drill_good"));
     auto& next = child<QAbstractButton>(window, QStringLiteral("drill_next"));
-    for (std::size_t card = 0; card <= scratch.answers().size(); ++card) {
-        wait_for(
-            *session.application, [&] { return board.isEnabled() || summary.isVisible(); },
-            "a card");
-        if (summary.isVisible()) {
-            return;
+    const auto sample = [report](const std::string& metric, double value, std::string_view method) {
+        if (report != nullptr) {
+            report->sample(metric, value, "ms", method);
         }
-        const auto answer = scratch.answers().find(board.position().key());
+    };
+    QElapsedTimer clock;
+    {
+        Watch entered(
+            application, window,
+            [&] {
+                return due.text().contains(QStringLiteral("due now,")) &&
+                       (!scratch.dropped() || status.text().startsWith(QStringLiteral(
+                                                  "Your cards now match your repertoire.")));
+            },
+            clock);
+        clock.start();
+        child<QTabBar>(window, QStringLiteral("screen_tabs")).setCurrentIndex(3);
+        sample("drill.enter", entered.wait("the drill's cards"),
+               "the Drill tab to its cards synced back from the repertoire (five made) and the "
+               "count due painted");
+    }
+    {
+        Watch shown(
+            application, window,
+            [&] {
+                return board.isEnabled() && status.text().startsWith(QStringLiteral("Your move"));
+            },
+            clock);
+        clock.start();
+        child<QAbstractButton>(window, QStringLiteral("drill_start")).click();
+        sample("drill.first_card", shown.wait("the first card"),
+               "Start the drill to the first card's position and question painted");
+    }
+    for (std::size_t card = 0; !summary.isVisible(); ++card) {
+        if (card > scratch.answers().size()) {
+            throw std::logic_error("more cards than the repertoire holds");
+        }
+        const Key key = board.position().key();
+        const auto answer = scratch.answers().find(key);
         if (answer == scratch.answers().end()) {
             throw std::logic_error("a card the repertoire does not hold");
         }
-        click(board, answer->second.substr(0, 2));
-        click(board, answer->second.substr(2, 2));
-        wait_for(
-            *session.application,
+        pick(application, board, answer->second);
+        Watch right(
+            application, window,
             [&] { return verdict.text().startsWith(QStringLiteral("Right.")) && good.isVisible(); },
-            "the verdict");
-        good.click();
-        wait_for(*session.application, [&next] { return next.isVisible(); }, "Next card");
+            clock);
+        static_cast<void>(drop(board, answer->second, clock));
+        sample("drill.answer", right.wait("the verdict"),
+               "the answer's second click to the verdict and the grades painted");
+        if (card == 0) {
+            // The status bar's day is the same text for every card graded today, so only the
+            // first card's shows a change to time.
+            Watch graded(
+                application, window,
+                [&message] {
+                    return message.text().startsWith(
+                        QStringLiteral("You will see this card again on "));
+                },
+                clock);
+            clock.start();
+            good.click();
+            sample("drill.grade", graded.wait("the review's day"),
+                   "About right to the status bar's day the card comes back painted, the "
+                   "review recorded by the profile worker (the first card's)");
+        } else {
+            good.click();
+        }
+        wait_for(application, [&next] { return next.isVisible(); }, "Next card");
+        Watch following(
+            application, window,
+            [&] {
+                return (board.isEnabled() && board.position().key() != key) || summary.isVisible();
+            },
+            clock);
+        clock.start();
         next.click();
+        const double shown = following.wait("the next card");
+        sample(summary.isVisible() ? "drill.summary" : "drill.next_card", shown,
+               summary.isVisible() ? "Next card, with none due, to the drill's summary painted"
+                                   : "Next card to the next card's position and question painted");
     }
-    wait_for(
-        *session.application, [&summary] { return summary.isVisible(); }, "the drill's summary");
+}
+
+void drill(MeasureApplication& application, Report& report, const Options& options) {
+    for (int run = 0; run < options.runs; ++run) {
+        Scratch scratch(options, both_repertoires());
+        scratch.drop_cards();
+        const Book book(options.db, options.tier);
+        MainWindow window(scratch.data_dir(), options.db);
+        window.show();
+        const Session session{
+            .application = &application,
+            .window = &window,
+            .book = &book,
+            .options = &options,
+        };
+        explore_to(session, {});
+        drill_session(session, scratch, &report);
+    }
+}
+
+// One window's Repertoire screen over the ten saved moves at the coverage depth: entering it (the
+// white repertoire), changing to the black one, and saving black's move at its first gap, each
+// timed to the tree and to the coverage and its gaps painted.
+void repertoire_session(MeasureApplication& application, Report& report, const Options& options,
+                        int depth) {
+    int tree_resets = 0;
+    int gap_changes = 0;
+    const Scratch scratch(options, both_repertoires(), depth);
+    const Book book(options.db, options.tier);
+    MainWindow window(scratch.data_dir(), options.db);
+    window.show();
+    const Session session{
+        .application = &application,
+        .window = &window,
+        .book = &book,
+        .options = &options,
+    };
+    explore_to(session, {});
+    const auto& board = child<BoardView>(window, QStringLiteral("board"));
+    const auto& tree = child<QTreeView>(window, QStringLiteral("repertoire_tree"));
+    const auto& gaps = child<QTableWidget>(window, QStringLiteral("repertoire_gaps"));
+    const auto& coverage = child<QLabel>(window, QStringLiteral("repertoire_coverage"));
+    QObject::connect(tree.model(), &QAbstractItemModel::modelReset, &window,
+                     [&tree_resets] { ++tree_resets; });
+    QObject::connect(gaps.model(), &QAbstractItemModel::rowsInserted, &window,
+                     [&gap_changes] { ++gap_changes; });
+    QObject::connect(gaps.model(), &QAbstractItemModel::rowsRemoved, &window,
+                     [&gap_changes] { ++gap_changes; });
+    const std::string name = fmt::format("repertoire.d{}.", depth);
+    // A step: the tree shown again, and the coverage answered, its line or its gaps changed.
+    const auto step = [&](const std::string& what, std::string_view how,
+                          const std::function<void(QElapsedTimer&)>& act) {
+        QElapsedTimer clock;
+        const int resets = tree_resets;
+        const int changes = gap_changes;
+        const QString before = coverage.text();
+        Watch tree_shown(
+            application, window, [&tree_resets, resets] { return tree_resets > resets; }, clock);
+        Watch covered(
+            application, window,
+            [&] {
+                return coverage.text().startsWith(QStringLiteral("Coverage is")) &&
+                       (gap_changes > changes || coverage.text() != before);
+            },
+            clock);
+        act(clock);
+        report.sample(name + what + "_tree", tree_shown.wait("the tree " + what), "ms",
+                      fmt::format("{} to the repertoire's tree painted", how));
+        report.sample(
+            name + what + "_coverage", covered.wait("the coverage " + what), "ms",
+            fmt::format("{} to the coverage and its gaps painted, {} plies deep", how, depth));
+    };
+    step("enter", "the Repertoire tab, the white repertoire's five moves,",
+         [&](QElapsedTimer& clock) {
+             clock.start();
+             child<QTabBar>(window, QStringLiteral("screen_tabs")).setCurrentIndex(2);
+         });
+    step("colour", "Black repertoire, its five moves,", [&](QElapsedTimer& clock) {
+        clock.start();
+        child<QAbstractButton>(window, QStringLiteral("repertoire_black")).click();
+    });
+    auto& go = child<QAbstractButton>(window, QStringLiteral("repertoire_goto"));
+    if (!go.isEnabled()) {
+        Report::info("repertoire_save", "skipped: the black repertoire has no gap");
+        return;
+    }
+    go.click(); // the board at the first gap, black to move
+    pause(50);  // the gap's scores land
+    const Position gap = board.position();
+    std::vector<std::string> moves = book.popular(gap);
+    if (moves.empty()) {
+        moves = sorted_legal(gap);
+    }
+    const std::string move = moves.front();
+    step("save", "a board move saving black's answer at the first gap", [&](QElapsedTimer& clock) {
+        pick(application, board, move);
+        static_cast<void>(drop(board, move, clock));
+    });
+}
+
+void repertoire(MeasureApplication& application, Report& report, const Options& options) {
+    for (const int depth : repertoire_depths) {
+        for (int run = 0; run < options.runs; ++run) {
+            repertoire_session(application, report, options, depth);
+        }
+    }
 }
 
 void memory(MeasureApplication& application, Report& report, const Options& options) {
-    const Scratch scratch(options, true);
+    const Scratch scratch(options, white_repertoire());
     const Book book(options.db, options.tier);
     MainWindow window(scratch.data_dir(), options.db);
     window.show();
@@ -1083,7 +1305,7 @@ void memory(MeasureApplication& application, Report& report, const Options& opti
                           fmt::format("after {} practice game{}", game, game > 1 ? "s" : ""));
         }
     }
-    drill(session, scratch);
+    drill_session(session, scratch, nullptr);
     report_memory(report, "drill",
                   fmt::format("after a drill of {} cards", scratch.answers().size()));
 }
@@ -1104,7 +1326,7 @@ int main(int argc, char* argv[]) {
     parser.addHelpOption();
     parser.addPositionalArgument(
         QStringLiteral("scenario"),
-        QStringLiteral("startup, explore, practice, board, memory or all"));
+        QStringLiteral("startup, explore, practice, board, repertoire, drill, memory or all"));
     const QCommandLineOption db_option(QStringList{QStringLiteral("db")},
                                        QStringLiteral("The opening database."),
                                        QStringLiteral("file"));
@@ -1125,8 +1347,9 @@ int main(int argc, char* argv[]) {
     const QStringList positional = parser.positionalArguments();
     const QString scenario = positional.isEmpty() ? QString() : positional.front();
     const QStringList scenarios{
-        QStringLiteral("startup"), QStringLiteral("explore"), QStringLiteral("practice"),
-        QStringLiteral("board"),   QStringLiteral("memory"),  QStringLiteral("all"),
+        QStringLiteral("startup"), QStringLiteral("explore"),    QStringLiteral("practice"),
+        QStringLiteral("board"),   QStringLiteral("repertoire"), QStringLiteral("drill"),
+        QStringLiteral("memory"),  QStringLiteral("all"),
     };
     bool runs_ok = false;
     bool tier_ok = false;
@@ -1137,7 +1360,8 @@ int main(int argc, char* argv[]) {
     if (positional.size() != 1 || !scenarios.contains(scenario) || !runs_ok || options.runs < 1 ||
         !tier_ok || parser.isSet(db_option) == parser.isSet(fixture_option)) {
         static_cast<void>(
-            std::fputs("usage: app_measure <startup|explore|practice|board|memory|all> "
+            std::fputs("usage: app_measure <startup|explore|practice|board|repertoire|drill|"
+                       "memory|all> "
                        "(--db <file> | --fixture) [--engine <binary>] [--runs <n>] "
                        "[--tier <0-6>]\n",
                        stderr));
@@ -1174,6 +1398,12 @@ int main(int argc, char* argv[]) {
         }
         if (all || scenario == QStringLiteral("board")) {
             board(application, report, options);
+        }
+        if (all || scenario == QStringLiteral("repertoire")) {
+            repertoire(application, report, options);
+        }
+        if (all || scenario == QStringLiteral("drill")) {
+            drill(application, report, options);
         }
         if (all || scenario == QStringLiteral("memory")) {
             memory(application, report, options);

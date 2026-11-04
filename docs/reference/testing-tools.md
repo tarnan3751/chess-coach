@@ -115,8 +115,8 @@ machine, the database, the engine and the load before and after. `--db` names th
 only (the release database for a baseline; without it the sample is built through the pipeline
 into a scratch directory), `--engine` the Stockfish (else `CHESS_COACH_STOCKFISH` or the `PATH`),
 `--tier` the tier (2, the app's default), `--out` a file for the table, and the sections to run
-follow: `startup`, `explore`, `practice`, `board`, `memory`, `pipeline` and `cli`. The script's
-header says what each section runs.
+follow: `startup`, `explore`, `practice`, `board`, `repertoire`, `drill`, `memory`, `pipeline` and
+`cli`. The script's header says what each section runs.
 
 **The app** is measured by `app_measure` (`app/tests/measure.cpp`), a program linking `app_lib`
 that opens the real `MainWindow` on a scratch data directory of its own (a `QTemporaryDir`) and
@@ -135,10 +135,16 @@ from the engine as the session does. It adds nothing to the app's code paths. It
 database named in the status bar and the start's rows), `explore` (the second click to the new
 rows at the start, after 1. e4 c5 2. Nf3 d6, on the move that leaves book there and on a move off
 book, the engine off or searching, and with it the engine's lines), `practice` (a game as white at
-a fixed seed: replies from the book, the process's first reply from the engine, which starts it,
-and later ones), `board` (the move's first paint, the slide's frames, a full repaint, Flip board
-and `set_position`, at the device pixel ratio the platform gives: `QT_SCALE_FACTOR=2` stands in
-for a Retina display) and `memory` (the resident size and the physical footprint after the start,
+a fixed seed, the user looking at the board for half a second after Start: replies from the book,
+the process's first reply from the engine, and later ones), `board` (the move's first paint, the
+slide's frames, a full repaint, Flip board and `set_position`, at the device pixel ratio the
+platform gives: `QT_SCALE_FACTOR=2` stands in for a Retina display), `repertoire` (ten moves saved
+across both colours, a window each run at a coverage depth of 10 and of 20 plies: the Repertoire
+tab, Black repertoire, and a board move saving black's answer at the first gap, each to the tree
+and to the coverage line and its gaps painted), `drill` (the same ten moves with their cards taken
+away: the Drill tab to the five white cards synced back, Start the drill to the first card, each
+right answer to its verdict, About right to the day the card comes back, Next card to the next
+card or the summary) and `memory` (the resident size and the physical footprint after the start,
 after each 50 of 200 Explore steps, after each of three practice games and after a drill of five
 cards). The engines run at one thread and 16 MB of hash, at the settings' 2 s for Explore and
 Practice's 0.5 s. ctest runs `app_measure all --fixture` on the fixture database with the fake
@@ -192,6 +198,28 @@ brackets; times in milliseconds.
 | After 50 Explore steps; after 200 | 66.5 MB; 66.6 MB | 21.9 MB; 22.1 MB |
 | After one practice game; after three | 68.9 MB; 69.0 MB | 22.7 MB; 22.7 MB |
 | After a drill of five cards | 69.2 MB | 22.9 MB |
+
+The Repertoire and Drill rows were measured the same day on `main` at `be2a254`, by
+`tools/measure.sh ... --runs 5 practice repertoire drill`, the load average 3.8 before and 3.9
+after:
+
+| Repertoire, ten saved moves | 10 plies deep | 20 plies deep |
+|---|---:|---:|
+| The Repertoire tab to the tree; to the coverage and its gaps | 7.6; 7.6 (7.3–8.7) | 7.3; 8.0 (7.1–14.1) |
+| Black repertoire to the tree; to the coverage | 6.1; 6.1 (6.1–6.7) | 7.3; 7.3 (6.5–14.7) |
+| A board move saving black's answer to the tree; to the coverage | 6.6; 6.6 (6.5–7.3) | 6.8; 7.4 (6.6–8.3) |
+
+| Drill, five cards | Median (spread) |
+|---|---:|
+| The Drill tab to the cards synced back and the count due | 5.5 (5.5–8.8) |
+| Start the drill to the first card | 5.0 (5.0–8.8) |
+| A right answer to its verdict and the grades | 11.1 (7.5–14.2) |
+| About right to the day the card comes back, the review recorded | 2.5 (2.3–4.2) |
+| Next card to the next card; to the summary | 2.5 (1.9–4.0); 9.8 (4.9–13.7) |
+
+A repertoire of ten moves leaves most lines at a gap within a few plies, where the coverage walk
+ends, so it visits few positions and its depth barely shows; one that answers more of the tree
+walks more of it.
 
 The pipeline's benchmark built the sample in 29 ms (28–29), 69,565 games per second, 14.2 MB at
 its peak. The CLI's `explore` took 3.2 to 4.6 ms a process and `stats` 722 ms (719–727). In the
