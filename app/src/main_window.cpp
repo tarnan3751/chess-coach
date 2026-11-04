@@ -316,9 +316,13 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     move_list_->setItemDelegate(new MoveListDelegate(move_list_));
     move_list_->setSelectionMode(QAbstractItemView::NoSelection);
     move_list_->setMinimumHeight(96);
-    // Every move the board shows, the user's or one it is given, sounds once.
-    connect(board_, &BoardView::move_shown, this,
-            [this](const QString& san) { sounds_.play(move_sound(san)); });
+    // Every move the board shows, the user's or one it is given, sounds once, but for the card's
+    // move Drill shows after a wrong answer, whose wrong tone sounds alone.
+    connect(board_, &BoardView::move_shown, this, [this](const QString& san) {
+        if (!applying_answer_) {
+            sounds_.play(move_sound(san));
+        }
+    });
     connect(board_, &BoardView::move_played, this, &MainWindow::move_played);
     connect(move_list_, &QListWidget::itemClicked, this, [this](const QListWidgetItem* item) {
         // Explore's line and the repertoire's are lines to go back along; a session's moves and

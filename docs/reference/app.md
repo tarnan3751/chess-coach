@@ -714,9 +714,9 @@ QtNetwork (`PLAN.md` §11, 2026-11-04):
 
 **When they play.** The window has one `Sounds` (`MainWindow::sounds`), and every sound goes
 through it, one per event: each move the board shows (`BoardView::move_shown`), the user's and those
-the window plays on it with `play_move` (Explore's rows, the coach's replies in Practice, the
-card's move after a wrong answer in Drill), sounds `move_sound` of its SAN; a wrong answer in
-Drill sounds `wrong` as its verdict shows; and an interruption in Practice sounds `interruption` as
+the window plays on it with `play_move` (Explore's rows, the coach's replies in Practice), sounds
+`move_sound` of its SAN; a wrong answer in Drill sounds `wrong` as its verdict shows, alone: the
+card's move the board then shows (`applying_answer_`) sounds nothing; and an interruption in Practice sounds `interruption` as
 its panel opens. A position set with `set_position` (New game, Back, the move list, a card, a
 replay's steps) sounds nothing, nor does a replay's interruption. The sounds are on unless the
 `sounds` setting is `false` (**Settings**). The toolbar's sound toggle (**Shell**) turns them off
@@ -892,9 +892,9 @@ the UI tests run silent on every platform, their sounds going to the null backen
   cards then deleted (`drop_cards` in the fixture), so that entering the screen syncs them back:
   a drill with each card's position named by its line, a correct move waiting for its grade with
   Next card hidden and no grade coming by itself, About right grading it good and due again a day
-  later, a wrong move, graded again with its tone and the card's move played on the board, and the
-  summary; and Easy changing a correct move's grade. Screenshots: `drill-card`, `drill-grade`,
-  `drill-summary`.
+  later, a wrong move, graded again with its tone alone and the card's move played on the board,
+  and the summary; and Easy changing a correct move's grade. Screenshots: `drill-card`,
+  `drill-grade`, `drill-summary`.
 
 The window, Explore, Repertoire and Drill tests set `CHESS_COACH_STOCKFISH` to a path that does
 not exist, so no real engine runs in them, and the window and Explore tests write nothing but the
