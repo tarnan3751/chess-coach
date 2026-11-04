@@ -1,6 +1,8 @@
 // The move list's rows (move_list_delegate.hpp).
 #include "move_list_delegate.hpp"
 
+#include "tables.hpp"
+
 #include <QFont>
 #include <QFontMetrics>
 #include <QPainter>
@@ -15,7 +17,7 @@ namespace chesscoach::app {
 void MoveListDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
                              const QModelIndex& index) const {
     const QStringList parts = index.data().toString().split(QLatin1Char(' '));
-    const QFont& font = option.font;
+    const QFont font = tabular(option.font);
     const QFontMetrics metrics(font);
     const int number_width = metrics.horizontalAdvance(QStringLiteral("000."));
     const int move_width = metrics.horizontalAdvance(QStringLiteral("Qxe8=Q+"));

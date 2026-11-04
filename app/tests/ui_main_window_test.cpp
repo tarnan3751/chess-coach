@@ -135,6 +135,13 @@ class MainWindowTest : public QObject {
         QCOMPARE(moves.item(0)->text(), QStringLiteral("1. d4"));
     }
 
+    void the_board_has_the_keyboard_at_start() const {
+        MainWindow window(data_dir_, QString());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowActive(&window));
+        QCOMPARE(window.focusWidget(), &child<BoardView>(window, QStringLiteral("board")));
+    }
+
     void flip_board_flips_the_board() const {
         MainWindow window(data_dir_, QString());
         const auto& board = child<BoardView>(window, QStringLiteral("board"));

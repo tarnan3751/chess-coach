@@ -99,13 +99,14 @@ resources.
   the left, at the top of the column (`BoardRow`): the board square and drawn edge to edge in its
   widget (**Board**), the bar the same height and 8 px from it; below them **the move list**
   (`move_list`, a `QListWidget`) with one row per move pair, `1. e4 e5`, which a delegate
-  (`MoveListDelegate`) paints with the move number muted in a column of its own and the last move,
-  the board's, marked in the selection colour. The window opens at 1200 × 780, its content
-  (`Columns`) 14 px from its edges and the two columns 14 px apart. The board column is as wide as
-  the board the window's height allows, leaving the screen column at least 700 px, which takes
-  the rest; the board is never less than 300 px, and the window's minimum width is what the two
-  columns' minimums need, so nothing clips. At the default size the board is 436 px
-  (`app_layout_test` pins the split, the floor and the bar against the board as drawn).
+  (`MoveListDelegate`) paints in tabular figures where Qt offers them (6.7 and later), with the
+  move number muted in a column of its own and the last move, the board's, marked in the selection
+  colour. The window opens at 1200 × 780, its content (`Columns`) 14 px from its edges and the two
+  columns 14 px apart. The board column is as wide as the board the window's height allows,
+  leaving the screen column at least 700 px, which takes the rest; the board is never less than
+  300 px, and the window's minimum width is what the two columns' minimums need, so nothing clips.
+  At the default size the board is 436 px (`app_layout_test` pins the split, the floor and the bar
+  against the board as drawn). The board has the keyboard focus at start.
 - **The screen switcher** on the right: a `QTabBar` (`screen_tabs`) over a `QStackedWidget`
   (`screens`) with Explore (**Explore**), Practice (**Spar**), Repertoire (**Repertoire**) and Drill
   (**Drill**), the names in Source Serif 4, the current one over a rule in the accent which covers
@@ -863,13 +864,14 @@ the UI tests run silent on every platform, their sounds going to the null backen
   `board-after-e4`, `board-dragging`, `board-flipped`, `board-promotion`, `board-check`,
   `board-fen`.
 - `ui_main_window_test`: the title, the tier selector's seven tiers, the move list following the
-  board and New game clearing it, Flip board, the four screens, Help > How to use chess-coach
-  with its five sections and no link, the toolbar's tooltips, each screen's description, the
-  status bar without a database; 1. e4 d5 2. exd5 Qxd5 3. Nc3 Qe5+ sounding a move, a capture or a
-  check once each and New game nothing; Play sounds in the Settings dialog turning them off and
-  on, saved for the next window; and the toolbar's sound toggle and Play sounds following each
-  other, with the toggle's icon and tooltip in both themes. Screenshots: `main-window-start`,
-  `main-window-after-moves`, `main-window-flipped`, `main-window-sounds-off`, `help-dialog`.
+  board and New game clearing it, the board holding the keyboard at start, Flip board, the four
+  screens, Help > How to use chess-coach with its five sections and no link, the toolbar's
+  tooltips, each screen's description, the status bar without a database; 1. e4 d5 2. exd5 Qxd5
+  3. Nc3 Qe5+ sounding a move, a capture or a check once each and New game nothing; Play sounds in
+  the Settings dialog turning them off and on, saved for the next window; and the toolbar's sound
+  toggle and Play sounds following each other, with the toggle's icon and tooltip in both themes.
+  Screenshots: `main-window-start`, `main-window-after-moves`, `main-window-flipped`,
+  `main-window-sounds-off`, `help-dialog`.
 - `ui_explore_test`, on a fixture database the test writes into `core`'s schema with real keys
   (`app/tests/fixture_db.cpp`, the CLI fixture's rows, with the badges §7.3 gives them): opening it,
   with the data version, the start position off book at tier 2 and its moves with badges, bars,

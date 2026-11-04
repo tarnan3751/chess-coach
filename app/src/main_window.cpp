@@ -305,6 +305,8 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(profile_worker_, &ProfileWorker::profile_failed, this, &MainWindow::profile_failed);
     profile_thread_.setObjectName(QStringLiteral("profiles"));
     profile_thread_.start();
+    // The board takes the keyboard at start, not the first control in the tab order.
+    board_->setFocus(Qt::OtherFocusReason);
 }
 
 MainWindow::~MainWindow() {

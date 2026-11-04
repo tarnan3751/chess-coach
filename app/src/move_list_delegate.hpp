@@ -1,7 +1,7 @@
 // The move list's rows (docs/reference/app.md, **Shell**): "1. e4 c5", the move number in the muted
 // colour (the palette's placeholder text), right-aligned in a column of its own, then each move in
-// its column, the last move of the list, the board's, marked in the selection colour (the
-// palette's highlight). The item's text stays the plain row, which the tests read.
+// its column in tabular figures, the last move of the list, the board's, marked in the selection
+// colour (the palette's highlight). The item's text stays the plain row, which the tests read.
 // GUI thread only.
 #pragma once
 
