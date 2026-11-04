@@ -12,8 +12,8 @@ name.
 ## Status
 
 As of 4 November 2026: version 1.0.0, awaiting its tag. The pipeline builds the tiered database from
-the Lichess dumps and the CLI queries it; the app has its four screens, Explore, Spar, Repertoire
-and Drill, and exports and imports its profile as one file. The first release database, data
+the Lichess dumps and the CLI queries it; the app has its four screens, Explore, Practice,
+Repertoire and Drill, and exports and imports its profile as one file. The first release database, data
 version 1 from the rated games of October 2026, is built, verified reproducible and published
 for the release to bundle (`data/release/README.md`). The macOS package and the release workflow
 are in place; the next milestone is version 1.0.
@@ -23,35 +23,35 @@ are in place; the next milestone is version 1.0.
 The screenshots are the UI harness's (`tools/ui_tests.sh`), on the tests' small fixture database
 and a stand-in engine.
 
-**Explore** shows the moves from any position at the chosen tier: their games and results, their
-badges, their recommendation score and the top tier's share, the position's opening name and
-evaluation, and Stockfish's lines below them. Transpositions merge, so two move orders to one
-position show the same moves. Here at the start position and the 1600–1799 tier, in the light and
-the dark theme:
+**Explore** shows what players at your rating play in any position: how often each move is chosen,
+how those games ended, its badges (Book, Popular, Dubious) and how often the strongest players
+choose it, with the opening's name, its evaluation and Stockfish's lines below. Transpositions
+merge, so two move orders to one position show the same moves. Here at the start position for
+players rated 1600–1799, in the light and the dark theme:
 
 ![Explore in the light theme: the board, the table of moves with badges and result bars, and three engine lines](docs/images/explore-light.png)
 
 ![The same in the dark theme](docs/images/explore-dark.png)
 
-**Spar** plays a session against replies drawn from what players at your tier really play and,
-once the game leaves the book, from Stockfish at limited strength. It interrupts a Dubious or an
-off-book move with the better choices, and keeps each session to replay. Here interrupting 1. a3,
-a Dubious move at the 1800–1999 tier of the same fixture; the move stands and the coach has
-replied:
+**Practice** plays an opening against a coach that answers with what players at your rating really
+play and, once the game leaves the book, with Stockfish at limited strength. The coach stops you at
+a Dubious or an off-book move and shows the better choices, and every game is kept to replay. Here
+it stops 1. a3, a Dubious move for players rated 1800–1999 in the same fixture; the move stands and
+the coach has replied:
 
-![Spar: the board after 1. a3 e5 and the interruption panel with the reason, the badges and loss of a3, and e4 and d4 as better choices](docs/images/spar-interruption.png)
+![Practice: the board after 1. a3 e5 and the coach's panel with the reason, the loss of a3, and e4 and d4 as better choices](docs/images/spar-interruption.png)
 
-**Repertoire** holds your lines per colour, built by playing them on the board or imported from
-PGN, and shows how much of what you will face at a tier they cover, the largest gaps, and the
-recommended moves where your choice is still open. Here a white repertoire of 1. a3 and, after
-1... e5, 2. Nf3 chosen from the recommendation panel, which covers everything opponents play at
-the tier:
+**Repertoire** holds the move you will play in each position, for White and for Black, saved by
+playing it on the board or added from a PGN file. It shows how much of what players at your rating
+play you have an answer to, the positions still without one, and the recommended moves where your
+choice is still open. Here a white repertoire of 1. a3 and, after 1... e5, 2. Nf3 chosen from the
+recommendation panel, which covers everything opponents play at that rating:
 
 ![Repertoire: the tree of 1. a3 e5 2. Nf3, full coverage at 1800–1999, the choice at the current position and the recommendation panel](docs/images/repertoire.png)
 
-**Drill** turns every repertoire move into a card scheduled by spaced repetition (SM-2): the
-position comes up, you play your move, and a wrong one is shown on the board. Here a drill of two
-cards ended, the second answered wrong and its move played:
+**Drill** turns every repertoire move into a flashcard scheduled by spaced repetition (SM-2). The
+position comes up and you play your move, and when you miss, the board shows the right one. Here a
+drill of two cards ended, the second answered wrong and its move played:
 
 ![Drill: the summary of two cards reviewed, one correct and one again, with the answer Nf3 on the board](docs/images/drill.png)
 
