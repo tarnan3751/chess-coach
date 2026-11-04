@@ -60,6 +60,8 @@ add_library(app_lib STATIC
   src/spar_worker.hpp
   src/squares.cpp
   src/squares.hpp
+  src/study_palette.cpp
+  src/study_palette.hpp
   src/tables.cpp
   src/tables.hpp)
 add_library(chesscoach::app_lib ALIAS app_lib)
