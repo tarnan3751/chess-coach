@@ -139,7 +139,17 @@ SparScreen::SparScreen(QWidget* parent)
     stepping->addWidget(replay_position_);
     stepping->addWidget(next_);
 
+    // What the screen is for and the first step, in the muted colour (the stylesheets'
+    // QLabel[muted="true"]).
+    auto* description = new QLabel(
+        tr("Play an opening against the database. The coach stops you when you leave the "
+           "book and shows the better choices."),
+        this);
+    description->setObjectName(QStringLiteral("spar_description"));
+    description->setWordWrap(true);
+    description->setProperty("muted", true);
     auto* column = new QVBoxLayout(this);
+    column->addWidget(description);
     column->addLayout(controls);
     column->addWidget(status_);
     column->addWidget(interruption_);

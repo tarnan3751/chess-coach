@@ -303,6 +303,8 @@ replay's up to its ply, and clicking a row does nothing on Spar.
 
 **The screen.** `SparScreen` holds:
 
+- its description (`spar_description`), in the muted colour (**Themes**): "Play an opening against
+  the database. The coach stops you when you leave the book and shows the better choices.";
 - the colour, *Play White* and *Play Black* (`spar_white`, `spar_black`), *Start a practice game*
   (`spar_start`) and *End the game* (`spar_end`), and the status line (`spar_status`): "Move 3.
   You are in the book.", "Move 5. You have left the book, so the engine replies.", "The practice
@@ -368,6 +370,8 @@ work."), and a read that throws names `profiles.db` and the restore.
 On Repertoire the board is at a line of the screen's own, from the start, which the move list
 shows and *New game*, *Back* and the move list's rows go back along. `RepertoireScreen` holds:
 
+- its description (`repertoire_description`), muted: "Choose the move you will play in each
+  position. Coverage shows how much of what your opponents play you have an answer to.";
 - the colour, *White repertoire* and *Black repertoire* (`repertoire_white`,
   `repertoire_black`), whose repertoire is shown and edited; the board turns to its side;
 - *Add lines from a PGN file…* (`repertoire_import`), the file chooser (**Files**) and then
@@ -397,14 +401,15 @@ a move where the opponent is to move only follows the line.
 
 ## Drill
 
-`DrillScreen` holds the colour, *White repertoire* and *Black repertoire* (`drill_white`,
-`drill_black`), the colour's cards due, "1 due now, out of your 2 cards." (`drill_due`, or that
-there are none yet and how to make them), both repertoires' progress, "Your White repertoire has
-2 cards, 1 due now. Your Black repertoire has no cards." (`drill_progress`), *Update cards from
-your repertoire* (`drill_sync`) and *Start the drill* (`drill_start`), the status line
-(`drill_status`), the verdict (`drill_verdict`), *That was hard*, *That was easy* and *Next card*
-(`drill_hard`, `drill_easy`, `drill_next`), and the summary (`drill_summary`,
-`drill_summary_text`).
+`DrillScreen` holds its description (`drill_description`), muted: "Flashcards on your repertoire.
+Each card shows a position. Play your move."; the colour, *White repertoire* and *Black
+repertoire* (`drill_white`, `drill_black`); the colour's cards due, "1 due now, out of your 2
+cards." (`drill_due`, or that there are none yet and how to make them); both repertoires'
+progress, "Your White repertoire has 2 cards, 1 due now. Your Black repertoire has no cards."
+(`drill_progress`); *Update cards from your repertoire* (`drill_sync`) and *Start the drill*
+(`drill_start`); the status line (`drill_status`); the verdict (`drill_verdict`); *That was
+hard*, *That was easy* and *Next card* (`drill_hard`, `drill_easy`, `drill_next`); and the
+summary (`drill_summary`, `drill_summary_text`).
 
 Entering the screen, or Update cards from your repertoire, syncs the colour's cards with its
 repertoire ("Your cards now match your repertoire.", then the cards made, started again and
@@ -508,7 +513,9 @@ translation files to give plurals); a loss in pawns with one decimal, "1.1" for 
 Each theme is one stylesheet, `app/resources/light.qss` and `dark.qss`, compiled in under
 `:/themes/` and applied to the whole application with `QApplication::setStyleSheet`; the board
 follows with `BoardTheme::light()` or `BoardTheme::dark()` (`BoardView::set_theme`). *View >
-Theme* switches and saves the choice; the window applies the saved one at start.
+Theme* switches and saves the choice; the window applies the saved one at start. A label whose
+dynamic property `muted` is true, such as a screen's description, takes the palette's muted colour
+(`QLabel[muted="true"]` in both stylesheets).
 
 ## About
 

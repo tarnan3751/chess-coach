@@ -103,7 +103,17 @@ RepertoireScreen::RepertoireScreen(QWidget* parent)
     gaps->addWidget(new QLabel(tr("Positions with no answer yet, most common first"), this), 1);
     gaps->addWidget(goto_);
 
+    // What the screen is for and the first step, in the muted colour (the stylesheets'
+    // QLabel[muted="true"]).
+    auto* description = new QLabel(
+        tr("Choose the move you will play in each position. Coverage shows how much of what "
+           "your opponents play you have an answer to."),
+        this);
+    description->setObjectName(QStringLiteral("repertoire_description"));
+    description->setWordWrap(true);
+    description->setProperty("muted", true);
     auto* column = new QVBoxLayout(this);
+    column->addWidget(description);
     column->addLayout(controls);
     column->addWidget(message_);
     column->addWidget(coverage_);

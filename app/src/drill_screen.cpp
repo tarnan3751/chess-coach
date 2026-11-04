@@ -61,7 +61,15 @@ DrillScreen::DrillScreen(QWidget* parent)
     auto* summary = new QVBoxLayout(summary_);
     summary->addWidget(summary_text_);
 
+    // What the screen is for and the first step, in the muted colour (the stylesheets'
+    // QLabel[muted="true"]).
+    auto* description = new QLabel(
+        tr("Flashcards on your repertoire. Each card shows a position. Play your move."), this);
+    description->setObjectName(QStringLiteral("drill_description"));
+    description->setWordWrap(true);
+    description->setProperty("muted", true);
     auto* column = new QVBoxLayout(this);
+    column->addWidget(description);
     column->addLayout(controls);
     column->addWidget(due_);
     column->addWidget(progress_);

@@ -52,3 +52,7 @@ QTabBar::tab:selected {
 QLabel#explore_name {
     font-size: 15px;
 }
+/* Secondary text, such as a screen's description: the palette's muted. */
+QLabel[muted="true"] {
+    color: #6f665a;
+}

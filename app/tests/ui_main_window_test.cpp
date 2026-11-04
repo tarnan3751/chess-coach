@@ -1,6 +1,6 @@
 // UI tests of the main window's frame under the offscreen platform (app; ui): the title, the
-// tier selector, the move list following the board, New game, Flip board, the screen switcher
-// and the status bar, with screenshots (ui_harness.hpp).
+// tier selector, the move list following the board, New game, Flip board, the screen switcher,
+// the screens' descriptions and the status bar, with screenshots (ui_harness.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 #include <chesscoach/version.hpp>
@@ -139,6 +139,28 @@ class MainWindowTest : public QObject {
         }
         tabs.setCurrentIndex(2);
         QCOMPARE(screens.currentIndex(), 2);
+    }
+
+    void every_screen_says_what_it_is_for() const {
+        const MainWindow window(data_dir_, QString());
+        const QStringList descriptions{
+            QStringLiteral("Play an opening against the database. The coach stops you when you "
+                           "leave the book and shows the better choices."),
+            QStringLiteral("Choose the move you will play in each position. Coverage shows how "
+                           "much of what your opponents play you have an answer to."),
+            QStringLiteral(
+                "Flashcards on your repertoire. Each card shows a position. Play your move."),
+        };
+        const QStringList names{
+            QStringLiteral("spar_description"),
+            QStringLiteral("repertoire_description"),
+            QStringLiteral("drill_description"),
+        };
+        for (qsizetype i = 0; i < names.size(); ++i) {
+            const auto& label = child<QLabel>(window, names.at(i));
+            QCOMPARE(label.text(), descriptions.at(i));
+            QVERIFY(label.property("muted").toBool()); // the stylesheets' muted colour
+        }
     }
 
     void the_status_bar_shows_no_database_and_the_engine() const {
