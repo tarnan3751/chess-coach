@@ -70,6 +70,75 @@ std::optional<std::string> best_move(const Position& position, std::string_view 
     return played->uci;
 }
 
+// The evaluation a line's JSON yields under §9's rules 2, 3 and 5: the deepest of its evals,
+// ties to the greater knodes, then the earlier in the list, and that eval's first pv, which must
+// hold exactly one integer score, cp or mate, and its line. nullopt when an eval lacks an integer
+// depth or knodes or the chosen eval has no usable first pv: the merge's unusable line.
+struct Choice {
+    std::int64_t depth = 0;
+    std::int64_t knodes = 0;
+    std::optional<std::int64_t> cp;
+    std::optional<std::int64_t> mate;
+    std::string_view first_move; // into the JSON's line, UCI as the line writes it
+};
+
+std::optional<Choice> choose(const nlohmann::json& json) {
+    const auto evals = json.find("evals");
+    const nlohmann::json* chosen = nullptr;
+    std::int64_t chosen_depth = 0;
+    std::int64_t chosen_knodes = 0;
+    if (evals != json.end() && evals->is_array()) {
+        for (const nlohmann::json& eval : *evals) {
+            const auto depth = eval.find("depth");
+            const auto knodes = eval.find("knodes");
+            if (!eval.is_object() || depth == eval.end() || knodes == eval.end() ||
+                !depth->is_number_integer() || !knodes->is_number_integer()) {
+                chosen = nullptr;
+                break;
+            }
+            const auto d = depth->get<std::int64_t>();
+            const auto k = knodes->get<std::int64_t>();
+            if (chosen == nullptr || d > chosen_depth || (d == chosen_depth && k > chosen_knodes)) {
+                chosen = &eval;
+                chosen_depth = d;
+                chosen_knodes = k;
+            }
+        }
+    }
+    const nlohmann::json* pv = nullptr;
+    if (chosen != nullptr) {
+        const auto pvs = chosen->find("pvs");
+        if (pvs != chosen->end() && pvs->is_array() && !pvs->empty() && pvs->front().is_object()) {
+            pv = &pvs->front();
+        }
+    }
+    if (pv == nullptr) {
+        return std::nullopt;
+    }
+    const auto cp = pv->find("cp");
+    const auto mate = pv->find("mate");
+    const auto text = pv->find("line");
+    const bool has_cp = cp != pv->end() && cp->is_number_integer();
+    const bool has_mate = mate != pv->end() && mate->is_number_integer();
+    if (has_cp == has_mate || text == pv->end() || !text->is_string()) {
+        return std::nullopt;
+    }
+    const std::string_view moves = text->get_ref<const std::string&>();
+    Choice choice{
+        .depth = chosen_depth,
+        .knodes = chosen_knodes,
+        .cp = std::nullopt,
+        .mate = std::nullopt,
+        .first_move = moves.substr(0, moves.find(' ')),
+    };
+    if (has_cp) {
+        choice.cp = cp->get<std::int64_t>();
+    } else {
+        choice.mate = mate->get<std::int64_t>();
+    }
+    return choice;
+}
+
 struct Batch {
     std::uint64_t sequence = 0;
     std::string text;
@@ -121,64 +190,21 @@ std::optional<EvalCandidate> read_eval_line(std::string_view line, std::uint64_t
         return std::nullopt;
     }
     ++counts.matched;
-    // Rule 2: the deepest evaluation, then the greater knodes, then the earlier in the list.
-    const auto evals = json.find("evals");
-    const nlohmann::json* chosen = nullptr;
-    std::int64_t chosen_depth = 0;
-    std::int64_t chosen_knodes = 0;
-    if (evals != json.end() && evals->is_array()) {
-        for (const nlohmann::json& eval : *evals) {
-            const auto depth = eval.find("depth");
-            const auto knodes = eval.find("knodes");
-            if (!eval.is_object() || depth == eval.end() || knodes == eval.end() ||
-                !depth->is_number_integer() || !knodes->is_number_integer()) {
-                chosen = nullptr;
-                break;
-            }
-            const auto d = depth->get<std::int64_t>();
-            const auto k = knodes->get<std::int64_t>();
-            if (chosen == nullptr || d > chosen_depth || (d == chosen_depth && k > chosen_knodes)) {
-                chosen = &eval;
-                chosen_depth = d;
-                chosen_knodes = k;
-            }
-        }
-    }
-    // Rules 3 and 5: the chosen evaluation's first pv, usable or the line is skipped whole.
-    const nlohmann::json* pv = nullptr;
-    if (chosen != nullptr) {
-        const auto pvs = chosen->find("pvs");
-        if (pvs != chosen->end() && pvs->is_array() && !pvs->empty() && pvs->front().is_object()) {
-            pv = &pvs->front();
-        }
-    }
-    if (pv == nullptr) {
+    const auto choice = choose(json);
+    if (!choice) {
         ++counts.unusable;
         return std::nullopt;
     }
-    const auto cp = pv->find("cp");
-    const auto mate = pv->find("mate");
-    const auto text = pv->find("line");
-    const bool has_cp = cp != pv->end() && cp->is_number_integer();
-    const bool has_mate = mate != pv->end() && mate->is_number_integer();
-    if (has_cp == has_mate || text == pv->end() || !text->is_string()) {
-        ++counts.unusable;
-        return std::nullopt;
-    }
-    const auto& moves = text->get_ref<const std::string&>();
-    const auto move = best_move(*position, std::string_view(moves).substr(0, moves.find(' ')));
+    const auto move = best_move(*position, choice->first_move);
     if (!move) {
         ++counts.unusable;
         return std::nullopt;
     }
-    EvalCandidate candidate{.key = key, .knodes = chosen_knodes, .order = order, .evaluation = {}};
-    candidate.evaluation.depth = chosen_depth;
+    EvalCandidate candidate{.key = key, .knodes = choice->knodes, .order = order, .evaluation = {}};
+    candidate.evaluation.depth = choice->depth;
     candidate.evaluation.best_move = *move;
-    if (has_cp) {
-        candidate.evaluation.cp = cp->get<std::int64_t>();
-    } else {
-        candidate.evaluation.mate = mate->get<std::int64_t>();
-    }
+    candidate.evaluation.cp = choice->cp;
+    candidate.evaluation.mate = choice->mate;
     return candidate;
 }
 
