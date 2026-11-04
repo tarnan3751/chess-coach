@@ -1,8 +1,11 @@
 # Release: builds the macOS disk image with tools/package.sh, which also checks it, on every v*
 # tag and by hand (CLAUDE.md, **Release notes**; docs/reference/testing-tools.md, **Release**).
-# On a tag the image goes to a draft GitHub release named for the tag, whose body is
-# tools/changelog.sh's section for the version; run by hand on a branch, the image is kept as
-# the run's artifact instead. Unsigned. The tools and vcpkg are set up as in ci.yml.
+# The image bundles the published opening database data/release/bundled.txt names: the asset of
+# a data-vN GitHub release, downloaded with gh and checked against the sha256 there, a CI download
+# of a published artefact like the brew and vcpkg installs, never a download in the build. On a
+# tag the image goes to a draft GitHub release named for the tag, whose body is
+# tools/changelog.sh's section for the version; run by hand on a branch, the image is kept as the
+# run's artifact instead. Unsigned. The tools and vcpkg are set up as in ci.yml.
 name: Release
 
 on:
@@ -42,8 +45,23 @@ jobs:
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**') }}
           restore-keys: vcpkg-${{ runner.os }}-
 
+      - name: Fetch the opening database to bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # data/release/bundled.txt: the data release's tag, the asset's name, the file's sha256.
+          tag="$(sed -n 1p data/release/bundled.txt)"
+          asset="$(sed -n 2p data/release/bundled.txt)"
+          sum="$(sed -n 3p data/release/bundled.txt)"
+          [ -n "$tag" ] && [ -n "$asset" ] && [ ${#sum} -eq 64 ] ||
+            { echo "data/release/bundled.txt is not three lines: tag, asset, sha256" >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/data"
+          gh release download "$tag" --pattern "$asset" --dir "$RUNNER_TEMP/data"
+          echo "$sum  $RUNNER_TEMP/data/$asset" | shasum -a 256 -c -
+          echo "CHESS_COACH_RELEASE_DB=$RUNNER_TEMP/data/$asset" >> "$GITHUB_ENV"
+
       - name: Package
-        run: tools/package.sh
+        run: tools/package.sh --db "$CHESS_COACH_RELEASE_DB"
 
       - name: Draft the release
         if: github.ref_type == 'tag'
