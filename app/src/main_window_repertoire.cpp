@@ -179,8 +179,9 @@ void MainWindow::pgn_imported(const PgnImportInfo& import) {
                         tr("Left out %1 moves where your repertoire already has different ones."));
     }
     if (import.unparsable > 0) {
-        said << counted(import.unparsable, tr("%1 game could not be read."),
-                        tr("%1 games could not be read."));
+        said << counted(import.unparsable,
+                        tr("%1 line stopped at a move that could not be played."),
+                        tr("%1 lines stopped at a move that could not be played."));
     }
     repertoire_->show_message(said.join(QLatin1Char(' ')));
 }

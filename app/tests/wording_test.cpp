@@ -1,7 +1,7 @@
 // Unit tests of the app's wording (app; unit; wording.hpp): the rating bands from core's bounds,
 // numbers with separators and counts with their nouns, the pawns rounded in integers and the three
-// cases of a loss, a day, and a database's months as one month, a run, a list with gaps or as
-// stored when one does not read. Pure functions: no application object is needed.
+// cases of a loss, a depth in moves, a day, and a database's months as one month, a run, a list
+// with gaps or as stored when one does not read. Pure functions: no application object is needed.
 #include "wording.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -16,6 +16,7 @@ using chesscoach::app::day;
 using chesscoach::app::loss_cell;
 using chesscoach::app::loss_sentence;
 using chesscoach::app::month_range;
+using chesscoach::app::moves_from_plies;
 using chesscoach::app::number;
 using chesscoach::app::pawns;
 using chesscoach::app::rating_band;
@@ -61,6 +62,13 @@ TEST_CASE("A loss is almost nothing, some pawns, or by force", "[wording]") {
     CHECK(loss_cell(4) == QStringLiteral("almost none"));
     CHECK(loss_cell(109) == QStringLiteral("1.1"));
     CHECK(loss_cell(1000) == QStringLiteral("loses by force"));
+}
+
+TEST_CASE("A depth in plies is counted in moves, rounded up", "[wording]") {
+    CHECK(moves_from_plies(2) == 1);
+    CHECK(moves_from_plies(20) == 10);
+    CHECK(moves_from_plies(21) == 11);
+    CHECK(moves_from_plies(40) == 20);
 }
 
 TEST_CASE("A day is written in full", "[wording]") {

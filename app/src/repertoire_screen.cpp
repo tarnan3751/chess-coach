@@ -47,7 +47,7 @@ RepertoireScreen::RepertoireScreen(QWidget* parent)
           },
           this)),
       choose_(new QPushButton(tr("Save this move"), this)),
-      gaps_(make_table({tr("How often"), tr("Moves"), tr("Position (FEN)")}, this)),
+      gaps_(make_table({tr("How often"), tr("Moves")}, this)),
       goto_(new QPushButton(tr("Go to this position"), this)) {
     setObjectName(QStringLiteral("repertoire_screen"));
     white_->setObjectName(QStringLiteral("repertoire_white"));
@@ -68,7 +68,7 @@ RepertoireScreen::RepertoireScreen(QWidget* parent)
     tree_->setModel(model_);
     tree_->setHeaderHidden(true);
     tree_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    gaps_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    gaps_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     // The score's columns, each in a sentence (docs/reference/core.md, **The recommendation
     // score**).
     const QStringList explained{
@@ -78,8 +78,9 @@ RepertoireScreen::RepertoireScreen(QWidget* parent)
         tr("The share of the points players have scored with this move at this rating, pulled "
            "toward half when it has few games."),
         tr("How many of the opponent's replies you would need to learn after it."),
-        tr("What the score takes off for each reply to learn beyond the first."),
-        tr("The expected score less the penalty. The highest is the one to learn."),
+        tr("The total the score takes off, a little for each reply to learn beyond the first."),
+        tr("The expected score less the penalty, or 0 for a move that is not Safe. The highest is "
+           "the one to learn."),
         tr("How often players at this rating play this move here."),
     };
     for (int column = 1; column < explained.size(); ++column) {
@@ -174,9 +175,9 @@ void RepertoireScreen::show_repertoire(const RepertoireData& repertoire) {
 }
 
 void RepertoireScreen::show_coverage(const CoverageData& coverage, const QString& tier) {
-    coverage_->setText(tr("Coverage is %1 against players rated %2, over the first %3 half-moves.")
+    coverage_->setText(tr("Coverage is %1 against players rated %2, over the first %3 moves.")
                            .arg(percent(coverage.covered), tier)
-                           .arg(coverage.depth));
+                           .arg(moves_from_plies(coverage.depth)));
     gaps_->setRowCount(0);
     gap_lines_.clear();
     for (const CoverageGap& gap : coverage.gaps) {
@@ -186,7 +187,6 @@ void RepertoireScreen::show_coverage(const CoverageData& coverage, const QString
         gaps_->setItem(
             row, 1,
             table_item(gap.line_san.isEmpty() ? tr("the starting position") : gap.line_san));
-        gaps_->setItem(row, 2, table_item(gap.fen));
         gap_lines_.append(gap.line);
     }
     if (gaps_->rowCount() > 0) {

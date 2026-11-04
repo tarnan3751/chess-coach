@@ -33,6 +33,10 @@ namespace chesscoach::app {
 // The same three cases in a table's cell: "almost none", "1.1", "loses by force".
 [[nodiscard]] QString loss_cell(qint64 centipawns);
 
+// A depth in plies as a game counts moves, white's and black's together, rounded up: 20 plies are
+// 10 moves, 21 are 11.
+[[nodiscard]] int moves_from_plies(int plies);
+
 // The day of a time in Unix seconds, in local time: "4 November 2026".
 [[nodiscard]] QString day(qint64 seconds);
 

@@ -2,6 +2,7 @@
 #include "settings_dialog.hpp"
 
 #include "file_chooser.hpp"
+#include "wording.hpp"
 
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -73,9 +74,9 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     spar_seconds_->setSuffix(tr(" seconds"));
     spar_seconds_->setValue(spar.seconds);
     repertoire_depth_->setObjectName(QStringLiteral("repertoire_depth"));
-    repertoire_depth_->setRange(2, 40);
-    repertoire_depth_->setSuffix(tr(" half-moves"));
-    repertoire_depth_->setValue(repertoire_depth);
+    // Shown in moves, as a game counts them, and stored in plies: an odd stored depth rounds up.
+    repertoire_depth_->setRange(1, 20);
+    repertoire_depth_->setValue(moves_from_plies(repertoire_depth));
 
     auto* form = new QFormLayout();
     form->setHorizontalSpacing(12);
@@ -84,10 +85,10 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     form->addRow(tr("Processor cores to use"), threads_);
     form->addRow(tr("Engine memory"), hash_mb_);
     form->addRow(tr("Thinking time per position"), seconds_);
-    form->addRow(tr("Lines to show"), lines_);
+    form->addRow(tr("Engine lines to show"), lines_);
     form->addRow(tr("Practice games end at move"), spar_end_move_);
     form->addRow(tr("Thinking time per practice reply"), spar_seconds_);
-    form->addRow(tr("Check coverage up to"), repertoire_depth_);
+    form->addRow(tr("Check coverage up to move"), repertoire_depth_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -112,6 +113,6 @@ SparSettings SettingsDialog::spar() const {
     return SparSettings{.end_move = spar_end_move_->value(), .seconds = spar_seconds_->value()};
 }
 
-int SettingsDialog::repertoire_depth() const { return repertoire_depth_->value(); }
+int SettingsDialog::repertoire_depth() const { return 2 * repertoire_depth_->value(); }
 
 } // namespace chesscoach::app

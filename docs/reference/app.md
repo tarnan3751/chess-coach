@@ -463,22 +463,24 @@ shows and *New game*, *Back* and the move list's rows go back along. `Repertoire
   sentence for each count that is not zero: "Read 1 game from the file. Added 1 new move to your
   repertoire. Left out 1 move where your repertoire already has a different one.", a move left
   out being a later move in the file for a position it has chosen, or a choice the repertoire
-  already answers differently, which it keeps;
+  already answers differently, which it keeps, and the file's unparsable count being of lines
+  ("1 line stopped at a move that could not be played.");
 - the coverage (`repertoire_coverage`), "Coverage is 62.5% against players rated 1800–1999, over
-  the first 20 half-moves.", at the tier selected and the depth in the settings, computed again
-  after every change and at a change of tier;
+  the first 10 moves.", at the tier selected and the depth in the settings, given in moves
+  (`moves_from_plies`, **Wording**), computed again after every change and at a change of tier;
 - the tree (`repertoire_tree`, a `QTreeView`), the choices in bold, the opponent's replies plain;
   a click on a move takes the board to the position after it;
 - the position (`repertoire_position`): "Your move here is Nf3.", "You have no move saved here
   yet…", or "Your opponent is to move here…", and *Remove this move* (`repertoire_remove`);
 - the recommendation panel (`repertoire_scores`, when the colour is to move, under "Moves to
-  choose from here, best first"): Move, Safe (core's sound), Gives away (the loss in pawns),
-  Expected, Replies, Penalty, Score and Played (the share), as core's score gives them, the
-  shares and scores as percentages, each column's header with a tooltip saying what it is; and
+  choose from here, best first"): Move, Safe (core's sound), Gives away (the loss, `loss_cell`),
+  Expected, Replies, Penalty (the total taken off), Score (0 for a move that is not Safe) and
+  Played (the share), as core's score gives them, the shares and scores as percentages, each
+  column's header with a tooltip saying what it is; and
   *Save this move* (`repertoire_choose`), which makes the selected move the choice;
-- the gaps (`repertoire_gaps`, "Positions with no answer yet, most common first"): How often,
-  Moves and Position (FEN), and *Go to this position* (`repertoire_goto`), which takes the board
-  to the selected gap.
+- the gaps (`repertoire_gaps`, "Positions with no answer yet, most common first"): How often and
+  Moves, the line that reaches the position (no screen shows a FEN), and *Go to this position*
+  (`repertoire_goto`), which takes the board to the selected gap.
 
 A board move where the colour is to move makes that move the position's choice, replacing any;
 a move where the opponent is to move only follows the line.
@@ -551,9 +553,10 @@ Settings…* (`SettingsDialog`, `settings_dialog`) edits, under plain names, the
 program, the binary with a Browse button, which opens the file chooser, and, while it is empty,
 the default binary's path as its placeholder, "Leave empty to use /opt/homebrew/bin/stockfish", or
 that none is found; Processor cores to use, the threads; Engine memory, the hash; Thinking time per
-position, the seconds; Lines to show), Practice's move limit and seconds per reply (Practice games
-end at move, `spar_end_move`; Thinking time per practice reply, `spar_seconds`) and the coverage
-depth in half-moves (Check coverage up to, `repertoire_depth`); accepting saves them, sends them to the
+position, the seconds; Engine lines to show), Practice's move limit and seconds per reply
+(Practice games end at move, `spar_end_move`; Thinking time per practice reply, `spar_seconds`)
+and the coverage depth in moves (Check coverage up to move, `repertoire_depth`, 1 to 20, saved as
+twice as many plies, an odd stored depth rounding up when shown); accepting saves them, sends them to the
 engine worker and the spar worker, which restart their engines with them at the next search,
 evaluates the position again and, on Repertoire, computes the coverage again. A new move limit
 applies from the next session. Reading does not create anything; the first write, when the theme or

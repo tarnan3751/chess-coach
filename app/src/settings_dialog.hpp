@@ -30,6 +30,7 @@ class SettingsDialog : public QDialog {
 
     [[nodiscard]] EngineSettings engine() const;
     [[nodiscard]] SparSettings spar() const;
+    // The coverage depth in plies: twice the moves the field shows.
     [[nodiscard]] int repertoire_depth() const;
 
   private:

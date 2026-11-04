@@ -108,8 +108,8 @@ QStringList tree(const MainWindow& window) {
 
 // The coverage line at tier 4 to the default depth, for a share written "62.5%".
 QString coverage_text(const QString& share) {
-    return QStringLiteral("Coverage is %1 against players rated 1800–1999, over the first 20 "
-                          "half-moves.")
+    return QStringLiteral("Coverage is %1 against players rated 1800–1999, over the first 10 "
+                          "moves.")
         .arg(share);
 }
 

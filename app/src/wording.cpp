@@ -84,6 +84,8 @@ QString loss_cell(qint64 centipawns) {
     return pawns(centipawns);
 }
 
+int moves_from_plies(int plies) { return (plies + 1) / 2; }
+
 QString day(qint64 seconds) {
     return english().toString(QDateTime::fromSecsSinceEpoch(seconds).date(),
                               QStringLiteral("d MMMM yyyy"));
