@@ -1,9 +1,12 @@
 // How the app words the things its sentences hold (docs/reference/app.md, **Wording**): a rating
-// band, a count with its noun, a number with thousands separators, a loss in pawns or in words, a
-// day and the months an opening database holds, each written one way on every screen, in English
-// (QLocale::English) whatever the system's locale. Pure functions of their arguments: no clock,
-// no I/O.
+// band, a count with its noun, a number with thousands separators, a move's loss by its two
+// evaluations, a day and the months an opening database holds, each written one way on every
+// screen, in English (QLocale::English) whatever the system's locale. Pure functions of their
+// arguments: no clock, no I/O.
 #pragma once
+
+#include <chesscoach/opening_store.hpp>
+#include <chesscoach/position.hpp>
 
 #include <QString>
 #include <QtGlobal>
@@ -24,14 +27,28 @@ namespace chesscoach::app {
 // Centipawns as pawns rounded to one decimal: 109 is "1.1", 95 is "1.0".
 [[nodiscard]] QString pawns(qint64 centipawns);
 
-// A move's loss in centipawns from the mover's side, as a sentence: under 5, "The engine says it
-// gives away almost nothing."; from 5 to 999, "The engine says it gives away about 1.1 pawns.", or
-// "about 1 pawn" when it rounds to 1.0; from 1,000, as a forced mate reads, "The engine says it
-// loses by force."
-[[nodiscard]] QString loss_sentence(qint64 centipawns);
+// A move's evaluations: docs/database.md §7.2's values, in centipawns from the mover's side, of the
+// position before it and of the one after it. A mate for the mover is worth about +99,999 and one
+// against about -99,999, so the difference alone cannot tell a lost game from a missed win.
+struct MoveEvaluations {
+    qint64 before = 0;
+    qint64 after = 0;
+};
 
-// The same three cases in a table's cell: "almost none", "1.1", "loses by force".
-[[nodiscard]] QString loss_cell(qint64 centipawns);
+// The evaluations of a move by mover from the store's rows of the two positions, through core's
+// evaluation_value; both rows must be evaluated, as the move's loss needs.
+[[nodiscard]] MoveEvaluations move_evaluations(Color mover, const PositionRow& before,
+                                               const PositionRow& after);
+
+// A move's loss as a sentence, chosen by its two evaluations: a mate against the mover after it,
+// "The engine says it loses by force."; a mate for the mover before it and none after, "The engine
+// says it misses a forced win."; else the loss, before less after, "The engine says it gives away
+// about 1.1 pawns." ("about 1 pawn" when it rounds to 1.0), or "almost nothing" under 5, however
+// large the loss: a move from +12 to +4 still wins.
+[[nodiscard]] QString loss_sentence(const MoveEvaluations& evaluations);
+
+// The same cases in a table's cell: "loses by force", "misses a win", "1.1", "almost none".
+[[nodiscard]] QString loss_cell(const MoveEvaluations& evaluations);
 
 // A depth in plies as a game counts moves, white's and black's together, rounded up: 20 plies are
 // 10 moves, 21 are 11.

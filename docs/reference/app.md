@@ -397,10 +397,10 @@ replay's up to its ply, and clicking a row does nothing on Spar.
 - **the interruption panel** (`spar_interruption`), shown when the coach interrupts a move: the
   reason, a sentence naming the move (`spar_reason`, "Players at your rating often choose a3, but
   it loses ground (Dubious)." or "h4 leaves the known lines. Too few games at your rating follow
-  it, so the engine replies from here."); the move's badges when the reason has not named them,
-  a sentence each ("Strong players choose it (Book).", "Players at your rating often choose it
-  (Popular)."), and its loss (`spar_played`, `loss_sentence`, **Wording**, or that the database
-  has no evaluation for it); the better choices (`spar_better`: Move, Badges by name, "Book,
+  it, so the engine replies from here."); then only its loss (`spar_played`, `loss_sentence` on
+  the two evaluations the worker reads from the store, **Wording**, or that the database has no
+  evaluation for it), never its badges, which beside "too few games" would read as a
+  contradiction; the better choices (`spar_better`: Move, Badges by name, "Book,
   Popular", Games and Results, with the result bar, the Badges and Results headers each with a
   tooltip saying what the three badges and the bar's three parts are); and *Keep playing*
   (`spar_continue`). The move stands; Keep
@@ -410,13 +410,14 @@ replay's up to its ply, and clicking a row does nothing on Spar.
   practice game."), how often the coach stopped the user ("The coach stopped you twice."), how far
   it went ("You left the known lines, and the engine played the rest."), and the moves;
 - **the saved sessions** (`spar_sessions`, under "Your saved practice games"): Date ("4 November
-  2026, 14:05", the day through `day`), Rating (its band), You played, Moves (white's and black's together, so six plies
-  are three), Stops and Result ("Ended early" for one ended early, else "White won", "Black won"
-  or "Draw" when the game has a result, else "Move limit"), newest first, and *Replay this game*
-  (`spar_replay`), which plays the selected one again: *Previous move* and *Next move*
-  (`spar_previous`, `spar_next`) step through it one ply at a time with the position
-  (`spar_replay_position`, "Position 3 of 6") on the board, and each interruption is shown read-only,
-  without Keep playing, after the move it interrupted. *Start a practice game* ends the replay.
+  2026, 14:05", the day through `day`), Rating (its band), You played, Moves (white's and black's
+  together, so six plies are three), Stops and Result ("Ended early" for one ended early, else
+  "White won", "Black won" or "Draw" when the game has a result, else "Move limit"), newest first,
+  and *Replay this game* (`spar_replay`), which plays the selected one again: *Previous move* and
+  *Next move* (`spar_previous`, `spar_next`) step through it one ply at a time with the position
+  (`spar_replay_position`, "Position 3 of 6") on the board,
+  and each interruption is shown read-only, without Keep playing, after the move it interrupted.
+  *Start a practice game* ends the replay.
 
 ## Profile worker
 
@@ -433,7 +434,7 @@ repertoire creates nothing. Its slots, reached by queued connection:
 | `set_choice(white, key, fen, uci)`, `remove_choice(white, key)` | `repertoire_changed(white, message)`; the store keeps the node's card in step |
 | `load_repertoire(white)` | `repertoire_ready(RepertoireData)`: the choices by key and the tree |
 | `compute_coverage(white, tier, depth)` | `coverage_ready(CoverageData)`: core's `compute_coverage` to `depth` plies, the gaps' lines in SAN |
-| `score_position(key, tier)` | `scores_ready(ScoreData)`: core's `score_moves` with each move's SAN |
+| `score_position(key, tier)` | `scores_ready(ScoreData)`: core's `score_moves` with each move's SAN and, where its loss is defined, its two evaluations from the store (`move_evaluations`, **Wording**) |
 | `import_pgn(path, white)` | `pgn_imported(PgnImportInfo)`, then `repertoire_changed`: `import_repertoire_pgn` and `import_choices` |
 | `sync_cards(white)` | `cards_synced(white, created, reset, deleted)` |
 | `due_cards(white)` | `cards_ready(CardsData)`: the colour's cards due now, each with its FEN (for the board), its answer in SAN and its name, and both colours' due and total counts |
@@ -488,8 +489,7 @@ shows and *New game*, *Back* and the move list's rows go back along. `Repertoire
   column's header with a tooltip saying what it is; and
   *Save this move* (`repertoire_choose`), which makes the selected move the choice;
 - the gaps (`repertoire_gaps`, "Positions with no answer yet, most common first"): How often and
-  Moves, the line that reaches the position (no screen shows a FEN), and *Go to this position*
-  (`repertoire_goto`), which takes the board to the selected gap.
+  Moves, the line that reaches the position (no screen shows a FEN), and *Go to this position* (`repertoire_goto`), which takes the board to the selected gap.
 
 A board move where the colour is to move makes that move the position's choice, replacing any;
 a move where the opponent is to move only follows the line.
@@ -602,17 +602,21 @@ that takes the default format to the data directory (`keep_qt_settings_in`:
 The sentences on every screen write their numbers one way, through `wording.hpp`, in English
 (`QLocale::English`) whatever the system's locale: a rating band as "under 1200", "1200–1399" to
 "2000–2199" and "2200 and above" (`rating_band`, from core's `tier_lower_bounds`), which reads
-after "players rated" and, with a capital, is what the Rating menu lists; a count with thousands separators,
-"173,722" (`number`), and with its noun, "1 card" or "2 cards" (`counted`, there being no
-translation files to give plurals); pawns rounded to one decimal in integers, "1.1" for 109
-centipawns and "1.0" for 95 (`pawns`); a move's loss in three cases, as a sentence (`loss_sentence`:
-under 5 centipawns "The engine says it gives away almost nothing.", up to 999 "… gives away about
-1.1 pawns." or "about 1 pawn", from 1,000, as a forced mate reads, "The engine says it loses by
-force.") or in a table's cell (`loss_cell`: "almost none", "1.1", "loses by force"); a day as "4
-November 2026" (`day`); and the months an opening database holds (`month_range`, from `meta`'s
-`YYYY-MM` list): "October 2026", a run of months one after another as "October 2026 to March
-2027", and months with gaps listed with the year after each year's last, "January, March and April
-2013". `app_wording_test` checks each.
+after "players rated" and, with a capital, is what the Rating menu lists; a count with thousands
+separators, "173,722" (`number`), and with its noun, "1 card" or "2 cards" (`counted`, there being
+no translation files to give plurals); pawns rounded to one decimal in integers, "1.1" for 109
+centipawns and "1.0" for 95 (`pawns`); a move's loss, chosen by its two evaluations
+(`MoveEvaluations`, §7.2's values from the mover's side, which `move_evaluations` reads from the
+store's rows through core's `evaluation_value`), not by their difference, since a mate is worth
+about ±99,999: a mate against the mover after the move, "The engine says it loses by force."; a
+mate for the mover before it and none after, "The engine says it misses a forced win."; else the
+loss in pawns, "… gives away about 1.1 pawns." or "about 1 pawn", or "almost nothing" under 5
+centipawns, however large the loss, so a move from +12 to +4 is "about 8.0 pawns"
+(`loss_sentence`, and `loss_cell` for a table: "loses by force", "misses a win", "1.1", "almost
+none"); a day as "4 November 2026" (`day`); and the months an opening database holds
+(`month_range`, from `meta`'s `YYYY-MM` list): "October 2026", a run of months one after another
+as "October 2026 to March 2027", and months with gaps listed with the year after each year's last,
+"January, March and April 2013". `app_wording_test` checks each.
 
 ## Themes
 

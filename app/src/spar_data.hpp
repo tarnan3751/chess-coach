@@ -5,6 +5,8 @@
 // (register_spar_types).
 #pragma once
 
+#include "wording.hpp"
+
 #include <QMetaType>
 #include <QString>
 #include <QStringList>
@@ -30,8 +32,9 @@ struct SparInterruption {
     QString reason;       // why, as a sentence: "Players at your rating often choose a3, …"
     QString played_san;
     QString played_uci;
-    QString badges;             // the played move's, a sentence each, or empty
-    std::optional<qint64> loss; // centipawns, when defined
+    // The move's two evaluations from the mover's side, when both positions are evaluated, which
+    // is when its loss is defined (wording.hpp's loss_sentence reads them).
+    std::optional<MoveEvaluations> evaluations;
     QVector<SparChoice> better;
 };
 

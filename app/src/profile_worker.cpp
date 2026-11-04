@@ -9,6 +9,7 @@
 #include <chesscoach/tier.hpp>
 
 #include "default_profile.hpp"
+#include "wording.hpp"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -419,11 +420,22 @@ void ProfileWorker::score_position(quint64 key, int tier) {
             for (const ScoreComponents& move : score_moves(*store, key, *at)) {
                 const auto san = position ? position->san_of(move.move)
                                           : tl::expected<std::string, MoveError>(move.move);
+                // The two evaluations the loss came from, which its wording reads.
+                std::optional<MoveEvaluations> evaluations;
+                if (move.loss && position) {
+                    Position child = *position;
+                    const auto played = child.play_uci(move.move);
+                    const auto child_row =
+                        played ? store->position(played->child) : std::optional<PositionRow>();
+                    if (child_row) {
+                        evaluations = move_evaluations(position->side_to_move(), *row, *child_row);
+                    }
+                }
                 data.rows.append(ScoreRow{
                     .san = QString::fromStdString(san.value_or(move.move)),
                     .uci = QString::fromStdString(move.move),
                     .sound = move.sound,
-                    .loss = move.loss,
+                    .evaluations = evaluations,
                     .expected = move.expected_score,
                     .replies = move.replies_needed,
                     .penalty = move.penalty,

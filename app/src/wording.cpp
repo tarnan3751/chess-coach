@@ -1,6 +1,7 @@
 // How the app words ratings, counts, numbers, pawns, days and months (wording.hpp).
 #include "wording.hpp"
 
+#include <chesscoach/score.hpp>
 #include <chesscoach/tier.hpp>
 
 #include <QCoreApplication>
@@ -9,6 +10,7 @@
 #include <QLocale>
 #include <QStringList>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -22,10 +24,24 @@ QString translate(const char* text) {
 
 QLocale english() { return {QLocale::English}; }
 
-// A loss below this many centipawns is almost nothing; from the second, a forced mate's value
-// (docs/database.md §7.2) or as good as one, the move loses by force.
+// A loss below this many centipawns is almost nothing.
 constexpr qint64 almost_nothing_cp = 5;
-constexpr qint64 by_force_cp = 1000;
+// §7.2 values a mate in m as 100,000 - |m| centipawns; no centipawn evaluation comes near this.
+constexpr qint64 mate_floor = 90000;
+
+// How a move's loss reads, from its two evaluations.
+enum class LossCase : std::uint8_t { by_force, missed_win, almost_nothing, pawns };
+
+LossCase loss_case(const MoveEvaluations& evaluations) {
+    if (evaluations.after <= -mate_floor) {
+        return LossCase::by_force;
+    }
+    if (evaluations.before >= mate_floor && evaluations.after < mate_floor) {
+        return LossCase::missed_win;
+    }
+    return evaluations.before - evaluations.after < almost_nothing_cp ? LossCase::almost_nothing
+                                                                      : LossCase::pawns;
+}
 
 // "2026-10" as October 2026's first day, or nullopt.
 std::optional<QDate> month(const QString& text) {
@@ -61,27 +77,44 @@ QString pawns(qint64 centipawns) {
     return english().toString(static_cast<double>(tenths) / 10.0, 'f', 1);
 }
 
-QString loss_sentence(qint64 centipawns) {
-    if (centipawns < almost_nothing_cp) {
-        return translate("The engine says it gives away almost nothing.");
-    }
-    if (centipawns >= by_force_cp) {
-        return translate("The engine says it loses by force.");
-    }
-    if (pawns(centipawns) == pawns(100)) {
-        return translate("The engine says it gives away about 1 pawn.");
-    }
-    return translate("The engine says it gives away about %1 pawns.").arg(pawns(centipawns));
+MoveEvaluations move_evaluations(Color mover, const PositionRow& before, const PositionRow& after) {
+    const qint64 side = mover == Color::white ? 1 : -1;
+    return MoveEvaluations{
+        .before = side * evaluation_value(before.eval_cp, before.eval_mate),
+        .after = side * evaluation_value(after.eval_cp, after.eval_mate),
+    };
 }
 
-QString loss_cell(qint64 centipawns) {
-    if (centipawns < almost_nothing_cp) {
-        return translate("almost none");
+QString loss_sentence(const MoveEvaluations& evaluations) {
+    const qint64 loss = evaluations.before - evaluations.after;
+    switch (loss_case(evaluations)) {
+    case LossCase::by_force:
+        return translate("The engine says it loses by force.");
+    case LossCase::missed_win:
+        return translate("The engine says it misses a forced win.");
+    case LossCase::almost_nothing:
+        return translate("The engine says it gives away almost nothing.");
+    case LossCase::pawns:
+        break;
     }
-    if (centipawns >= by_force_cp) {
+    if (pawns(loss) == pawns(100)) {
+        return translate("The engine says it gives away about 1 pawn.");
+    }
+    return translate("The engine says it gives away about %1 pawns.").arg(pawns(loss));
+}
+
+QString loss_cell(const MoveEvaluations& evaluations) {
+    switch (loss_case(evaluations)) {
+    case LossCase::by_force:
         return translate("loses by force");
+    case LossCase::missed_win:
+        return translate("misses a win");
+    case LossCase::almost_nothing:
+        return translate("almost none");
+    case LossCase::pawns:
+        break;
     }
-    return pawns(centipawns);
+    return pawns(evaluations.before - evaluations.after);
 }
 
 int moves_from_plies(int plies) { return (plies + 1) / 2; }

@@ -195,6 +195,10 @@ void leave_the_book(MainWindow& window, const BoardView& board) {
     QTRY_VERIFY(interruption_shown(window));
     QCOMPARE(played(window.sounds()).count(SoundEvent::interruption), 2);
     QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(), off_book_h4());
+    // Only the loss follows the reason: no badge beside "too few games".
+    const QString played = child<QLabel>(window, QStringLiteral("spar_played")).text();
+    QVERIFY2(played.startsWith(QStringLiteral("The ")) && !played.contains(QLatin1Char('(')),
+             qPrintable(played));
     QCOMPARE(rows(window, QStringLiteral("spar_better")), 1);
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 0), QStringLiteral("Nf3"));
     QTRY_COMPARE(move_rows(window), 2);

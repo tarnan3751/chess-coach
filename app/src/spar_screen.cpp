@@ -213,14 +213,11 @@ void SparScreen::show_message(const QString& text) { status_->setText(text); }
 
 void SparScreen::show_interruption(const SparInterruption& interruption, bool continue_button) {
     reason_->setText(interruption.reason);
-    // A Dubious move's reason has said its badges; another move's are news.
-    QStringList said;
-    if (!interruption.dubious && !interruption.badges.isEmpty()) {
-        said << interruption.badges;
-    }
-    said << (interruption.loss ? loss_sentence(*interruption.loss)
-                               : tr("The database has no engine evaluation for it."));
-    played_->setText(said.join(QLatin1Char(' ')));
+    // The reason says what the move is; its badges beside "too few games" would read as a
+    // contradiction, so only its loss follows.
+    played_->setText(interruption.evaluations
+                         ? loss_sentence(*interruption.evaluations)
+                         : tr("The database has no engine evaluation for it."));
     better_->setRowCount(0);
     for (const SparChoice& choice : interruption.better) {
         const int row = better_->rowCount();

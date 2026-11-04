@@ -64,22 +64,26 @@ QString badge_words(Badges badges) {
     return words.join(QStringLiteral(", "));
 }
 
-// The badges said of a move, a sentence each, the name in parentheses.
-QString badge_sentences(Badges badges) {
-    QStringList said;
-    if (badges.has(Badge::book)) {
-        said << translate("Strong players choose it (Book).");
+// The move's two evaluations from the mover's side, read from the store, when its loss is defined
+// (both positions evaluated): before is the position it was played in, after the key it reached.
+std::optional<MoveEvaluations> evaluations(const OpeningStore& store,
+                                           const Interruption& interruption, const Position& before,
+                                           Key after) {
+    if (!interruption.loss) {
+        return std::nullopt;
     }
-    if (badges.has(Badge::dubious)) {
-        said << translate("Players at your rating often choose it, but it loses ground (Dubious).");
-    } else if (badges.has(Badge::popular)) {
-        said << translate("Players at your rating often choose it (Popular).");
+    const auto parent = store.position(before.key());
+    const auto child = store.position(after);
+    if (!parent || !child) {
+        return std::nullopt;
     }
-    return said.join(QLatin1Char(' '));
+    return move_evaluations(before.side_to_move(), *parent, *child);
 }
 
-// The interruption as the window shows it; played_san is the move's SAN where it was played.
-SparInterruption converted(const Interruption& interruption, const QString& played_san) {
+// The interruption as the window shows it; played_san is the move's SAN where it was played, and
+// evaluations its two evaluations, when known.
+SparInterruption converted(const Interruption& interruption, const QString& played_san,
+                           std::optional<MoveEvaluations> evaluations) {
     SparInterruption out;
     out.dubious = interruption.reason == Interruption::Reason::dubious;
     out.reason = out.dubious ? translate("Players at your rating often choose %1, but it loses "
@@ -90,8 +94,7 @@ SparInterruption converted(const Interruption& interruption, const QString& play
                                    .arg(played_san);
     out.played_san = played_san;
     out.played_uci = QString::fromStdString(interruption.played);
-    out.badges = badge_sentences(interruption.badges);
-    out.loss = interruption.loss;
+    out.evaluations = evaluations;
     for (const BetterChoice& choice : interruption.better) {
         out.better.append(SparChoice{
             .san = QString::fromStdString(choice.san),
@@ -320,6 +323,7 @@ void SparWorker::user_move(const QString& uci) {
     }
     SparSession& session = *session_;
     try {
+        const Position before = session.position();
         const auto outcome = session.play_user_move(uci.toStdString());
         if (!outcome) {
             emit session_failed(tr("That move is not legal here. Play another one."));
@@ -329,7 +333,13 @@ void SparWorker::user_move(const QString& uci) {
         const QString san = QString::fromStdString(played.san);
         std::optional<SparInterruption> interruption;
         if (played.interruption.has_value()) {
-            interruption = converted(*played.interruption, san);
+            // The session's store, open since its start, holds the two positions' evaluations.
+            const OpeningStore* store = open_store();
+            interruption =
+                converted(*played.interruption, san,
+                          store != nullptr ? evaluations(*store, *played.interruption, before,
+                                                         session.position().key())
+                                           : std::nullopt);
         }
         emit move_accepted(san, uci, interruption, state());
     } catch (const std::exception&) {
@@ -519,7 +529,9 @@ void SparWorker::replay_session(qint64 id) {
                 const UserMoveOutcome& outcome = *played;
                 out.san = QString::fromStdString(outcome.san);
                 if (outcome.interruption.has_value()) {
-                    out.interruption = converted(*outcome.interruption, out.san);
+                    out.interruption = converted(*outcome.interruption, out.san,
+                                                 evaluations(*store, *outcome.interruption, before,
+                                                             session.position().key()));
                 }
             } else {
                 Recorded recorded(move);

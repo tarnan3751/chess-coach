@@ -229,7 +229,8 @@ void RepertoireScreen::show_scores(const ScoreData& scores) {
         san->setData(Qt::UserRole, move.uci);
         scores_->setItem(row, 0, san);
         scores_->setItem(row, 1, table_item(move.sound ? tr("yes") : tr("no")));
-        scores_->setItem(row, 2, table_item(move.loss ? loss_cell(*move.loss) : tr("—")));
+        scores_->setItem(row, 2,
+                         table_item(move.evaluations ? loss_cell(*move.evaluations) : tr("—")));
         scores_->setItem(row, 3, table_item(percent(move.expected)));
         scores_->setItem(row, 4, table_item(number(move.replies)));
         scores_->setItem(row, 5, table_item(percent(move.penalty)));

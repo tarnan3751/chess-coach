@@ -1,8 +1,12 @@
 // Unit tests of the app's wording (app; unit; wording.hpp): the rating bands from core's bounds,
-// numbers with separators and counts with their nouns, the pawns rounded in integers and the three
-// cases of a loss, a depth in moves, a day, and a database's months as one month, a run, a list
-// with gaps or as stored when one does not read. Pure functions: no application object is needed.
+// numbers with separators and counts with their nouns, the pawns rounded in integers and the cases
+// of a loss by its two evaluations, a depth in moves, a day, and a database's months as one month,
+// a run, a list with gaps or as stored when one does not read. Pure functions: no application
+// object is needed.
 #include "wording.hpp"
+
+#include <chesscoach/opening_store.hpp>
+#include <chesscoach/position.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -48,20 +52,54 @@ TEST_CASE("Pawns round to one decimal in integers", "[wording]") {
     CHECK(pawns(-109) == QStringLiteral("-1.1"));
 }
 
-TEST_CASE("A loss is almost nothing, some pawns, or by force", "[wording]") {
-    const QString nothing = QStringLiteral("The engine says it gives away almost nothing.");
-    CHECK(loss_sentence(0) == nothing);
-    CHECK(loss_sentence(4) == nothing);
-    CHECK(loss_sentence(5) == QStringLiteral("The engine says it gives away about 0.1 pawns."));
-    CHECK(loss_sentence(95) == QStringLiteral("The engine says it gives away about 1 pawn."));
-    CHECK(loss_sentence(104) == QStringLiteral("The engine says it gives away about 1 pawn."));
-    CHECK(loss_sentence(109) == QStringLiteral("The engine says it gives away about 1.1 pawns."));
-    CHECK(loss_sentence(999) == QStringLiteral("The engine says it gives away about 10.0 pawns."));
-    CHECK(loss_sentence(1000) == QStringLiteral("The engine says it loses by force."));
-    CHECK(loss_sentence(99997) == QStringLiteral("The engine says it loses by force."));
-    CHECK(loss_cell(4) == QStringLiteral("almost none"));
-    CHECK(loss_cell(109) == QStringLiteral("1.1"));
-    CHECK(loss_cell(1000) == QStringLiteral("loses by force"));
+TEST_CASE("A loss reads by the two evaluations, not the difference alone", "[wording]") {
+    using chesscoach::app::MoveEvaluations;
+    constexpr qint64 mate_in_3 = 99997; // §7.2's value of a mate in 3 for the mover
+    // A mate against the mover after the move: it loses by force, from anywhere.
+    CHECK(loss_sentence({.before = 30, .after = -mate_in_3}) ==
+          QStringLiteral("The engine says it loses by force."));
+    CHECK(loss_sentence({.before = -mate_in_3 - 2, .after = -mate_in_3}) ==
+          QStringLiteral("The engine says it loses by force."));
+    CHECK(loss_cell({.before = 30, .after = -mate_in_3}) == QStringLiteral("loses by force"));
+    // A forced win before it and none after: it misses the win, though the mover may stand well.
+    CHECK(loss_sentence({.before = mate_in_3, .after = 250}) ==
+          QStringLiteral("The engine says it misses a forced win."));
+    CHECK(loss_cell({.before = mate_in_3, .after = 250}) == QStringLiteral("misses a win"));
+    // A mate kept, a little slower, gives away almost nothing.
+    CHECK(loss_sentence({.before = mate_in_3, .after = mate_in_3 - 2}) ==
+          QStringLiteral("The engine says it gives away almost nothing."));
+    // Still winning after a large swing, +12 to +4: pawns, never "by force".
+    CHECK(loss_sentence({.before = 1200, .after = 400}) ==
+          QStringLiteral("The engine says it gives away about 8.0 pawns."));
+    CHECK(loss_cell({.before = 1200, .after = 400}) == QStringLiteral("8.0"));
+    // Otherwise the pawns, rounded, or almost nothing.
+    CHECK(loss_sentence({.before = 30, .after = 26}) ==
+          QStringLiteral("The engine says it gives away almost nothing."));
+    CHECK(loss_sentence({.before = 30, .after = 25}) ==
+          QStringLiteral("The engine says it gives away about 0.1 pawns."));
+    CHECK(loss_sentence({.before = 30, .after = -65}) ==
+          QStringLiteral("The engine says it gives away about 1 pawn."));
+    CHECK(loss_sentence({.before = 30, .after = -79}) ==
+          QStringLiteral("The engine says it gives away about 1.1 pawns."));
+    CHECK(loss_sentence({.before = 100, .after = -1400}) ==
+          QStringLiteral("The engine says it gives away about 15.0 pawns."));
+    CHECK(loss_cell({.before = 30, .after = 30}) == QStringLiteral("almost none"));
+    CHECK(loss_cell({.before = 30, .after = -79}) == QStringLiteral("1.1"));
+}
+
+TEST_CASE("A move's evaluations are the store's values from the mover's side", "[wording]") {
+    using chesscoach::Color;
+    using chesscoach::app::move_evaluations;
+    chesscoach::PositionRow before;
+    before.eval_cp = 30;
+    chesscoach::PositionRow mated;
+    mated.eval_mate = -3; // black mates in 3
+    const auto white = move_evaluations(Color::white, before, mated);
+    CHECK(white.before == 30);
+    CHECK(white.after == -99997);
+    const auto black = move_evaluations(Color::black, before, mated);
+    CHECK(black.before == -30);
+    CHECK(black.after == 99997);
 }
 
 TEST_CASE("A depth in plies is counted in moves, rounded up", "[wording]") {

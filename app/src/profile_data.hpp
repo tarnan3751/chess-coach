@@ -6,6 +6,8 @@
 // are registered metatypes (register_profile_types).
 #pragma once
 
+#include "wording.hpp"
+
 #include <QHash>
 #include <QMetaType>
 #include <QString>
@@ -52,7 +54,8 @@ struct ScoreRow {
     QString san;
     QString uci;
     bool sound = true;
-    std::optional<qint64> loss;
+    // The move's two evaluations from the mover's side, when its loss is defined.
+    std::optional<MoveEvaluations> evaluations;
     double expected = 0.5;
     int replies = 0;
     double penalty = 0.0;
