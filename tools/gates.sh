@@ -213,7 +213,9 @@ fi
 # 7. Module boundary and the no-network rule ---------------------------------------------
 # core, pipeline and cli must not include or link Qt, and nothing may include or link a network
 # library; the CMake build enforces this too, this is the belt to its braces and runs even when
-# the build above failed. The sources are C++ and Objective-C++, an include #include or #import.
+# the build above failed. The sources are C++ and Objective-C++, an include #include or #import;
+# Apple's network frameworks and Foundation's NSURL classes, which AppKit brings in without an
+# include, are matched by name as well (cmake/boundary_check.cmake has the same rules).
 : >"$scratch/boundary.txt"
 for d in core pipeline cli; do
   [ -d "$d" ] || continue
@@ -223,9 +225,11 @@ for d in core pipeline cli; do
 done
 for d in core pipeline cli app cmake; do
   [ -d "$d" ] || continue
-  grep -rnE '^[[:space:]]*#[[:space:]]*(include|import)[[:space:]]*[<"](curl/|httplib|boost/asio|boost/beast|sys/socket\.h|netinet/|arpa/inet|winsock|QtNetwork/|QNetwork|QTcp|QUdp|QSsl)' "$d" \
+  grep -rnE '^[[:space:]]*#[[:space:]]*(include|import)[[:space:]]*[<"](curl/|httplib|boost/asio|boost/beast|sys/socket\.h|netinet/|arpa/inet|winsock|QtNetwork/|QNetwork|QTcp|QUdp|QSsl|Foundation/NSURL|CFNetwork/|Network/)' "$d" \
     --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.mm' >>"$scratch/boundary.txt" || true
-  grep -rnE 'Qt6?::Network|CURL::|libcurl|httplib|Boost::asio|Boost::beast|OpenSSL::' "$d" \
+  grep -rnE 'NSURL(Session|Connection|Request)|CFNetwork|nw_(connection|listener)_' "$d" \
+    --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.mm' >>"$scratch/boundary.txt" || true
+  grep -rnE 'Qt6?::Network|CURL::|libcurl|httplib|Boost::asio|Boost::beast|OpenSSL::|-framework[[:space:]]+(Network|CFNetwork)|(Network|CFNetwork)\.framework' "$d" \
     --include='CMakeLists.txt' --include='*.cmake' >>"$scratch/boundary.txt" || true
 done
 [ -f vcpkg.json ] && grep -nE '"(curl|cpp-httplib|boost-asio|boost-beast|openssl|qtnetwork|qtbase)"' vcpkg.json >>"$scratch/boundary.txt" || true
