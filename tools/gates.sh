@@ -229,7 +229,9 @@ for d in core pipeline cli app cmake; do
     --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.mm' >>"$scratch/boundary.txt" || true
   grep -rnE 'NSURL(Session|Connection|Request)|CFNetwork|nw_(connection|listener)_' "$d" \
     --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.mm' >>"$scratch/boundary.txt" || true
-  grep -rnE 'Qt6?::Network|CURL::|libcurl|httplib|Boost::asio|Boost::beast|OpenSSL::|-framework[[:space:]]+(Network|CFNetwork)|(Network|CFNetwork)\.framework' "$d" \
+  grep -rnE '^[[:space:]]*@import[[:space:]]+(Network|CFNetwork)' "$d" \
+    --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.mm' >>"$scratch/boundary.txt" || true
+  grep -rnE 'Qt6?::Network|CURL::|libcurl|httplib|Boost::asio|Boost::beast|OpenSSL::|-framework[[:space:]]+(Network|CFNetwork)|(Network|CFNetwork)\.framework|find_library\([^)]*[[:space:]](Network|CFNetwork)[[:space:])]' "$d" \
     --include='CMakeLists.txt' --include='*.cmake' >>"$scratch/boundary.txt" || true
 done
 [ -f vcpkg.json ] && grep -nE '"(curl|cpp-httplib|boost-asio|boost-beast|openssl|qtnetwork|qtbase)"' vcpkg.json >>"$scratch/boundary.txt" || true

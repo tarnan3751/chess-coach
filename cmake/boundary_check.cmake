@@ -8,8 +8,9 @@
 #   - no network include in a source (the C and C++ libraries, QtNetwork, Apple's CFNetwork and
 #     Network frameworks and Foundation's NSURL headers), no use of NSURLSession, NSURLConnection,
 #     NSURLRequest, CFNetwork or the Network framework's nw_ types, which Foundation and AppKit
-#     bring in without an include of their own, and no network target or framework in a
-#     CMakeLists.txt or *.cmake, under core/, pipeline/, cli/, app/ or cmake/;
+#     bring in without an include of their own, no `@import` of those frameworks, and no network
+#     target or framework (linked, found by find_library, or named by path) in a CMakeLists.txt
+#     or *.cmake, under core/, pipeline/, cli/, app/ or cmake/;
 #   - no network port in vcpkg.json.
 # CMake's regular expressions have no [[:space:]] class, so the patterns spell it [ \t]; the
 # network names are written with one letter bracketed (lib[c]url), which matches the same text,
@@ -23,11 +24,12 @@ endif()
 
 set(space "[ \t]")
 set(include_start "^${space}*#${space}*(include|import)${space}*[<\"]")
+set(module_import "^${space}*@import${space}+(Netw[o]rk|CFNetw[o]rk)")
 set(qt_include "${include_start}(Q[A-Z][A-Za-z0-9]*|Qt[A-Za-z]*/)")
 set(qt_target "Qt6?::")
 set(network_include "${include_start}(curl/|http[l]ib|boost/asio|boost/beast|sys/socket\\.h|netinet/|arpa/inet|winsock|QtNetwork/|QNetwork|QTcp|QUdp|QSsl|Foundation/NSURL|CFNetw[o]rk/|Netw[o]rk/)")
 set(network_symbol "NSURL(Session|Connection|Request)|CFNetw[o]rk|nw_(connection|listener)_")
-set(network_target "Qt6?::Network|CURL[:]:|lib[c]url|http[l]ib|Boost::[a]sio|Boost::[b]east|OpenSSL[:]:|-framework[ \t]+(Netw[o]rk|CFNetw[o]rk)|(Netw[o]rk|CFNetw[o]rk)\\.framework")
+set(network_target "Qt6?::Network|CURL[:]:|lib[c]url|http[l]ib|Boost::[a]sio|Boost::[b]east|OpenSSL[:]:|-framework[ \t]+(Netw[o]rk|CFNetw[o]rk)|(Netw[o]rk|CFNetw[o]rk)\\.framework|find_library\\([^)]*[ \t](Netw[o]rk|CFNetw[o]rk)[ \t)]")
 set(network_port "\"(curl|cpp-http[l]ib|boost-asio|boost-beast|openssl|qtnetwork|qtbase)\"")
 
 set(sources "*.cpp" "*.hpp" "*.h" "*.mm")
@@ -64,6 +66,7 @@ scan("${qt_include}" DIRS core pipeline cli NAMES ${sources})
 scan("${qt_target}" DIRS core pipeline cli NAMES ${build_files})
 scan("${network_include}" DIRS core pipeline cli app cmake NAMES ${sources})
 scan("${network_symbol}" DIRS core pipeline cli app cmake NAMES ${sources})
+scan("${module_import}" DIRS core pipeline cli app cmake NAMES ${sources})
 scan("${network_target}" DIRS core pipeline cli app cmake NAMES ${build_files})
 if(EXISTS "${CHESSCOACH_SOURCE_DIR}/vcpkg.json")
   file(STRINGS "${CHESSCOACH_SOURCE_DIR}/vcpkg.json" hits REGEX "${network_port}")

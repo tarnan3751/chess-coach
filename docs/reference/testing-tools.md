@@ -116,9 +116,10 @@ library (`CLAUDE.md`, **Module boundaries**). Three checks hold it:
    sockets, `QtNetwork` and its classes, Apple's `CFNetwork` and `Network` frameworks and
    Foundation's `NSURL...` headers), no use of `NSURLSession`, `NSURLConnection`,
    `NSURLRequest`, `CFNetwork` or the `nw_connection_`/`nw_listener_` types (which Foundation
-   and AppKit bring in without an include of their own) and no network target or framework
-   anywhere under the four modules and `cmake/`; no network port in `vcpkg.json`. It lists
-   every offending line.
+   and AppKit bring in without an include of their own), no `@import` of those frameworks, and
+   no network target or framework (linked, found by `find_library`, or named by path) anywhere
+   under the four modules and `cmake/`; no network port in `vcpkg.json`. It lists every
+   offending line.
 3. **The gate's boundary step** greps the same patterns, and runs even when the build failed.
 
 The patterns of 2 and 3 are the same rules: CMake's regular expressions have no `[[:space:]]`,
