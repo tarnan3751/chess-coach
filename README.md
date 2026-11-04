@@ -13,10 +13,10 @@ name.
 
 As of 4 November 2026: version 1.0.0, awaiting its tag. The pipeline builds the tiered database from
 the Lichess dumps and the CLI queries it; the app has its four screens, Explore, Practice,
-Repertoire and Drill, and exports and imports its profile as one file. The first release database, data
-version 1 from the rated games of October 2026, is built, verified reproducible and published
-for the release to bundle (`data/release/README.md`). The macOS package and the release workflow
-are in place; the next milestone is version 1.0.
+Repertoire and Drill, and backs up and restores your work as one file. The first release
+database, data version 1 from the rated games of October 2026, is built, verified reproducible
+and published for the release to bundle (`data/release/README.md`). The macOS package and the
+release workflow are in place; the next milestone is version 1.0.
 
 ## The four screens
 
@@ -34,26 +34,27 @@ players rated 1600–1799, in the light and the dark theme:
 ![The same in the dark theme](docs/images/explore-dark.png)
 
 **Practice** plays an opening against a coach that answers with what players at your rating really
-play and, once the game leaves the book, with Stockfish at limited strength. The coach stops you at
-a Dubious or an off-book move and shows the better choices, and every game is kept to replay. Here
-it stops 1. a3, a Dubious move for players rated 1800–1999 in the same fixture; the move stands and
-the coach has replied:
+play and, once the game leaves the known lines, with Stockfish at limited strength. The coach stops
+you at a Dubious move or one that leaves the known lines and shows the better choices, and every
+game is kept to replay. Here it stops 1. a3, a Dubious move for players rated 1800–1999 in the
+same fixture. The move stands and the coach has replied:
 
 ![Practice: the board after 1. a3 e5 and the coach's panel with the reason, the loss of a3, and e4 and d4 as better choices](docs/images/spar-interruption.png)
 
 **Repertoire** holds the move you will play in each position, for White and for Black, saved by
 playing it on the board or added from a PGN file. It shows how much of what players at your rating
-play you have an answer to, the positions still without one, and the recommended moves where your
-choice is still open. Here a white repertoire of 1. a3 and, after 1... e5, 2. Nf3 chosen from the
-recommendation panel, which covers everything opponents play at that rating:
+play you have an answer to, the positions still without one, and the moves to choose from, best
+first, where you have not saved one yet. Here a white repertoire of 1. a3 and, after 1... e5, 2. Nf3
+saved from the moves to choose from, which covers everything opponents play at that rating:
 
-![Repertoire: the tree of 1. a3 e5 2. Nf3, full coverage at 1800–1999, the choice at the current position and the recommendation panel](docs/images/repertoire.png)
+![Repertoire: the tree of 1. a3 e5 2. Nf3, full coverage against players rated 1800–1999, the move saved at the current position and the moves to choose from](docs/images/repertoire.png)
 
 **Drill** turns every repertoire move into a flashcard scheduled by spaced repetition (SM-2). The
-position comes up and you play your move, and when you miss, the board shows the right one. Here a
-drill of two cards ended, the second answered wrong and its move played:
+position comes up and you play your move. When you are right you say how hard it was to find, and
+when you miss, the board shows the right one. Here a drill of two cards ended, the second answered
+wrong and its move played:
 
-![Drill: the summary of two cards reviewed, one correct and one again, with the answer Nf3 on the board](docs/images/drill.png)
+![Drill: the summary of two cards answered, one right and one wrong, with the answer Nf3 on the board](docs/images/drill.png)
 
 Both also work from a terminal through `chess-coach-cli repertoire` and `chess-coach-cli drill`
 (**The CLI**).
