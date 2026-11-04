@@ -34,7 +34,7 @@ state (**Files**).
 | `explore_data.hpp` | `ExploreData` and `ExploreMove`, the worker's answer for a position |
 | `explore_model.{hpp,cpp}` | `ExploreModel`, the table model of the Explore screen (**Explore**) |
 | `explore_screen.{hpp,cpp}` | `ExploreScreen`, the Explore screen |
-| `result_delegate.{hpp,cpp}` | `ResultDelegate`, the result bar of Explore's table and Spar's better choices |
+| `result_delegate.{hpp,cpp}` | The results bar and the badge pills; `ResultDelegate`, the bar of Spar's better choices (**Tables**) |
 | `spar_worker.{hpp,cpp}` | `SparWorker`, the live session, its store connections and its engine on their own thread (**Spar**) |
 | `spar_data.hpp` | The spar worker's answers: `SparState`, `SparInterruption`, `SparSummary`, the saved sessions, a replay |
 | `spar_screen.{hpp,cpp}` | `SparScreen`, the Spar screen (**Spar**) |
@@ -43,7 +43,7 @@ state (**Files**).
 | `repertoire_screen.{hpp,cpp}` | `RepertoireScreen`, the Repertoire screen (**Repertoire**) |
 | `drill_screen.{hpp,cpp}` | `DrillScreen`, the Drill screen (**Drill**) |
 | `default_profile.{hpp,cpp}` | The profile the app works on: Default, else the first |
-| `tables.{hpp,cpp}` | The read-only tables of Spar and Repertoire |
+| `tables.{hpp,cpp}` | The read-only tables of Spar and Repertoire; the Study table's header, rows and type sizes (**Tables**) |
 | `file_chooser.{hpp,cpp}` | `FileChooser`, the app's own file chooser, and the functions that run it (**Files**) |
 | `locations.{hpp,cpp}` | The app bundle's resources, the opening database the window opens, the message when there is none (**The database**) |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
@@ -268,6 +268,29 @@ column settings (Result stretches; the others fit their contents).
 all or nothing for a mate. It shows the position's stored evaluation when it has one, else the
 engine's first line, and is empty when there is neither, keeping its width so that the board
 beside it does not move; it follows the board's flip. It is empty on the other screens.
+
+## Tables
+
+The Study look's parts for a table that paints itself (`tables.{hpp,cpp}`,
+`result_delegate.{hpp,cpp}`), in the colours of a `StudyPalette` its owner keeps:
+
+- **The header** (`TableHeader`, a `QHeaderView`): the `chrome` fill with a `border` hairline
+  under it; each label in 11.5 px semibold `muted`, 10 px from the section's edge, at the left or
+  the right as the model's `Qt::TextAlignmentRole` for the section says, and its note
+  (`header_note_role`) after it in the regular weight; the sections' tooltips are the model's.
+- **The rows**: the body `panel` inside a hairline frame, no grid and no alternate colours; a cell
+  has 10 px of padding left and right and 5 px above and below, a `row_line` rule under every row,
+  and the selected row filled with `selection` (`paint_row`). Type sizes are in pixels, fractions
+  included, through the point size at the device's DPI (`sized_font`); numbers take tabular
+  figures where Qt can ask the font for them (6.7 and later, `tabular`).
+- **The pills** (`paint_badge_pills`): Book, Popular and Dubious in that order, each in its
+  badge's colours, 11.5 px semibold, 1 px by 7 px of padding, 2 px corners, 4 px apart.
+- **The results bar** (`paint_results_bar`): 150 × 16 px after the cell's padding, a hairline
+  frame round white wins, draws and black wins in the results colours, with the white and black
+  percentages inside their segments in 10 px bold, and the draws' only in a segment 18 px wide or
+  more (in the white segment's text colour); a percentage that does not fit its segment is left
+  out. `ResultDelegate` paints it over the style's cell for Spar's better choices, in the light
+  palette (Spar has none of its own yet).
 
 ## Spar
 
