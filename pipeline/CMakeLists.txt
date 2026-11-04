@@ -35,7 +35,9 @@ add_library(pipeline_lib STATIC
   src/writer.cpp
   src/writer.hpp
   src/zstd_istream.cpp
-  src/zstd_istream.hpp)
+  src/zstd_istream.hpp
+  src/zstd_ostream.cpp
+  src/zstd_ostream.hpp)
 target_include_directories(pipeline_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_include_directories(pipeline_lib SYSTEM PRIVATE "${CHESSCOACH_CHESS_LIBRARY_INCLUDE_DIR}")
 target_link_libraries(pipeline_lib
@@ -73,6 +75,7 @@ if(BUILD_TESTING)
                               tests/test_files.hpp
                               tests/work_pool_test.cpp
                               tests/zstd_istream_test.cpp
+                              tests/zstd_ostream_test.cpp
                       LIBS pipeline_lib SQLiteCpp)
   target_compile_definitions(pipeline_unit_test PRIVATE ${pipeline_test_definitions})
   chesscoach_add_test(pipeline_property_test MODULE pipeline KIND property
