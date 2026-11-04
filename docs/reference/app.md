@@ -713,13 +713,16 @@ domain, and the other libraries with their licences. *About Qt* is Qt's own dial
 
 ## Sounds
 
-Five sounds, one per `SoundEvent`: `move`, a wooden thunk; `capture`, a heavier one, lower and
-longer; `check`, a short rising two-tone; `wrong`, a soft low tone falling; and `interruption`, a
-gentle double knock. They are WAV files, 16-bit 44.1 kHz mono, each under 300 ms with its peak at
-−12 dBFS, compiled in under `:/sounds/<event>.wav` from `app/resources/sounds/`.
-`tools/make_sounds.py` synthesises them (resonances rung by a short noise burst over a damped low
-thud for the thunks, sines for the tones) from a fixed seed: they are the project's own work under
-its licence and need no notice.
+Five sounds, one per `SoundEvent`: `move`, a wooden thunk, 130 ms; `capture`, a heavier one,
+lower and longer; `check`, a short rising two-tone; `wrong`, a soft low tone falling; and
+`interruption`, a soft, low, muffled double knock, with no click and a ringing pitch near 230 Hz, so
+that it is not heard as a move. They are WAV files, 16-bit 44.1 kHz mono, each under 300 ms with
+its peak at −12 dBFS, compiled in under `:/sounds/<event>.wav` from `app/resources/sounds/`.
+`tools/make_sounds.py` synthesises them from a fixed seed: each thunk is a damped low noise burst,
+its energy between about 100 and 250 Hz and about half the sound's (three fifths of the capture's),
+under a millisecond's broadband click at the onset, the piece's contact, and a short wooden ring of
+a few resonances above them; the knock is a muffled hit ringing low resonances, twice; the tones
+are sines. They are the project's own work under its licence and need no notice.
 
 `move_sound(san)` is a move's sound: `check` when its SAN carries `+` or `#`, else `capture` when
 it carries `x`, else `move`. `Sounds` plays them, `play(event)` doing nothing after
