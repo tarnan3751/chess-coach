@@ -13,6 +13,8 @@
 #             and of 2 (QT_SCALE_FACTOR=2, as on a Retina display)
 #   repertoire  app_measure repertoire: one process, --runs windows at each coverage depth (10 and
 #             20 plies) over ten saved moves, entering the screen, changing colour, saving a move
+#   repertoire_large  app_measure repertoire_large: the same over white's answer to every gap to 20
+#             plies (a few hundred moves, built from the database) but one held out to save
 #   drill     app_measure drill: one process, --runs windows, each a drill of five cards synced back
 #   memory    app_measure memory: --runs processes, each one session of Explore steps, practice
 #             games and a drill, the resident size read along it
@@ -22,8 +24,8 @@
 #
 #   tools/measure.sh [--db <file>] [--engine <binary>] [--runs <n>] [--tier <0-6>] [--out <file>]
 #                    [--no-sounds] [<section>...]
-# Sections: startup explore practice board repertoire drill memory pipeline cli (all of them by
-# default).
+# Sections: startup explore practice board repertoire repertoire_large drill memory pipeline cli
+# (all of them by default).
 #
 # The app's runs are silent, so their moves leave out the sound the app plays as the board shows a
 # move (on macOS, its post to the sound queue and the play there). On macOS each of startup,
@@ -62,17 +64,21 @@ while [ $# -gt 0 ]; do
     --tier) tier="${2:-}"; shift 2 ;;
     --out) out="${2:-}"; shift 2 ;;
     --no-sounds) sounds=0; shift ;;
-    startup|explore|practice|board|repertoire|drill|memory|pipeline|cli) sections+=("$1"); shift ;;
+    startup|explore|practice|board|repertoire|repertoire_large|drill|memory|pipeline|cli)
+      sections+=("$1")
+      shift
+      ;;
     *)
       echo "usage: tools/measure.sh [--db <file>] [--engine <binary>] [--runs <n>] [--tier <0-6>]" \
         "[--out <file>] [--no-sounds]" \
-        "[startup|explore|practice|board|repertoire|drill|memory|pipeline|cli]..." >&2
+        "[startup|explore|practice|board|repertoire|repertoire_large|drill|memory|pipeline|cli]..." >&2
       exit 2
       ;;
   esac
 done
 case "$runs" in ''|*[!0-9]*|0) echo "measure: --runs must be a positive number" >&2; exit 2 ;; esac
-[ ${#sections[@]} -gt 0 ] || sections=(startup explore practice board repertoire drill memory pipeline cli)
+[ ${#sections[@]} -gt 0 ] ||
+  sections=(startup explore practice board repertoire repertoire_large drill memory pipeline cli)
 if [ -z "$engine" ]; then
   engine="$(command -v stockfish || true)"
 fi
@@ -185,6 +191,9 @@ run_section() {
       ;;
     repertoire)
       app repertoire --db "$db" --tier "$tier" --runs "$runs" $sound
+      ;;
+    repertoire_large)
+      app repertoire_large --db "$db" --tier "$tier" --runs "$runs"
       ;;
     drill)
       app drill --db "$db" --tier "$tier" --runs "$runs" $sound

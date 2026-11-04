@@ -14,7 +14,7 @@
 // driven by those events, never by sleeping between polls as QTest::qWait does, which would delay
 // what is measured.
 //
-//   app_measure <startup|explore|practice|board|repertoire|drill|memory|all>
+//   app_measure <startup|explore|practice|board|repertoire|repertoire_large|drill|memory|all>
 //               (--db <file> | --fixture) [--engine <binary>] [--runs <n>] [--tier <0-6>]
 //               [--sounds]
 //
@@ -539,6 +539,12 @@ std::vector<std::string> sorted_legal(const Position& position) {
     return moves;
 }
 
+// A choice of a built repertoire, with the coverage walk's mass at its position.
+struct Answer {
+    Choice choice;
+    double mass = 0;
+};
+
 // The opening database as the measurement reads it, on its own read-only connection: the moves
 // to play, and what the Explore screen should say once it shows a position.
 class Book {
@@ -594,6 +600,37 @@ class Book {
             }
         }
         return legal.front();
+    }
+
+    // The colour's repertoire answering every gap the coverage walk meets to the depth with the
+    // position's most played move, else its first legal one, the walk run again until it meets
+    // no gap it can answer: each choice with the line and the mass that reached it.
+    [[nodiscard]] std::vector<Answer> answer_every_gap(Color colour, int depth) const {
+        chesscoach::Repertoire repertoire;
+        std::vector<Answer> answers;
+        const chesscoach::CoverageConfig config{.max_plies = depth};
+        for (bool added = true; added;) {
+            added = false;
+            const chesscoach::Coverage coverage =
+                chesscoach::compute_coverage(store_, repertoire, colour, tier_, config);
+            for (const chesscoach::Gap& gap : coverage.gaps) {
+                const Position position = after(gap.line);
+                std::vector<std::string> moves = popular(position);
+                if (moves.empty()) {
+                    moves = sorted_legal(position);
+                }
+                if (repertoire.contains(gap.key) || moves.empty()) {
+                    continue; // a position with no move to give
+                }
+                repertoire.emplace(gap.key, moves.front());
+                answers.push_back(Answer{
+                    .choice = Choice{.colour = colour, .line = gap.line, .move = moves.front()},
+                    .mass = gap.mass,
+                });
+                added = true;
+            }
+        }
+        return answers;
     }
 
     // The line under the Explore screen's name for the position after ply moves.
@@ -682,18 +719,24 @@ class Scratch {
             throw std::runtime_error("profiles.db does not open");
         }
         const std::int64_t profile = profiles->profiles().front().id;
-        for (const Choice& choice : choices) {
-            const Position position = after(choice.line);
-            const auto set = profiles->set_choice(profile, choice.colour,
-                                                  chesscoach::RepertoireChoice{
-                                                      .key = position.key(),
-                                                      .fen = position.fen(),
-                                                      .move = choice.move,
-                                                  });
-            if (!set) {
+        // Each colour's in one transaction, cards and all: a large repertoire saves in moments.
+        for (const Color colour : {Color::white, Color::black}) {
+            std::vector<chesscoach::RepertoireChoice> saved;
+            for (const Choice& choice : choices) {
+                if (choice.colour == colour) {
+                    const Position position = after(choice.line);
+                    saved.push_back(chesscoach::RepertoireChoice{
+                        .key = position.key(),
+                        .fen = position.fen(),
+                        .move = choice.move,
+                    });
+                    answers_.emplace(position.key(), choice.move);
+                }
+            }
+            const auto imported = profiles->import_choices(profile, colour, saved);
+            if (!imported || std::cmp_not_equal(imported->added, saved.size())) {
                 throw std::runtime_error("the measured repertoire is not saved");
             }
-            answers_.emplace(position.key(), choice.move);
         }
     }
 
@@ -1204,13 +1247,88 @@ void drill(MeasureApplication& application, Report& report, const Options& optio
     }
 }
 
+// The Repertoire screen's answers as a measured step sees them: the tree shown again (its model
+// reset), and the coverage answered (its line changed, or its gaps' rows), each timed to its
+// paint under the metric "<prefix><what>_tree" or "_coverage".
+class RepertoireSteps {
+  public:
+    RepertoireSteps(MeasureApplication& application, MainWindow& window, Report& report,
+                    std::string prefix, int depth)
+        : application_(&application), window_(&window), report_(&report),
+          prefix_(std::move(prefix)), depth_(depth),
+          coverage_(&child<QLabel>(window, QStringLiteral("repertoire_coverage"))) {
+        const auto& tree = child<QTreeView>(window, QStringLiteral("repertoire_tree"));
+        const auto& gaps = child<QTableWidget>(window, QStringLiteral("repertoire_gaps"));
+        QObject::connect(tree.model(), &QAbstractItemModel::modelReset, &guard_,
+                         [this] { ++tree_resets_; });
+        QObject::connect(gaps.model(), &QAbstractItemModel::rowsInserted, &guard_,
+                         [this] { ++gap_changes_; });
+        QObject::connect(gaps.model(), &QAbstractItemModel::rowsRemoved, &guard_,
+                         [this] { ++gap_changes_; });
+    }
+
+    // Acts, starting the clock, and waits for both answers painted, timing them when what names
+    // the step.
+    void step(const std::string& what, std::string_view how,
+              const std::function<void(QElapsedTimer&)>& act) {
+        QElapsedTimer clock;
+        const int resets = tree_resets_;
+        const int changes = gap_changes_;
+        const QString before = coverage_->text();
+        Watch tree_shown(
+            *application_, *window_, [this, resets] { return tree_resets_ > resets; }, clock);
+        Watch covered(
+            *application_, *window_,
+            [this, changes, &before] {
+                return coverage_->text().startsWith(QStringLiteral("Coverage is")) &&
+                       (gap_changes_ > changes || coverage_->text() != before);
+            },
+            clock);
+        act(clock);
+        const double tree = tree_shown.wait("the tree " + what);
+        const double coverage = covered.wait("the coverage " + what);
+        if (!what.empty()) {
+            report_->sample(prefix_ + what + "_tree", tree, "ms",
+                            fmt::format("{} to the repertoire's tree painted", how));
+            report_->sample(
+                prefix_ + what + "_coverage", coverage, "ms",
+                fmt::format("{} to the coverage and its gaps painted, {} plies deep", how, depth_));
+        }
+    }
+
+  private:
+    MeasureApplication* application_;
+    MainWindow* window_;
+    Report* report_;
+    std::string prefix_;
+    int depth_;
+    const QLabel* coverage_;
+    QObject guard_; // the counters' connections, which go with this
+    int tree_resets_ = 0;
+    int gap_changes_ = 0;
+};
+
+// The board at the first gap through Go to this position, and the move to save there, the
+// position's most played (else its first legal) move; nullopt without a gap.
+std::optional<std::string> go_to_first_gap(MainWindow& window, const Book& book) {
+    auto& go = child<QAbstractButton>(window, QStringLiteral("repertoire_goto"));
+    if (!go.isEnabled()) {
+        return std::nullopt;
+    }
+    go.click();
+    pause(50); // the gap's scores land
+    const Position gap = child<BoardView>(window, QStringLiteral("board")).position();
+    std::vector<std::string> moves = book.popular(gap);
+    if (moves.empty()) {
+        moves = sorted_legal(gap);
+    }
+    return moves.front();
+}
+
 // One window's Repertoire screen over the ten saved moves at the coverage depth: entering it (the
-// white repertoire), changing to the black one, and saving black's move at its first gap, each
-// timed to the tree and to the coverage and its gaps painted.
+// white repertoire), changing to the black one, and saving black's move at its first gap.
 void repertoire_session(MeasureApplication& application, Report& report, const Options& options,
                         int depth) {
-    int tree_resets = 0;
-    int gap_changes = 0;
     const Scratch scratch(options, both_repertoires(), depth);
     const Book book(options.db, options.tier);
     MainWindow window(scratch.data_dir(), options.db);
@@ -1223,72 +1341,134 @@ void repertoire_session(MeasureApplication& application, Report& report, const O
     };
     explore_to(session, {});
     const auto& board = child<BoardView>(window, QStringLiteral("board"));
-    const auto& tree = child<QTreeView>(window, QStringLiteral("repertoire_tree"));
-    const auto& gaps = child<QTableWidget>(window, QStringLiteral("repertoire_gaps"));
-    const auto& coverage = child<QLabel>(window, QStringLiteral("repertoire_coverage"));
-    QObject::connect(tree.model(), &QAbstractItemModel::modelReset, &window,
-                     [&tree_resets] { ++tree_resets; });
-    QObject::connect(gaps.model(), &QAbstractItemModel::rowsInserted, &window,
-                     [&gap_changes] { ++gap_changes; });
-    QObject::connect(gaps.model(), &QAbstractItemModel::rowsRemoved, &window,
-                     [&gap_changes] { ++gap_changes; });
-    const std::string name = fmt::format("repertoire.d{}.", depth);
-    // A step: the tree shown again, and the coverage answered, its line or its gaps changed.
-    const auto step = [&](const std::string& what, std::string_view how,
-                          const std::function<void(QElapsedTimer&)>& act) {
-        QElapsedTimer clock;
-        const int resets = tree_resets;
-        const int changes = gap_changes;
-        const QString before = coverage.text();
-        Watch tree_shown(
-            application, window, [&tree_resets, resets] { return tree_resets > resets; }, clock);
-        Watch covered(
-            application, window,
-            [&] {
-                return coverage.text().startsWith(QStringLiteral("Coverage is")) &&
-                       (gap_changes > changes || coverage.text() != before);
-            },
-            clock);
-        act(clock);
-        report.sample(name + what + "_tree", tree_shown.wait("the tree " + what), "ms",
-                      fmt::format("{} to the repertoire's tree painted", how));
-        report.sample(
-            name + what + "_coverage", covered.wait("the coverage " + what), "ms",
-            fmt::format("{} to the coverage and its gaps painted, {} plies deep", how, depth));
-    };
-    step("enter", "the Repertoire tab, the white repertoire's five moves,",
-         [&](QElapsedTimer& clock) {
-             clock.start();
-             child<QTabBar>(window, QStringLiteral("screen_tabs")).setCurrentIndex(2);
-         });
-    step("colour", "Black repertoire, its five moves,", [&](QElapsedTimer& clock) {
+    RepertoireSteps steps(application, window, report, fmt::format("repertoire.d{}.", depth),
+                          depth);
+    steps.step("enter", "the Repertoire tab, the white repertoire's five moves,",
+               [&](QElapsedTimer& clock) {
+                   clock.start();
+                   child<QTabBar>(window, QStringLiteral("screen_tabs")).setCurrentIndex(2);
+               });
+    steps.step("colour", "Black repertoire, its five moves,", [&](QElapsedTimer& clock) {
         clock.start();
         child<QAbstractButton>(window, QStringLiteral("repertoire_black")).click();
     });
-    auto& go = child<QAbstractButton>(window, QStringLiteral("repertoire_goto"));
-    if (!go.isEnabled()) {
+    const auto move = go_to_first_gap(window, book);
+    if (!move) {
         Report::info("repertoire_save", "skipped: the black repertoire has no gap");
         return;
     }
-    go.click(); // the board at the first gap, black to move
-    pause(50);  // the gap's scores land
-    const Position gap = board.position();
-    std::vector<std::string> moves = book.popular(gap);
-    if (moves.empty()) {
-        moves = sorted_legal(gap);
-    }
-    const std::string move = moves.front();
-    step("save", "a board move saving black's answer at the first gap", [&](QElapsedTimer& clock) {
-        let_sounds_end(options);
-        pick(application, board, move);
-        static_cast<void>(drop(board, move, clock));
-    });
+    steps.step("save", "a board move saving black's answer at the first gap",
+               [&](QElapsedTimer& clock) {
+                   let_sounds_end(options);
+                   pick(application, board, *move);
+                   static_cast<void>(drop(board, *move, clock));
+               });
 }
 
 void repertoire(MeasureApplication& application, Report& report, const Options& options) {
     for (const int depth : repertoire_depths) {
         for (int run = 0; run < options.runs; ++run) {
             repertoire_session(application, report, options, depth);
+        }
+    }
+}
+
+// The large repertoire: white's answer to every gap to 20 plies at the tier (Book's
+// answer_every_gap), but one, held out so that the screen has one gap to save: the choice at ply 8
+// the walk reached with the most mass (on a database without one, the deepest before it); and the
+// five black moves; white_moves, how many of the choices are white's.
+struct LargeRepertoire {
+    std::vector<Choice> choices;
+    Choice held_out;
+    std::size_t white_moves = 0;
+};
+
+LargeRepertoire large_repertoire(const Book& book) {
+    constexpr int built_depth = 20;
+    constexpr std::size_t held_out_ply = 8;
+    std::vector<Answer> answers = book.answer_every_gap(Color::white, built_depth);
+    // By ply up to held_out_ply, then by mass.
+    const auto rank = [](const Answer& answer) {
+        const std::size_t ply = answer.choice.line.size();
+        return std::pair{ply <= held_out_ply ? ply : 0, answer.mass};
+    };
+    const auto held = std::ranges::max_element(
+        answers, [&rank](const Answer& a, const Answer& b) { return rank(a) < rank(b); });
+    if (held == answers.end()) {
+        throw std::runtime_error("the large repertoire has no choice to hold out");
+    }
+    LargeRepertoire large{.choices = {}, .held_out = held->choice};
+    for (auto answer = answers.begin(); answer != answers.end(); ++answer) {
+        if (answer != held) {
+            large.choices.push_back(answer->choice);
+        }
+    }
+    large.white_moves = large.choices.size();
+    for (const Choice& choice : both_repertoires()) {
+        if (choice.colour == Color::black) {
+            large.choices.push_back(choice);
+        }
+    }
+    return large;
+}
+
+// One window's Repertoire screen over the large repertoire at the coverage depth: entering it (the
+// large white one), Black repertoire (untimed) and White repertoire again, and saving the held-out
+// move at white's one gap.
+void repertoire_large_session(MeasureApplication& application, Report& report,
+                              const Options& options, const LargeRepertoire& large, int depth) {
+    const Scratch scratch(options, large.choices, depth);
+    const Book book(options.db, options.tier);
+    MainWindow window(scratch.data_dir(), options.db);
+    window.show();
+    const Session session{
+        .application = &application,
+        .window = &window,
+        .book = &book,
+        .options = &options,
+    };
+    explore_to(session, {});
+    const auto& board = child<BoardView>(window, QStringLiteral("board"));
+    const std::size_t white = large.white_moves;
+    RepertoireSteps steps(application, window, report, fmt::format("repertoire_large.d{}.", depth),
+                          depth);
+    steps.step("enter", fmt::format("the Repertoire tab, the white repertoire's {} moves,", white),
+               [&](QElapsedTimer& clock) {
+                   clock.start();
+                   child<QTabBar>(window, QStringLiteral("screen_tabs")).setCurrentIndex(2);
+               });
+    steps.step("", "", [&](QElapsedTimer& clock) {
+        clock.start();
+        child<QAbstractButton>(window, QStringLiteral("repertoire_black")).click();
+    });
+    steps.step("colour", fmt::format("White repertoire again, from Black, its {} moves,", white),
+               [&](QElapsedTimer& clock) {
+                   clock.start();
+                   child<QAbstractButton>(window, QStringLiteral("repertoire_white")).click();
+               });
+    const auto move = go_to_first_gap(window, book);
+    if (!move || board.position().key() != after(large.held_out.line).key()) {
+        Report::info("repertoire_large_save", "skipped: the first gap is not the held-out one");
+        return;
+    }
+    steps.step("save",
+               fmt::format("a board move saving white's held-out answer at ply {}, the {} moves' "
+                           "one gap,",
+                           large.held_out.line.size(), white),
+               [&](QElapsedTimer& clock) {
+                   let_sounds_end(options);
+                   pick(application, board, large.held_out.move);
+                   static_cast<void>(drop(board, large.held_out.move, clock));
+               });
+}
+
+void repertoire_large(MeasureApplication& application, Report& report, const Options& options) {
+    const LargeRepertoire large = large_repertoire(Book(options.db, options.tier));
+    Report::info("repertoire_large_moves", std::to_string(large.white_moves));
+    Report::info("repertoire_large_held_out_ply", std::to_string(large.held_out.line.size()));
+    for (const int depth : repertoire_depths) {
+        for (int run = 0; run < options.runs; ++run) {
+            repertoire_large_session(application, report, options, large, depth);
         }
     }
 }
@@ -1362,9 +1542,9 @@ int main(int argc, char* argv[]) {
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("The app's measurements (tools/measure.sh)."));
     parser.addHelpOption();
-    parser.addPositionalArgument(
-        QStringLiteral("scenario"),
-        QStringLiteral("startup, explore, practice, board, repertoire, drill, memory or all"));
+    parser.addPositionalArgument(QStringLiteral("scenario"),
+                                 QStringLiteral("startup, explore, practice, board, repertoire, "
+                                                "repertoire_large, drill, memory or all"));
     const QCommandLineOption db_option(QStringList{QStringLiteral("db")},
                                        QStringLiteral("The opening database."),
                                        QStringLiteral("file"));
@@ -1389,8 +1569,8 @@ int main(int argc, char* argv[]) {
     const QString scenario = positional.isEmpty() ? QString() : positional.front();
     const QStringList scenarios{
         QStringLiteral("startup"), QStringLiteral("explore"),    QStringLiteral("practice"),
-        QStringLiteral("board"),   QStringLiteral("repertoire"), QStringLiteral("drill"),
-        QStringLiteral("memory"),  QStringLiteral("all"),
+        QStringLiteral("board"),   QStringLiteral("repertoire"), QStringLiteral("repertoire_large"),
+        QStringLiteral("drill"),   QStringLiteral("memory"),     QStringLiteral("all"),
     };
     bool runs_ok = false;
     bool tier_ok = false;
@@ -1401,8 +1581,8 @@ int main(int argc, char* argv[]) {
     if (positional.size() != 1 || !scenarios.contains(scenario) || !runs_ok || options.runs < 1 ||
         !tier_ok || parser.isSet(db_option) == parser.isSet(fixture_option)) {
         static_cast<void>(
-            std::fputs("usage: app_measure <startup|explore|practice|board|repertoire|drill|"
-                       "memory|all> "
+            std::fputs("usage: app_measure <startup|explore|practice|board|repertoire|"
+                       "repertoire_large|drill|memory|all> "
                        "(--db <file> | --fixture) [--engine <binary>] [--runs <n>] "
                        "[--tier <0-6>] [--sounds]\n",
                        stderr));
@@ -1457,6 +1637,9 @@ int main(int argc, char* argv[]) {
         }
         if (all || scenario == QStringLiteral("repertoire")) {
             repertoire(application, report, options);
+        }
+        if (all || scenario == QStringLiteral("repertoire_large")) {
+            repertoire_large(application, report, options);
         }
         if (all || scenario == QStringLiteral("drill")) {
             drill(application, report, options);

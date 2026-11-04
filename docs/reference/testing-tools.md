@@ -116,8 +116,8 @@ database, read only (the release database for a baseline; without it the sample 
 the pipeline into a scratch directory), `--engine` the Stockfish (else `CHESS_COACH_STOCKFISH` or
 the `PATH`), `--tier` the tier (2, the app's default), `--out` a file for the table,
 `--no-sounds` leaves out the second pass with the app's sounds (below), and the sections to run
-follow: `startup`, `explore`, `practice`, `board`, `repertoire`, `drill`, `memory`, `pipeline`
-and `cli`. The script's header says what each section runs.
+follow: `startup`, `explore`, `practice`, `board`, `repertoire`, `repertoire_large`, `drill`,
+`memory`, `pipeline` and `cli`. The script's header says what each section runs.
 
 **The app** is measured by `app_measure` (`app/tests/measure.cpp`), a program linking `app_lib`
 that opens the real `MainWindow` on a scratch data directory of its own (a `QTemporaryDir`) and
@@ -142,7 +142,11 @@ slide's frames, a full repaint, Flip board and `set_position`, at the device pix
 platform gives: `QT_SCALE_FACTOR=2` stands in for a Retina display), `repertoire` (ten moves saved
 across both colours, a window each run at a coverage depth of 10 and of 20 plies: the Repertoire
 tab, Black repertoire, and a board move saving black's answer at the first gap, each to the tree
-and to the coverage line and its gaps painted), `drill` (the same ten moves with their cards taken
+and to the coverage line and its gaps painted), `repertoire_large` (the same steps over a white
+repertoire built from the database, the most played move at every gap the coverage walk meets to
+20 plies at the tier, 690 moves on the release database, but one held out, the choice at ply 8
+the walk reaches with the most mass, so that the save answers the one gap; its colour step is
+White repertoire again after Black), `drill` (the same ten moves with their cards taken
 away: the Drill tab to the five white cards synced back, Start the drill to the first card, each
 right answer to its verdict, About right to the day the card comes back, Next card to the next
 card or the summary) and `memory` (the resident size and the physical footprint after the start,
