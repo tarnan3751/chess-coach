@@ -1,10 +1,10 @@
 // UI tests of the Drill screen (app; ui): a white repertoire of two choices saved through core's
 // ProfileStore, its cards taken away so that entering the screen syncs them back; a drill showing
-// a card at its position named by its line, a correct move waiting for the user's grade, About
-// right recording it as good and only then Next card, the card no longer due, a wrong move
-// recorded as again with its tone alone and the card's move played on the board, and the summary
-// when no card is due; and Easy changing a correct move's grade. Screenshots of a card, its grading
-// and the summary (ui_harness.hpp, fixture_db.hpp).
+// a card at its position named by its line, a correct move sounding its move and waiting for the
+// user's grade, About right recording it as good and only then Next card, the card no longer due,
+// a wrong move recorded as again with its tone alone and the card's move played on the board, and
+// the summary when no card is due; and Easy changing a correct move's grade. Screenshots of a
+// card, its grading and the summary (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
 #include <chesscoach/repertoire.hpp>
@@ -159,6 +159,9 @@ class DrillTest : public QObject {
         play(board, answers(board).first);
         QTRY_VERIFY(
             text(window, QStringLiteral("drill_verdict")).startsWith(QStringLiteral("Right.")));
+        // A right answer sounds its move.
+        QVERIFY(played(window.sounds()).last() == SoundEvent::move);
+        QCOMPARE(played(window.sounds()).count(SoundEvent::move), 1);
         QVERIFY(text(window, QStringLiteral("drill_verdict"))
                     .endsWith(QStringLiteral(" is your move here. How hard was it to find?")));
         for (const auto* name : {"drill_hard", "drill_good", "drill_easy"}) {
@@ -196,11 +199,11 @@ class DrillTest : public QObject {
         Position answered = second;
         static_cast<void>(answered.play_uci(answer));
         QTRY_COMPARE(board.position().fen(), answered.fen());
-        // The answers' sounds: the right move, then the wrong move and its tone, the card's move
-        // shown after it without one.
+        // A wrong answer sounds the wrong tone alone: neither the user's move nor the card's move
+        // shown after it.
         const NullSoundBackend& sounds = played(window.sounds());
         QCOMPARE(sounds.count(SoundEvent::wrong), 1);
-        QCOMPARE(sounds.count(SoundEvent::move), 2);
+        QCOMPARE(sounds.count(SoundEvent::move), 1);
         QVERIFY(sounds.last() == SoundEvent::wrong);
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
                      QStringLiteral("1 due now, out of your 2 cards."));

@@ -741,9 +741,10 @@ QtNetwork (`PLAN.md` §11, 2026-11-04):
 **When they play.** The window has one `Sounds` (`MainWindow::sounds`), and every sound goes
 through it, one per event: each move the board shows (`BoardView::move_shown`), the user's and those
 the window plays on it with `play_move` (Explore's rows, the coach's replies in Practice), sounds
-`move_sound` of its SAN; a wrong answer in Drill sounds `wrong` as its verdict shows, alone: the
-card's move the board then shows (`applying_answer_`) sounds nothing; and an interruption in Practice sounds `interruption` as
-its panel opens. A position set with `set_position` (New game, Back, the move list, a card, a
+`move_sound` of its SAN, but on Drill, which gives an answer its one sound itself
+(`drill_move_played`): a right answer sounds its move, and a wrong one `wrong` alone as its verdict
+shows, the card's move the board then shows sounding nothing; and an interruption in Practice
+sounds `interruption` as its panel opens. A position set with `set_position` (New game, Back, the move list, a card, a
 replay's steps) sounds nothing, nor does a replay's interruption. The sounds are on unless the
 `sounds` setting is `false` (**Settings**). The toolbar's sound toggle (**Shell**) turns them off
 and on and saves the choice at once; Play sounds in the Settings dialog does the same when the
@@ -918,8 +919,8 @@ the UI tests run silent on every platform, their sounds going to the null backen
   cards then deleted (`drop_cards` in the fixture), so that entering the screen syncs them back:
   a drill with each card's position named by its line, a correct move waiting for its grade with
   Next card hidden and no grade coming by itself, About right grading it good and due again a day
-  later, a wrong move, graded again with its tone alone and the card's move played on the board,
-  and the summary; and Easy changing a correct move's grade. Screenshots: `drill-card`,
+  later, its move's sound the one sound it made, a wrong move, graded again with the wrong tone
+  alone and the card's move played on the board, and the summary; and Easy changing a correct move's grade. Screenshots: `drill-card`,
   `drill-grade`, `drill-summary`.
 
 The window, Explore, Repertoire and Drill tests set `CHESS_COACH_STOCKFISH` to a path that does

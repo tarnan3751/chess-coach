@@ -1,9 +1,10 @@
 // The main window's Drill screen (main_window.hpp; docs/reference/app.md, **Drill**): the cards
 // synced on entering, a drill taking the first due card each time, the board at the card's
 // position for the user's move, the grade recorded once through the profile worker (again at
-// once for a wrong move, which sounds its tone and whose answer the board then plays silently; for
-// a correct one the grade the user presses, Hard, About right or Easy, or good when the drill ends
-// before a press), and the summary when no card is due.
+// once for a wrong move, whose answer the board then plays; for a correct one the grade the user
+// presses, Hard, About right or Easy, or good when the drill ends before a press), and the summary
+// when no card is due. An answer makes one sound: a right one its move's, a wrong one the wrong
+// tone alone, the card's move shown after it none.
 #include <chesscoach/position.hpp>
 #include <chesscoach/scheduler.hpp>
 
@@ -100,6 +101,7 @@ void MainWindow::drill_move_played(const QString& uci, const QString& san) {
     if (uci == card.move) {
         ++correct_;
         grade_ = static_cast<int>(Grade::good);
+        sounds_.play(move_sound(san));
         drill_->show_correct(san);
     } else {
         ++again_;

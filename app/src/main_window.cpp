@@ -316,10 +316,10 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     move_list_->setItemDelegate(new MoveListDelegate(move_list_));
     move_list_->setSelectionMode(QAbstractItemView::NoSelection);
     move_list_->setMinimumHeight(96);
-    // Every move the board shows, the user's or one it is given, sounds once, but for the card's
-    // move Drill shows after a wrong answer, whose wrong tone sounds alone.
+    // Every move the board shows, the user's or one it is given, sounds once by its SAN, but on
+    // Drill, which chooses the answer's sound itself (drill_move_played).
     connect(board_, &BoardView::move_shown, this, [this](const QString& san) {
-        if (!applying_answer_) {
+        if (screen_ != Screen::drill) {
             sounds_.play(move_sound(san));
         }
     });
