@@ -872,7 +872,9 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
 what a window's sounds played, and `save_screenshot(widget, test, state)`, which saves `QWidget::grab()` as
 `build/<preset>/ui-screenshots/<test>-<state>.png` (the directory is the compile definition
 `CHESSCOACH_UI_SCREENSHOT_DIR`). Including the harness sets `CHESS_COACH_SILENT` before `main`, so
-the UI tests run silent on every platform, their sounds going to the null backend (**Sounds**).
+the UI tests run silent on every platform, their sounds going to the null backend (**Sounds**);
+a program built with `CHESSCOACH_HARNESS_SOUNDS` defined, `app_measure`, decides that itself
+(`docs/reference/testing-tools.md`, **Measuring**).
 
 - `ui_board_test`: the start position's 32 pieces on their squares; two clicks playing 1. e4 with
   its hints, animation and last-move highlight; a drag from g1 to f3 after 1. e4 e5; illegal

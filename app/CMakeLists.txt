@@ -197,12 +197,14 @@ if(BUILD_TESTING)
   # declared here rather than through chesscoach_add_test, whose bench kind is Catch2's. ctest runs
   # every scenario once on the fixture database with the fake engine, a smoke run that fails only
   # when a step never completes; labelled bench, it runs in the release preset's bench step. It
-  # uses the UI harness, so it is given the harness's screenshot directory like the UI tests.
+  # uses the UI harness, so it is given the harness's screenshot directory like the UI tests, and
+  # CHESSCOACH_HARNESS_SOUNDS, so that its own --sounds, not the harness, decides the silence.
   add_executable(app_measure tests/measure.cpp tests/ui_harness.hpp)
   target_link_libraries(app_measure PRIVATE chesscoach::warnings chesscoach::app_lib
                                             app_test_fixture Qt6::Test)
   target_compile_definitions(app_measure
-                             PRIVATE "CHESSCOACH_UI_SCREENSHOT_DIR=\"${chesscoach_screenshots}\"")
+                             PRIVATE "CHESSCOACH_UI_SCREENSHOT_DIR=\"${chesscoach_screenshots}\""
+                                     CHESSCOACH_HARNESS_SOUNDS)
   add_dependencies(app_measure fake-uci)
   add_test(NAME app_measure
            COMMAND app_measure all --fixture --runs 1 --tier 4

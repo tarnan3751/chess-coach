@@ -3,7 +3,8 @@
 // directory (CHESSCOACH_UI_SCREENSHOT_DIR, set by app/CMakeLists.txt), and the viewport point at
 // the centre of a board square, where a test clicks. Including it makes the tests silent: it sets
 // CHESS_COACH_SILENT before main, so every window's sounds go to the null backend, which a test
-// reads for what the window played.
+// reads for what the window played; unless the includer is built with CHESSCOACH_HARNESS_SOUNDS
+// defined, which leaves the choice to its own main (app_measure's --sounds).
 #pragma once
 
 #include "board_scene.hpp"
@@ -28,10 +29,12 @@
 
 namespace chesscoach::app::test {
 
+#ifndef CHESSCOACH_HARNESS_SOUNDS
 // Set at static initialisation, before any test makes a window (sounds.hpp); qputenv fails only
 // for want of memory, before main, which ends the run as it should.
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization,cert-err58-cpp)
 inline const bool silent = qputenv("CHESS_COACH_SILENT", "1");
+#endif
 
 // The descendant of parent with the object name. A missing one is a mistake in the test or the
 // window rather than a failed check, so it stops the run (QTEST_ASSERT), and the result is never

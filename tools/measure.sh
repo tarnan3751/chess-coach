@@ -21,9 +21,16 @@
 #             times each after a discarded run, timed by perl's Time::HiRes around the process
 #
 #   tools/measure.sh [--db <file>] [--engine <binary>] [--runs <n>] [--tier <0-6>] [--out <file>]
-#                    [<section>...]
+#                    [--no-sounds] [<section>...]
 # Sections: startup explore practice board repertoire drill memory pipeline cli (all of them by
 # default).
+#
+# The app's runs are silent, so their moves leave out the sound the app plays as the board shows a
+# move (on macOS, its post to the sound queue and the play there). On macOS each of startup,
+# explore, practice, board, repertoire, drill and memory then runs again with app_measure --sounds,
+# whose metrics end in ".sounds": startup and explore with the engine off, memory once. Those runs
+# play the sounds audibly through NSSound, whose volume is the app's, out of the measurement's
+# reach, so --no-sounds leaves them out. Elsewhere the app plays no sound and there is no such pass.
 #
 # --db is the opening database, read only (the release database for the baseline); without it the
 # sample is built through the pipeline into a scratch directory. --engine is the Stockfish for the
@@ -43,6 +50,8 @@ engine="${CHESS_COACH_STOCKFISH:-}"
 runs=5
 tier=2
 out=""
+sounds=1
+[ "$(uname)" = Darwin ] || sounds=0 # the app plays no sound elsewhere
 sections=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -51,10 +60,12 @@ while [ $# -gt 0 ]; do
     --runs) runs="${2:-}"; shift 2 ;;
     --tier) tier="${2:-}"; shift 2 ;;
     --out) out="${2:-}"; shift 2 ;;
+    --no-sounds) sounds=0; shift ;;
     startup|explore|practice|board|repertoire|drill|memory|pipeline|cli) sections+=("$1"); shift ;;
     *)
       echo "usage: tools/measure.sh [--db <file>] [--engine <binary>] [--runs <n>] [--tier <0-6>]" \
-        "[--out <file>] [startup|explore|practice|board|repertoire|drill|memory|pipeline|cli]..." >&2
+        "[--out <file>] [--no-sounds]" \
+        "[startup|explore|practice|board|repertoire|drill|memory|pipeline|cli]..." >&2
       exit 2
       ;;
   esac
@@ -136,20 +147,22 @@ timed() {
   done
 }
 
+# run_section <section> [--sounds]: the section's runs, silent or with the app's sounds.
 skipped=""
-for section in "${sections[@]}"; do
-  echo "measure: $section" >&2
+run_section() {
+  local section="$1" sound="${2:-}" i
+  echo "measure: $section${sound:+ with the sounds}" >&2
   case "$section" in
     startup)
-      "$measure" startup --db "$db" --tier "$tier" >/dev/null 2>&1
-      for ((i = 0; i < runs; i++)); do app startup --db "$db" --tier "$tier"; done
-      if [ -n "$engine" ]; then
+      "$measure" startup --db "$db" --tier "$tier" $sound >/dev/null 2>&1
+      for ((i = 0; i < runs; i++)); do app startup --db "$db" --tier "$tier" $sound; done
+      if [ -n "$engine" ] && [ -z "$sound" ]; then
         for ((i = 0; i < runs; i++)); do app startup --db "$db" --tier "$tier" --engine "$engine"; done
       fi
       ;;
     explore)
-      app explore --db "$db" --tier "$tier" --runs "$runs"
-      if [ -n "$engine" ]; then
+      app explore --db "$db" --tier "$tier" --runs "$runs" $sound
+      if [ -n "$engine" ] && [ -z "$sound" ]; then
         for ((i = 0; i < runs; i++)); do
           app explore --db "$db" --tier "$tier" --runs 2 --engine "$engine"
         done
@@ -157,30 +170,28 @@ for section in "${sections[@]}"; do
       ;;
     practice)
       if [ -z "$engine" ]; then
-        skipped="$skipped practice"
-        continue
+        [ -n "$sound" ] || skipped="$skipped practice" # named once, not again for the sounds pass
+        return
       fi
       for ((i = 0; i < runs; i++)); do
-        app practice --db "$db" --tier "$tier" --runs 1 --engine "$engine"
+        app practice --db "$db" --tier "$tier" --runs 1 --engine "$engine" $sound
       done
       ;;
     board)
-      app board --db "$db" --tier "$tier" --runs "$runs"
-      QT_SCALE_FACTOR=2 app board --db "$db" --tier "$tier" --runs "$runs"
+      app board --db "$db" --tier "$tier" --runs "$runs" $sound
+      QT_SCALE_FACTOR=2 app board --db "$db" --tier "$tier" --runs "$runs" $sound
       ;;
     repertoire)
-      app repertoire --db "$db" --tier "$tier" --runs "$runs"
+      app repertoire --db "$db" --tier "$tier" --runs "$runs" $sound
       ;;
     drill)
-      app drill --db "$db" --tier "$tier" --runs "$runs"
+      app drill --db "$db" --tier "$tier" --runs "$runs" $sound
       ;;
     memory)
-      for ((i = 0; i < runs; i++)); do
-        if [ -n "$engine" ]; then
-          app memory --db "$db" --tier "$tier" --engine "$engine"
-        else
-          app memory --db "$db" --tier "$tier"
-        fi
+      local memory_runs="$runs"
+      [ -z "$sound" ] || memory_runs=1
+      for ((i = 0; i < memory_runs; i++)); do
+        app memory --db "$db" --tier "$tier" ${engine:+--engine "$engine"} $sound
       done
       ;;
     pipeline)
@@ -209,8 +220,17 @@ for section in "${sections[@]}"; do
       timed cli.stats "chess-coach-cli stats, the same" "$cli" stats --db "$db"
       ;;
   esac
+}
+
+for section in "${sections[@]}"; do
+  run_section "$section"
+  case " startup explore practice board repertoire drill memory " in
+    *" $section "*) [ "$sounds" = 0 ] || run_section "$section" --sounds ;;
+  esac
 done
 load_after="$(load)"
+sounds_note="off"
+[ "$sounds" = 0 ] || sounds_note="a second pass with them on, its metrics ending in .sounds, audible"
 
 # The header, then one row per metric in the order the metrics first appeared.
 {
@@ -224,7 +244,8 @@ load_after="$(load)"
   echo "Database: $db ($(awk -v b="$(wc -c <"$db")" 'BEGIN { printf("%.1f", b / 1048576) }') MB)," \
     "tier $tier. Engine: ${engine:-none}." \
     "Platform: $QT_QPA_PLATFORM. Runs: $runs. Load average (1 min): $load_before before," \
-    "$load_after after$load_note.${skipped:+ Skipped, without an engine:$skipped.}"
+    "$load_after after$load_note.${skipped:+ Skipped, without an engine:$skipped.}" \
+    "Sounds: $sounds_note."
   echo
   echo "| Metric | Median | Min – max | n | Unit | Method |"
   echo "|---|---:|---:|---:|---|---|"

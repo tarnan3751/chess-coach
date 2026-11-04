@@ -114,9 +114,10 @@ the number of samples, the unit and how it was measured, under a header with the
 machine, the database, the engine and the load before and after. `--db` names the database, read
 only (the release database for a baseline; without it the sample is built through the pipeline
 into a scratch directory), `--engine` the Stockfish (else `CHESS_COACH_STOCKFISH` or the `PATH`),
-`--tier` the tier (2, the app's default), `--out` a file for the table, and the sections to run
-follow: `startup`, `explore`, `practice`, `board`, `repertoire`, `drill`, `memory`, `pipeline` and
-`cli`. The script's header says what each section runs.
+`--tier` the tier (2, the app's default), `--out` a file for the table, `--no-sounds` leaves out
+the second pass with the app's sounds (below), and the sections to run follow: `startup`,
+`explore`, `practice`, `board`, `repertoire`, `drill`, `memory`, `pipeline` and `cli`. The
+script's header says what each section runs.
 
 **The app** is measured by `app_measure` (`app/tests/measure.cpp`), a program linking `app_lib`
 that opens the real `MainWindow` on a scratch data directory of its own (a `QTemporaryDir`) and
@@ -153,6 +154,20 @@ fails when a step never completes and has no time budget.
 
 What the numbers are, and are not:
 
+- **Silent, but for the `.sounds` metrics.** `app_measure` sets `CHESS_COACH_SILENT` before its
+  first window (its UI harness is built to leave that to it), so the app's sounds go to the null
+  backend and every move's number leaves out the sound the app plays as the board shows the
+  move: on macOS the GUI thread's post of the play to the backend's queue, and the play there, on
+  a thread of its own (`docs/reference/app.md`, **Sounds**). `app_measure --sounds` leaves the
+  variable unset, and on macOS `tools/measure.sh` runs startup, explore (the engine off),
+  practice, board, repertoire and drill a second time with it, memory once, each metric's name
+  then ending in `.sounds`; elsewhere, where the app plays no sound, `--sounds` is refused and
+  there is no second pass. `explore.first_click` is a process's first move, its sound the first a
+  move plays, after the queue's silent one at the start. With the sounds on, each timed move
+  comes at least 300 ms after the last sound began, longer than the longest of them, so a sound
+  starts from silence as after a user's thought rather than stopping one still playing. Those
+  runs are audible: the volume is the app's NSSound's, which the measurement does not reach, and
+  it touches no system setting.
 - **Offscreen.** The window paints into its backing store as it does on macOS, raster, but no
   window server composites it and no display's refresh paces it. The cocoa platform's share is
   not measured; `QT_QPA_PLATFORM=cocoa tools/measure.sh startup` on a display would.

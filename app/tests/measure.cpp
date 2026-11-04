@@ -16,7 +16,14 @@
 //
 //   app_measure <startup|explore|practice|board|repertoire|drill|memory|all>
 //               (--db <file> | --fixture) [--engine <binary>] [--runs <n>] [--tier <0-6>]
+//               [--sounds]
 //
+// The windows are silent (CHESS_COACH_SILENT, set before the first one), so every move's time
+// leaves out the sound the app plays as the board shows it (on macOS, the GUI thread's post of the
+// play to the backend's queue, and the play there, on a thread of its own); --sounds leaves the
+// variable unset, so the app's own backend plays them (NSSound on macOS, audibly: the measurement
+// does not reach the app's volume), and every metric's name then ends in ".sounds"; it is refused
+// elsewhere, where the app has no backend and would play nothing.
 // --engine names the Stockfish both engines use, at one thread and 16 MB of hash; without it the
 // engine is off (a binary that is not there), Explore shows no lines and Practice ends a game at
 // the first position where it cannot stay in book. --runs is the repetitions inside one process
@@ -26,10 +33,10 @@
 // tab-separated lines that tools/measure.sh gathers over runs into medians and spreads: "info <key>
 // <value>", "method <metric> <unit> <how>" once per metric before its first sample, and "sample
 // <metric> <value>". Nothing of it is in the app's own code paths: it finds the window's widgets by
-// their object names, as the UI tests do (ui_harness.hpp, which also makes it silent), and chooses
-// its moves and computes what the window should show from its own read-only connection to the
-// database. ctest runs every scenario once on the fixture with the fake engine (app; bench, release
-// preset): a smoke run, which fails only when a step never completes, never on a time.
+// their object names, as the UI tests do (ui_harness.hpp, built here to leave the silence to main),
+// and chooses its moves and computes what the window should show from its own read-only connection
+// to the database. ctest runs every scenario once on the fixture with the fake engine (app; bench,
+// release preset): a smoke run, which fails only when a step never completes, never on a time.
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
@@ -196,9 +203,11 @@ double elapsed_ms(const QElapsedTimer& clock) {
     return static_cast<double>(clock.nsecsElapsed()) / 1.0e6;
 }
 
-// The lines tools/measure.sh reads.
+// The lines tools/measure.sh reads; with the sounds on, every metric's name ends in ".sounds".
 class Report {
   public:
+    explicit Report(bool sounds) : sounds_(sounds) {}
+
     static void info(std::string_view key, std::string_view value) {
         fmt::print("info\t{}\t{}\n", key, value);
         static_cast<void>(std::fflush(stdout));
@@ -206,14 +215,17 @@ class Report {
 
     void sample(const std::string& metric, double value, std::string_view unit,
                 std::string_view method) {
-        if (described_.insert(metric).second) {
-            fmt::print("method\t{}\t{}\t{}\n", metric, unit, method);
+        const std::string name = sounds_ ? metric + ".sounds" : metric;
+        if (described_.insert(name).second) {
+            fmt::print("method\t{}\t{}\t{}{}\n", name, unit, method,
+                       sounds_ ? " (the app's sounds playing)" : "");
         }
-        fmt::print("sample\t{}\t{:.2f}\n", metric, value);
+        fmt::print("sample\t{}\t{:.2f}\n", name, value);
         static_cast<void>(std::fflush(stdout));
     }
 
   private:
+    bool sounds_;
     std::set<std::string, std::less<>> described_;
 };
 
@@ -493,7 +505,18 @@ struct Options {
     QString engine; // empty: the engine is off
     int runs = 5;
     int tier = MainWindow::default_tier;
+    bool sounds = false; // the app's sounds play (--sounds)
 };
+
+// With the sounds on, lets the last one end before the next timed move, as a user's thinking
+// does: longer than the longest of the app's sounds (wrong.wav, 280 ms), so a move's sound starts
+// from silence rather than stopping one still playing.
+void let_sounds_end(const Options& options) {
+    constexpr int longest_sound_ms = 300;
+    if (options.sounds) {
+        pause(longest_sound_ms);
+    }
+}
 
 // How a metric names the engine's state: engine_on or engine_off.
 std::string_view engine_label(const Options& options) {
@@ -730,6 +753,7 @@ void explore_to(const Session& session, const std::vector<std::string>& line) {
         *session.application, [&] { return summary.text() == expected && !board.animating(); },
         "the Explore table after " + std::to_string(line.size()) + " moves");
     pause(20); // any answer still in flight for an earlier position lands
+    let_sounds_end(*session.options);
 }
 
 void startup(MeasureApplication& application, Report& report, const Options& options,
@@ -777,7 +801,10 @@ void startup(MeasureApplication& application, Report& report, const Options& opt
                   from + " to the Explore table's rows at the start painted");
 }
 
-void explore(MeasureApplication& application, Report& report, const Options& options) {
+// The Explore steps; the first one's click is reported apart when it is the process's first move
+// (first_in_process).
+void explore(MeasureApplication& application, Report& report, const Options& options,
+             bool first_in_process) {
     const Scratch scratch(options);
     const Book book(options.db, options.tier);
     MainWindow window(scratch.data_dir(), options.db);
@@ -819,6 +846,7 @@ void explore(MeasureApplication& application, Report& report, const Options& opt
     Report::info("explore_leave_book", leave);
     Report::info("explore_off_book", steps.back().move);
     const std::string label(engine_label(options));
+    bool first_move = first_in_process;
     for (int run = 0; run < options.runs; ++run) {
         for (const Step& step : steps) {
             explore_to(session, step.setup);
@@ -835,9 +863,16 @@ void explore(MeasureApplication& application, Report& report, const Options& opt
                 application, window, [&lines_arrived] { return lines_arrived; }, clock);
             const double gui = drop(board, step.move, clock);
             const double shown = table.wait("the table after " + step.move);
-            report.sample("explore.click", gui, "ms",
-                          "the board's second click handled: the move played on the board, the "
-                          "line and the move list updated, the database and engine asked");
+            if (std::exchange(first_move, false)) {
+                report.sample("explore.first_click", gui, "ms",
+                              "the process's first move's second click handled, as "
+                              "explore.click; its sound, when on, the first a move plays");
+            } else {
+                report.sample(
+                    "explore.click", gui, "ms",
+                    "the board's second click handled: the move played and its sound (when on), "
+                    "the line and the move list updated, the database and engine asked");
+            }
             report.sample(fmt::format("explore.{}.{}", label, step.name), shown, "ms",
                           fmt::format("the board's second click to the Explore table (or its "
                                       "off-book message) for the new position painted, the "
@@ -878,6 +913,7 @@ void practice_game(const Session& session, Report* report, bool& first_engine) {
     bool in_book = book.in_book(Position::start());
     int moves = 0;
     while (end.isEnabled() && board.isEnabled()) {
+        let_sounds_end(*session.options);
         const Position before = board.position();
         std::string move;
         if (in_book && moves < practice_book_moves) {
@@ -1107,6 +1143,7 @@ void drill_session(const Session& session, const Scratch& scratch, Report* repor
         if (answer == scratch.answers().end()) {
             throw std::logic_error("a card the repertoire does not hold");
         }
+        let_sounds_end(*session.options);
         pick(application, board, answer->second);
         Watch right(
             application, window,
@@ -1242,6 +1279,7 @@ void repertoire_session(MeasureApplication& application, Report& report, const O
     }
     const std::string move = moves.front();
     step("save", "a board move saving black's answer at the first gap", [&](QElapsedTimer& clock) {
+        let_sounds_end(options);
         pick(application, board, move);
         static_cast<void>(drop(board, move, clock));
     });
@@ -1342,7 +1380,10 @@ int main(int argc, char* argv[]) {
                                          QStringLiteral("The tier, 0 to 6 (the app's default)."),
                                          QStringLiteral("tier"),
                                          QString::number(MainWindow::default_tier));
-    parser.addOptions({db_option, fixture_option, engine_option, runs_option, tier_option});
+    const QCommandLineOption sounds_option(QStringList{QStringLiteral("sounds")},
+                                           QStringLiteral("The app's sounds play."));
+    parser.addOptions(
+        {db_option, fixture_option, engine_option, runs_option, tier_option, sounds_option});
     parser.process(application);
     const QStringList positional = parser.positionalArguments();
     const QString scenario = positional.isEmpty() ? QString() : positional.front();
@@ -1363,7 +1404,7 @@ int main(int argc, char* argv[]) {
             std::fputs("usage: app_measure <startup|explore|practice|board|repertoire|drill|"
                        "memory|all> "
                        "(--db <file> | --fixture) [--engine <binary>] [--runs <n>] "
-                       "[--tier <0-6>]\n",
+                       "[--tier <0-6>] [--sounds]\n",
                        stderr));
         return 2;
     }
@@ -1380,18 +1421,33 @@ int main(int argc, char* argv[]) {
         Report::info("db", options.db.toStdString());
         Report::info("tier", std::to_string(options.tier));
         Report::info("engine", options.engine.isEmpty() ? "none" : options.engine.toStdString());
-        Report report;
+        // The silence, or not, before the first window makes its sounds (sounds.hpp).
+        const bool sounds = parser.isSet(sounds_option);
+#ifndef __APPLE__
+        if (sounds) {
+            throw std::runtime_error(
+                "--sounds needs the app's sound backend, which only macOS has");
+        }
+#endif
+        options.sounds = sounds;
+        if (sounds) {
+            qunsetenv("CHESS_COACH_SILENT");
+        } else if (!qputenv("CHESS_COACH_SILENT", "1")) {
+            throw std::runtime_error("CHESS_COACH_SILENT could not be set");
+        }
+        Report::info("sounds", sounds ? "on" : "off");
+        Report report(sounds);
         const bool all = scenario == QStringLiteral("all");
         if (all || scenario == QStringLiteral("startup")) {
             startup(application, report, options, launch);
         }
         if (all || scenario == QStringLiteral("explore")) {
-            explore(application, report, options);
+            explore(application, report, options, true);
         }
         if (all && !options.engine.isEmpty()) {
             Options off = options;
             off.engine.clear();
-            explore(application, report, off);
+            explore(application, report, off, false);
         }
         if ((all || scenario == QStringLiteral("practice")) && !options.engine.isEmpty()) {
             practice(application, report, options);
