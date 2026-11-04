@@ -185,12 +185,14 @@ class MainWindow : public QMainWindow {
     void rebuild_move_list();
     void request_query();
     void request_evaluation();
-    void engine_state(const QString& text);
+    void engine_state(EngineState state, const QString& name, const QString& detail);
+    // The status bar's words for the engine's state: "Stockfish 17 ready".
+    [[nodiscard]] static QString engine_status(EngineState state, const QString& name);
     void lines_ready(quint64 key, int request_id, const QVector<EngineLine>& lines, bool cached);
     void engine_failed(const QString& message);
     void update_eval_bar();
     void show_settings();
-    void database_opened(const QString& data_version);
+    void database_opened(const QString& data_version, const QString& months);
     void database_failed(const QString& message);
     void position_ready(const ExploreData& explore);
     void choose_theme(const QString& theme);
@@ -204,6 +206,7 @@ class MainWindow : public QMainWindow {
     std::optional<DatabaseChoice> located_; // the opening database, and where it was found
     QString db_path_;
     QString data_version_;
+    QString months_; // the open database's, as meta holds them
     bool database_open_ = false;
     QThread db_thread_;
     DbWorker* db_worker_; // lives on db_thread_, deleted when it finishes
@@ -229,7 +232,6 @@ class MainWindow : public QMainWindow {
     QListWidget* move_list_;
     QComboBox* tier_selector_;
     QLabel* database_label_ = nullptr;
-    QLabel* data_version_label_ = nullptr;
     QLabel* engine_label_ = nullptr;
     QActionGroup* themes_ = nullptr;
     QAction* light_action_ = nullptr;

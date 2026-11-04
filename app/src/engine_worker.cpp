@@ -92,6 +92,7 @@ QVector<EngineLine> white_side_lines(const Position& position,
 
 void register_engine_types() {
     qRegisterMetaType<EngineSettings>();
+    qRegisterMetaType<EngineState>();
     qRegisterMetaType<EngineLine>();
     qRegisterMetaType<QVector<EngineLine>>();
 }
@@ -188,7 +189,7 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
     const auto path = find_engine_binary(settings_, resources_);
     if (!path) {
         drop_engine();
-        emit engine_state(tr("not found"));
+        emit engine_state(EngineState::not_found, QString(), tr("not found"));
         return;
     }
     if (!engine_ || !engine_->is_alive()) {
@@ -196,17 +197,23 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
         EngineOptions options;
         options.threads = settings_.threads;
         options.hash_mb = settings_.hash_mb;
+        emit engine_state(EngineState::starting, QString(), tr("starting"));
         auto started = Engine::start(*path, options);
         if (!started) {
-            emit engine_state(tr("failed to start"));
+            emit engine_state(EngineState::failed, QString(), tr("failed to start"));
             emit engine_failed(
                 describe(tr("The engine at %1").arg(QString::fromStdString(path->string())),
                          started.error()) +
                 QLatin1Char(' ') + tr("Choose another engine in Settings."));
             return;
         }
-        const std::scoped_lock lock(engine_mutex_);
-        engine_.emplace(std::move(*started));
+        {
+            const std::scoped_lock lock(engine_mutex_);
+            engine_.emplace(std::move(*started));
+        }
+        // Started and idle, whether or not a newer request leaves the search below unrun.
+        const QString started_name = QString::fromStdString(engine_->name());
+        emit engine_state(EngineState::ready, started_name, started_name);
     }
     if (stale(request_id) || !engine_.has_value()) {
         return;
@@ -214,10 +221,10 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
     // Only this thread replaces engine_, and not before the search below returns.
     Engine& engine = *engine_;
     const QString name = QString::fromStdString(engine.name());
-    emit engine_state(tr("searching"));
+    emit engine_state(EngineState::searching, name, tr("searching"));
     const auto result = engine.search(
         *position, {.lines = lines, .seconds = settings_.seconds, .generation = request_id});
-    emit engine_state(name);
+    emit engine_state(EngineState::ready, name, name);
     if (!result) {
         emit engine_failed(describe(name, result.error()) + QLatin1Char(' ') +
                            tr("chess-coach tries again at your next move."));

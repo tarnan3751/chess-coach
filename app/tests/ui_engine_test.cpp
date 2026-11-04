@@ -133,7 +133,7 @@ class EngineTest : public QObject {
         QCOMPARE(line_text(window, 2), QStringLiteral("3: depth 3 +0.3 Nf3 e5"));
         QCOMPARE(text_of(window, QStringLiteral("engine_label")), QStringLiteral("Engine"));
         QCOMPARE(text_of(window, QStringLiteral("engine_status")),
-                 QStringLiteral("Engine: FakeUCI 1.0"));
+                 QStringLiteral("FakeUCI 1.0 ready"));
         // The stored evaluation feeds the bar where there is one.
         const auto& bar = child<EvalBar>(window, QStringLiteral("eval_bar"));
         QVERIFY(std::abs(bar.white_share().value_or(-1) - EvalBar::white_share_of_cp(19)) < 1e-9);
@@ -222,7 +222,7 @@ class EngineTest : public QObject {
         // The engine never started.
         QVERIFY(!QFile::exists(log));
         QCOMPARE(text_of(window, QStringLiteral("engine_status")),
-                 QStringLiteral("Engine: not started"));
+                 QStringLiteral("Engine not started"));
     }
 
     void a_long_search_is_cancelled_by_moving_on() {
@@ -233,7 +233,7 @@ class EngineTest : public QObject {
         QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_label")),
                                   QStringLiteral("Engine: searching"), first_wait_ms);
         QCOMPARE(text_of(window, QStringLiteral("engine_status")),
-                 QStringLiteral("Engine: searching"));
+                 QStringLiteral("FakeUCI 1.0 thinking\u2026"));
 
         // The window keeps processing events while the engine thinks.
         int ticks = 0;
@@ -271,7 +271,7 @@ class EngineTest : public QObject {
         const Session session(*db_, missing);
         const MainWindow& window = *session.window;
         QTRY_COMPARE(text_of(window, QStringLiteral("engine_status")),
-                     QStringLiteral("Engine: not found"));
+                     QStringLiteral("No engine found"));
         QCOMPARE(text_of(window, QStringLiteral("engine_label")),
                  QStringLiteral("Engine: not found"));
         QCOMPARE(line_count(window), 0);
@@ -288,7 +288,7 @@ class EngineTest : public QObject {
         // Qt 6.4's expansion of this macro mixes / and + without parentheses.
         // NOLINTNEXTLINE(readability-math-missing-parentheses)
         QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_status")),
-                                  QStringLiteral("Engine: failed to start"), first_wait_ms);
+                                  QStringLiteral("The engine did not start"), first_wait_ms);
         QVERIFY(
             text_of(window, QStringLiteral("engine_label")).startsWith(QStringLiteral("Engine: ")));
         QCOMPARE(line_count(window), 0);

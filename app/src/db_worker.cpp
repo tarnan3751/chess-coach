@@ -144,8 +144,11 @@ void DbWorker::open_database(const QString& path) {
         return;
     }
     const std::string* version = store->meta().find("data_version");
+    const std::string* months = store->meta().find("months");
+    const QString data_version = version != nullptr ? QString::fromStdString(*version) : QString();
+    const QString month_list = months != nullptr ? QString::fromStdString(*months) : QString();
     store_.emplace(std::move(*store));
-    emit database_opened(version != nullptr ? QString::fromStdString(*version) : QString());
+    emit database_opened(data_version, month_list);
 }
 
 void DbWorker::import_database(const QString& data_dir, const QString& source,

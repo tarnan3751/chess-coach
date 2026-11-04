@@ -87,12 +87,18 @@ which the executable and the UI tests link. The piece set, the two stylesheets
   (`screens`) with Explore (**Explore**), Practice (**Spar**), Repertoire (**Repertoire**) and Drill
   (**Drill**). The board belongs to the current screen: a move on it goes to that screen's line,
   session or card, and the evaluation bar and Explore's engine are idle on the other three.
-- **The status bar**: `database_status`, the opening database's file name and where it was found,
-  "openings.db (data directory)", "(--db)" or "(app bundle)", or "No database" (its tooltip the full
-  path); `data_version_status`, "Data version <v>" once the database is open; and `engine_status`,
-  "Engine: <state>" as the engine worker reports it ("not started" until then, "not found", "failed
-  to start" for a binary that does not answer the handshake, the engine's name when idle,
-  "searching").
+- **The status bar**, two labels: `database_status` on the left, the opening database by its
+  months (`meta`'s, in English: "October 2026", or "October 2026 to March 2027" for a run) and its
+  data version, "Opening database: October 2026, data version 1" ("Opening database: data version
+  1" when `meta` names no months), "Loading the opening database…" until the worker answers, or
+  "No opening database", its tooltip the file's full path and where it was found, "… (data
+  directory)", "(--db)" or "(app bundle)"; and `engine_status` on the right, the engine as the
+  engine worker reports it by `EngineState` (`not_started`, `starting`, `ready`, `searching`,
+  `not_found`, `failed`) beside the engine's name, never by the worker's words: "Engine not
+  started" until then, "Engine starting…", "<name> ready" when idle ("Stockfish 17 ready"),
+  "<name> thinking…" while it searches, "No engine found", or "The engine did not start" for a
+  binary that does not answer the handshake. Explore's engine panel shows the worker's words for
+  the same state, its `detail`.
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
 every position along them. On Explore, a move on the board (`move_played`) appends to it (on the
@@ -108,15 +114,14 @@ that a missing one is reported rather than passed over; without `--db` it takes 
 exists of `<data-dir>/openings.db` and the app bundle's `Contents/Resources/openings.db` (core's
 `locate_opening_database`, through `find_opening_database` in `locations.cpp`), asks the database
 worker to open it, and hands its path to the spar and profile workers, which open it when they first
-need it. The status bar names it and where it was found, "openings.db (data directory)", "(--db)" or
-"(app bundle)", with the full path as its tooltip, and once it is open shows its data version. When
-it does not open, a non-blocking message box (`database_error`) says why in a sentence ("The
-opening database … could not be opened. It is not a database file, or it is damaged. Import one
-with File > Import database."), the status bar says "No database", and Explore's empty state names
-the file: "There is no opening database at …. Check the file given with --db." for a missing
-`--db`, or that it could not be opened, with the import; the board still plays. When there is
-none, Explore's empty state says to import one with File > Import database and names the three
-places it looks, "inside the app" being the bundle.
+need it. The status bar names it by its months and data version once it is open, with its full path
+and where it was found as its tooltip. When it does not open, a non-blocking message box
+(`database_error`) says why in a sentence ("The opening database … could not be opened. It is not
+a database file, or it is damaged. Import one with File > Import database."), the status bar says
+"No opening database", and Explore's empty state names the file: "There is no opening database at
+…. Check the file given with --db." for a missing `--db`, or that it could not be opened, with the
+import; the board still plays. When there is none, Explore's empty state says to import one with
+File > Import database and names the three places it looks, "inside the app" being the bundle.
 
 **The bundle.** The bundle's resources are `<the executable's folder>/../Resources` when the
 executable runs inside a `.app`, else there are none (`bundle_resources`). The window works them out
@@ -158,7 +163,7 @@ two signals connected to its slots, every crossing queued:
 
 | Slot | Answer |
 |---|---|
-| `open_database(path)` | `database_opened(data_version)`, the file's `data_version` from `meta`, or `database_failed(message)` |
+| `open_database(path)` | `database_opened(data_version, months)`, the file's `data_version` and `months` from `meta`, or `database_failed(message)` |
 | `query(line_keys, tier)` | `position_ready(ExploreData)`: the position at the end of the line at the tier. Without an open database, nothing |
 | `import_database(data_dir, source, current)` | `database_imported(path, data_version, months)` and the new file opened, or `database_import_failed(message)` and `current` opened again (**Importing a database**) |
 
@@ -184,7 +189,7 @@ the window, deleted on its thread when the thread finishes. It owns one core `En
 | Slot | What it does |
 |---|---|
 | `configure(EngineSettings)` | Keeps the settings for the next search and drops the running engine, which quits, so the next search starts one with them |
-| `evaluate(key, fen, request_id)` | Answers `lines_ready(key, request_id, lines, cached)`, from the cache or a search, unless the request is stale; reports `engine_state(text)` and `engine_failed(message)` |
+| `evaluate(key, fen, request_id)` | Answers `lines_ready(key, request_id, lines, cached)`, from the cache or a search, unless the request is stale; reports `engine_state(state, name, detail)` and `engine_failed(message)` |
 
 **An evaluation.** First the cache: `cache_lookup(key, lines, 12)`, a hit needing every line at
 depth 12 or more, as the CLI's `eval`; a hit is answered with `cached` set and the engine is not
@@ -193,11 +198,12 @@ else `stockfish` on the `PATH`, else the app bundle's `Contents/Resources/engine
 the packaging puts it (**The bundle**), and reports "not found" when there is none
 (`find_engine_binary`, which the spar worker shares), and "failed to start" when the binary does not
 answer the UCI handshake. The engine starts at the first search (Threads and Hash from the settings)
-and again after it dies or times out. The worker reports "searching", runs `search` for the
-settings' line count and seconds, reports the engine's name, and stores a full result with
-`cache_store`, answering with what the cache then holds. `profiles.db` is opened only when it
-exists, for a lookup, or when a search is to be stored, so it is created by the first stored search
-and a run that searches nothing writes nothing.
+and again after it dies or times out, the worker reporting "starting" meanwhile and the engine's
+name once it has started. The worker reports "searching", runs `search` for the settings' line
+count and seconds, reports the engine's name, and stores a full result with `cache_store`,
+answering with what the cache then holds. `profiles.db` is opened only when it exists, for a
+lookup, or when a search is to be stored, so it is created by the first stored search and a run
+that searches nothing writes nothing.
 
 **One search at a time, cancelled by moving on.** The worker's slots run one at a time on its
 thread, and `Engine::search` blocks there, so two searches are never in flight. Each request the

@@ -412,16 +412,16 @@ void MainWindow::build_menus() {
 }
 
 void MainWindow::build_status_bar() {
+    // The opening database on the left, by its months and data version, and the engine on the
+    // right.
     database_label_ = new QLabel();
     database_label_->setObjectName(QStringLiteral("database_status"));
     show_database_label();
-    data_version_label_ = new QLabel();
-    data_version_label_->setObjectName(QStringLiteral("data_version_status"));
-    data_version_label_->hide();
-    engine_label_ = new QLabel(tr("Engine: not started"));
+    engine_label_ = new QLabel(engine_status(EngineState::not_started, QString()));
     engine_label_->setObjectName(QStringLiteral("engine_status"));
-    statusBar()->addWidget(database_label_);
-    statusBar()->addWidget(data_version_label_);
+    statusBar()->setContentsMargins(8, 0, 8, 0);
+    statusBar()->setSizeGripEnabled(false);
+    statusBar()->addWidget(database_label_, 1);
     statusBar()->addPermanentWidget(engine_label_);
 }
 
@@ -505,31 +505,39 @@ void MainWindow::request_query() {
 }
 
 void MainWindow::show_database_label() {
-    // The file's name and where it was found: "openings.db (data directory)".
+    // The database by its months and data version once it is open, never by its file, which the
+    // tooltip names with where it was found: "/…/openings.db (data directory)".
     if (!located_) {
-        database_label_->setText(tr("No database"));
+        database_label_->setText(tr("No opening database"));
         database_label_->setToolTip(no_database_text(data_dir_));
         return;
     }
-    database_label_->setText(tr("%1 (%2)").arg(
-        QFileInfo(QString::fromStdString(located_->path.string())).fileName(), located_->source));
-    database_label_->setToolTip(QString::fromStdString(located_->path.string()));
+    database_label_->setToolTip(
+        tr("%1 (%2)").arg(QDir::toNativeSeparators(QString::fromStdString(located_->path.string())),
+                          located_->source));
+    if (!database_open_) {
+        database_label_->setText(tr("Loading the opening database\u2026"));
+        return;
+    }
+    const QString held = month_range(months_);
+    database_label_->setText(
+        held.isEmpty() ? tr("Opening database: data version %1").arg(data_version_)
+                       : tr("Opening database: %1, data version %2").arg(held, data_version_));
 }
 
-void MainWindow::database_opened(const QString& data_version) {
+void MainWindow::database_opened(const QString& data_version, const QString& months) {
     database_open_ = true;
     data_version_ = data_version;
+    months_ = months;
     show_database_label();
-    data_version_label_->setText(tr("Data version %1").arg(data_version));
-    data_version_label_->show();
     request_query();
 }
 
 void MainWindow::database_failed(const QString& message) {
     database_open_ = false;
     data_version_.clear();
-    database_label_->setText(tr("No database"));
-    data_version_label_->hide();
+    months_.clear();
+    database_label_->setText(tr("No opening database"));
     // The file the window chose did not open: say which, not where else it might have looked.
     QString empty = no_database_text(data_dir_);
     if (located_) {
@@ -583,13 +591,32 @@ void MainWindow::request_evaluation() {
     emit evaluate_requested(position.key(), QString::fromStdString(position.fen()), request_id_);
 }
 
-void MainWindow::engine_state(const QString& text) {
-    engine_label_->setText(tr("Engine: %1").arg(text));
-    if (text == EngineWorker::tr("searching")) {
+void MainWindow::engine_state(EngineState state, const QString& name, const QString& detail) {
+    engine_label_->setText(engine_status(state, name));
+    // Explore's engine panel keeps the worker's words; a start in progress leaves it as it is.
+    if (state == EngineState::searching) {
         explore_->show_engine_searching();
-    } else {
-        explore_->show_engine_state(text);
+    } else if (state != EngineState::starting) {
+        explore_->show_engine_state(detail);
     }
+}
+
+QString MainWindow::engine_status(EngineState state, const QString& name) {
+    switch (state) {
+    case EngineState::not_started:
+        return tr("Engine not started");
+    case EngineState::starting:
+        return tr("Engine starting\u2026");
+    case EngineState::ready:
+        return tr("%1 ready").arg(name);
+    case EngineState::searching:
+        return tr("%1 thinking\u2026").arg(name);
+    case EngineState::not_found:
+        return tr("No engine found");
+    case EngineState::failed:
+        return tr("The engine did not start");
+    }
+    return {};
 }
 
 void MainWindow::lines_ready(quint64 key, int request_id, const QVector<EngineLine>& lines,

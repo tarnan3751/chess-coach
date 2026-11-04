@@ -19,6 +19,7 @@
 #include <QVector>
 #include <QtGlobal>
 #include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <mutex>
 #include <optional>
@@ -49,7 +50,19 @@ struct EngineLine {
     friend bool operator==(const EngineLine&, const EngineLine&) = default;
 };
 
-// Registers EngineSettings and the lines for queued connections; idempotent.
+// What the engine is doing, as the worker reports it: not started (before the first search),
+// starting (its process and handshake), ready (idle), searching, not found (no binary), or failed
+// (the binary did not answer the handshake). The window words it in the status bar.
+enum class EngineState : std::uint8_t {
+    not_started,
+    starting,
+    ready,
+    searching,
+    not_found,
+    failed,
+};
+
+// Registers EngineSettings, EngineState and the lines for queued connections; idempotent.
 void register_engine_types();
 
 // The engine to run: the settings' binary; else CHESS_COACH_STOCKFISH; else stockfish on the
@@ -86,8 +99,12 @@ class EngineWorker : public QObject {
     Q_SLOT void evaluate(quint64 key, const QString& fen, int request_id);
 
   signals:
-    // "not found", "failed to start", the engine's name when it is idle, or "searching".
-    void engine_state(const QString& text);
+    // The engine's state; name is the engine's own, from its handshake, when it is ready or
+    // searching, else empty; detail is the state in the worker's words, which Explore's engine
+    // panel shows: "starting", "searching", "not found", "failed to start", or the name when
+    // ready.
+    void engine_state(chesscoach::app::EngineState state, const QString& name,
+                      const QString& detail);
     void lines_ready(quint64 key, int request_id, const QVector<chesscoach::app::EngineLine>& lines,
                      bool cached);
     void engine_failed(const QString& message);
@@ -113,4 +130,5 @@ class EngineWorker : public QObject {
 } // namespace chesscoach::app
 
 Q_DECLARE_METATYPE(chesscoach::app::EngineSettings)
+Q_DECLARE_METATYPE(chesscoach::app::EngineState)
 Q_DECLARE_METATYPE(chesscoach::app::EngineLine)

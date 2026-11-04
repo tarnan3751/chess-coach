@@ -210,10 +210,9 @@ class MainWindowTest : public QObject {
     void the_status_bar_shows_no_database_and_the_engine() const {
         const MainWindow window(data_dir_, QString());
         QCOMPARE(child<QLabel>(window, QStringLiteral("database_status")).text(),
-                 QStringLiteral("No database"));
-        QVERIFY(child<QLabel>(window, QStringLiteral("data_version_status")).isHidden());
+                 QStringLiteral("No opening database"));
         QCOMPARE(child<QLabel>(window, QStringLiteral("engine_status")).text(),
-                 QStringLiteral("Engine: not started"));
+                 QStringLiteral("Engine not started"));
         QVERIFY(child<QLabel>(window, QStringLiteral("explore_message"))
                     .text()
                     .startsWith(QStringLiteral("No opening database")));

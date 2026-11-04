@@ -76,7 +76,9 @@ QStringList table_moves(const MainWindow& window) {
 }
 
 bool opened(const MainWindow& window) {
-    return child<QLabel>(window, QStringLiteral("data_version_status")).isVisible();
+    return child<QLabel>(window, QStringLiteral("database_status"))
+        .text()
+        .startsWith(QStringLiteral("Opening database: "));
 }
 
 void select_tier(MainWindow& window, int tier) {
@@ -108,10 +110,11 @@ class ExploreTest : public QObject {
         const Session session(QString::fromStdString(db_->path()));
         MainWindow& window = *session.window;
         QTRY_VERIFY(opened(window));
-        QCOMPARE(child<QLabel>(window, QStringLiteral("data_version_status")).text(),
-                 QStringLiteral("Data version 0"));
         QCOMPARE(child<QLabel>(window, QStringLiteral("database_status")).text(),
-                 QStringLiteral("openings.db (--db)"));
+                 QStringLiteral("Opening database: January 2013, data version 0"));
+        QVERIFY(child<QLabel>(window, QStringLiteral("database_status"))
+                    .toolTip()
+                    .endsWith(QStringLiteral("openings.db (--db)")));
         // Tier 2 to start, where the fixture has no games: the start position is off book.
         QCOMPARE(window.tier(), MainWindow::default_tier);
         QTRY_COMPARE(message(window), QStringLiteral("Off book at 1400–1599: 0 games"));
@@ -336,8 +339,7 @@ class ExploreTest : public QObject {
         QVERIFY(
             box.text().contains(QStringLiteral("It is not a database file, or it is damaged.")));
         QCOMPARE(child<QLabel>(window, QStringLiteral("database_status")).text(),
-                 QStringLiteral("No database"));
-        QVERIFY(!child<QLabel>(window, QStringLiteral("data_version_status")).isVisible());
+                 QStringLiteral("No opening database"));
         // The empty state names the file that did not open, not the places looked in.
         QVERIFY(message(window).startsWith(QStringLiteral("The opening database")));
         QVERIFY(message(window).contains(QDir::toNativeSeparators(broken)));

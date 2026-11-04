@@ -24,7 +24,7 @@ class DbWorker : public QObject {
     explicit DbWorker(QObject* parent = nullptr);
 
     // Opens the database at path, replacing any open one; answers database_opened with the
-    // file's data_version, or database_failed with a message.
+    // file's data_version and months from meta, or database_failed with a message.
     Q_SLOT void open_database(const QString& path);
     // Puts a copy of source in place as <data_dir>/openings.db (core's import_opening_database),
     // its own store closed meanwhile: answers database_imported and opens the new file, or
@@ -38,7 +38,7 @@ class DbWorker : public QObject {
   signals:
     void database_imported(const QString& path, qint64 data_version, const QString& months);
     void database_import_failed(const QString& message);
-    void database_opened(const QString& data_version);
+    void database_opened(const QString& data_version, const QString& months);
     void database_failed(const QString& message);
     void position_ready(const chesscoach::app::ExploreData& data);
 

@@ -77,8 +77,14 @@ QString text(const MainWindow& window, const QString& name) {
     return child<QLabel>(window, name).text();
 }
 
+// The status bar's tooltip names the database's file and where it was found.
+QString found(const MainWindow& window) {
+    return child<QLabel>(window, QStringLiteral("database_status")).toolTip();
+}
+
 bool opened(const MainWindow& window) {
-    return !child<QLabel>(window, QStringLiteral("data_version_status")).isHidden();
+    return text(window, QStringLiteral("database_status"))
+        .startsWith(QStringLiteral("Opening database: "));
 }
 
 class LookupTest : public QObject {
@@ -110,8 +116,7 @@ class LookupTest : public QObject {
         {
             const MainWindow window(places.data_dir, explicit_db);
             QTRY_VERIFY(opened(window));
-            QCOMPARE(text(window, QStringLiteral("database_status")),
-                     QStringLiteral("explicit.db (--db)"));
+            QVERIFY(found(window).endsWith(QStringLiteral("explicit.db (--db)")));
         }
         {
             // A --db that names no file is reported, not passed over for the data directory's.
@@ -123,7 +128,7 @@ class LookupTest : public QObject {
                         .toString()
                         .contains(none));
             QCOMPARE(text(window, QStringLiteral("database_status")),
-                     QStringLiteral("No database"));
+                     QStringLiteral("No opening database"));
             QVERIFY(text(window, QStringLiteral("explore_message"))
                         .startsWith(QStringLiteral("There is no opening database at")));
         }
@@ -146,21 +151,20 @@ class LookupTest : public QObject {
             QTest::qWait(300);
             QCOMPARE(window.findChildren<QWidget*>(QStringLiteral("database_error")).size(), 1);
             QCOMPARE(text(window, QStringLiteral("database_status")),
-                     QStringLiteral("No database"));
+                     QStringLiteral("No opening database"));
         }
         QVERIFY(QFile::remove(places.in_data()));
         {
             const MainWindow window(places.data_dir, QString());
             QTRY_VERIFY(opened(window));
-            QCOMPARE(text(window, QStringLiteral("database_status")),
-                     QStringLiteral("openings.db (app bundle)"));
+            QVERIFY(found(window).endsWith(QStringLiteral("openings.db (app bundle)")));
         }
         QVERIFY(QFile::remove(places.in_bundle()));
         {
             MainWindow window(places.data_dir, QString());
             window.show();
             QCOMPARE(text(window, QStringLiteral("database_status")),
-                     QStringLiteral("No database"));
+                     QStringLiteral("No opening database"));
             const QString message = text(window, QStringLiteral("explore_message"));
             QVERIFY2(message.contains(QStringLiteral("--db")) &&
                          message.contains(QDir::toNativeSeparators(places.data_dir)) &&
@@ -184,8 +188,8 @@ class LookupTest : public QObject {
         }
         MainWindow window(places.data_dir, QString());
         window.show();
-        QTRY_COMPARE(text(window, QStringLiteral("data_version_status")),
-                     QStringLiteral("Data version 0"));
+        QTRY_COMPARE(text(window, QStringLiteral("database_status")),
+                     QStringLiteral("Opening database: January 2013, data version 0"));
         const auto& table = child<QTableView>(window, QStringLiteral("explore_table"));
         QTRY_COMPARE(table.model()->rowCount(), 4);
         const auto& board = child<chesscoach::app::BoardView>(window, QStringLiteral("board"));
@@ -210,10 +214,9 @@ class LookupTest : public QObject {
         auto* done = window.findChild<QMessageBox*>(QStringLiteral("database_imported"));
         QCOMPARE(done->text(), QStringLiteral("The new opening database is ready (data version 7). "
                                               "It holds games from January 2013."));
-        QTRY_COMPARE(text(window, QStringLiteral("data_version_status")),
-                     QStringLiteral("Data version 7"));
-        QCOMPARE(text(window, QStringLiteral("database_status")),
-                 QStringLiteral("openings.db (data directory)"));
+        QTRY_COMPARE(text(window, QStringLiteral("database_status")),
+                     QStringLiteral("Opening database: January 2013, data version 7"));
+        QVERIFY(found(window).endsWith(QStringLiteral("openings.db (data directory)")));
         QVERIFY(QFileInfo::exists(
             QDir(places.data_dir).filePath(QStringLiteral("openings.db.previous"))));
         // The import is over: the busy dialog is gone, and both imports are on again.
@@ -238,8 +241,8 @@ class LookupTest : public QObject {
         QVERIFY(window.findChild<QMessageBox*>(QStringLiteral("database_error"))
                     ->text()
                     .startsWith(QStringLiteral("junk.db was not imported")));
-        QTRY_COMPARE(text(window, QStringLiteral("data_version_status")),
-                     QStringLiteral("Data version 7"));
+        QTRY_COMPARE(text(window, QStringLiteral("database_status")),
+                     QStringLiteral("Opening database: January 2013, data version 7"));
         QTRY_COMPARE(table.model()->rowCount(), 3);
     }
 
@@ -258,7 +261,7 @@ class LookupTest : public QObject {
         {
             const MainWindow window(places.data_dir, QString());
             const auto status = QStringLiteral("engine_status");
-            const auto expected = QStringLiteral("Engine: FakeUCI 1.0");
+            const auto expected = QStringLiteral("FakeUCI 1.0 ready");
             // NOLINTNEXTLINE(readability-math-missing-parentheses)
             QTRY_COMPARE_WITH_TIMEOUT(text(window, status), expected, 30000);
             child<QAction>(window, QStringLiteral("settings_action")).trigger();
