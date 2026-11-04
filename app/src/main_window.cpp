@@ -60,7 +60,6 @@
 #include <QStyleOptionViewItem>
 #include <QStyledItemDelegate>
 #include <QTabBar>
-#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -293,8 +292,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
       profile_worker_(new ProfileWorker(data_dir, db_path_)), board_(new BoardView()),
       eval_bar_(new EvalBar()), explore_(new ExploreScreen()), spar_(new SparScreen()),
       repertoire_(new RepertoireScreen()), drill_(new DrillScreen()), tabs_(new QTabBar()),
-      move_list_(new QListWidget()), tier_selector_(new RatingChooser()),
-      grade_timer_(new QTimer(this)) {
+      move_list_(new QListWidget()), tier_selector_(new RatingChooser()) {
     keep_qt_settings_in(data_dir);
     // The Study look on every platform: Fusion, which draws what the stylesheet cannot reach
     // (radio buttons, spin boxes, scroll bars, the tab strip's alignment) in the theme's palette,
@@ -373,9 +371,6 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(drill_, &DrillScreen::start_requested, this, &MainWindow::drill_start);
     connect(drill_, &DrillScreen::next_requested, this, &MainWindow::drill_next);
     connect(drill_, &DrillScreen::grade_chosen, this, &MainWindow::drill_grade);
-    grade_timer_->setSingleShot(true);
-    grade_timer_->setInterval(2000);
-    connect(grade_timer_, &QTimer::timeout, this, &MainWindow::drill_record);
 
     setCentralWidget(new Columns(new BoardRow(eval_bar_, board_), move_list_, tabs_, screens));
 

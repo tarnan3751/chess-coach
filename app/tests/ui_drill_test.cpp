@@ -1,9 +1,10 @@
 // UI tests of the Drill screen (app; ui): a white repertoire of two choices saved through core's
 // ProfileStore, its cards taken away so that entering the screen syncs them back; a drill showing
-// a card at its position, a correct move recorded as good and the card no longer due, a wrong move
+// a card at its position named by its line, a correct move waiting for the user's grade, About
+// right recording it as good and only then Next card, the card no longer due, a wrong move
 // recorded as again with the card's move played on the board, and the summary when no card is
-// due; and Easy changing a correct move's grade. Screenshots of a card and the summary
-// (ui_harness.hpp, fixture_db.hpp).
+// due; and Easy changing a correct move's grade. Screenshots of a card, its grading and the
+// summary (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
 #include <chesscoach/repertoire.hpp>
@@ -101,6 +102,17 @@ std::pair<std::string, std::string> answers(const BoardView& board) {
     return {"g1f3", "b1c3"};
 }
 
+// What the status line asks at the board's position: the start, or after 1. e4 e5.
+QString asked(const BoardView& board) {
+    return board.position().key() == Position::start().key()
+               ? QStringLiteral("Your move in the starting position.")
+               : QStringLiteral("Your move after 1. e4 e5.");
+}
+
+bool shown(const MainWindow& window, const QString& name) {
+    return child<QAbstractButton>(window, name).isVisible();
+}
+
 void play(const BoardView& board, const std::string& uci) {
     click(board, uci.substr(0, 2));
     click(board, uci.substr(2, 2));
@@ -134,17 +146,29 @@ class DrillTest : public QObject {
 
         press(window, QStringLiteral("drill_start"));
         QTRY_VERIFY(board.isEnabled());
-        QVERIFY(
-            text(window, QStringLiteral("drill_status")).startsWith(QStringLiteral("Your move ")));
+        QCOMPARE(text(window, QStringLiteral("drill_status")), asked(board));
+        QVERIFY(!shown(window, QStringLiteral("drill_next")));
         save_screenshot(window, QStringLiteral("drill"), QStringLiteral("card"));
 
-        // The first card answered right: good, unless Hard or Easy; recorded at Next.
+        // The first card answered right: the user grades it, and only then comes Next card.
         const Position first = board.position();
         play(board, answers(board).first);
         QTRY_VERIFY(
             text(window, QStringLiteral("drill_verdict")).startsWith(QStringLiteral("Right.")));
-        QVERIFY(child<QAbstractButton>(window, QStringLiteral("drill_easy")).isVisible());
+        QVERIFY(text(window, QStringLiteral("drill_verdict"))
+                    .endsWith(QStringLiteral(" is your move here. How hard was it to find?")));
+        for (const auto* name : {"drill_hard", "drill_good", "drill_easy"}) {
+            QVERIFY2(shown(window, QString::fromLatin1(name)), name);
+        }
+        QVERIFY(!shown(window, QStringLiteral("drill_next")));
         QVERIFY(!board.isEnabled());
+        QTRY_VERIFY(!board.animating());
+        save_screenshot(window, QStringLiteral("drill"), QStringLiteral("grade"));
+        QTest::qWait(2500); // no grade comes by itself
+        QVERIFY(shown(window, QStringLiteral("drill_good")));
+        press(window, QStringLiteral("drill_good"));
+        QVERIFY(!shown(window, QStringLiteral("drill_good")));
+        QVERIFY(shown(window, QStringLiteral("drill_next")));
         press(window, QStringLiteral("drill_next"));
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
                      QStringLiteral("1 due now, out of your 2 cards."));
@@ -157,12 +181,14 @@ class DrillTest : public QObject {
 
         // The second answered wrong: again at once, and the board plays the card's move.
         QTRY_VERIFY(board.isEnabled());
+        QCOMPARE(text(window, QStringLiteral("drill_status")), asked(board));
         const auto [answer, wrong] = answers(board);
         const Position second = board.position();
         play(board, wrong);
         QTRY_VERIFY(
             text(window, QStringLiteral("drill_verdict")).startsWith(QStringLiteral("Not quite.")));
-        QVERIFY(!child<QAbstractButton>(window, QStringLiteral("drill_easy")).isVisible());
+        QVERIFY(!shown(window, QStringLiteral("drill_easy")));
+        QVERIFY(shown(window, QStringLiteral("drill_next")));
         Position answered = second;
         static_cast<void>(answered.play_uci(answer));
         QTRY_COMPARE(board.position().fen(), answered.fen());
@@ -173,7 +199,7 @@ class DrillTest : public QObject {
         QTRY_VERIFY(child<QWidget>(window, QStringLiteral("drill_summary")).isVisible());
         QCOMPARE(text(window, QStringLiteral("drill_summary_text")),
                  QStringLiteral("The drill is over. You answered 2 cards, 1 right and 1 wrong. "
-                                "The ones you missed come back soon."));
+                                "The ones you missed come back tomorrow."));
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
                      QStringLiteral("None of your 2 cards is due now."));
         for (const chesscoach::Card& card : session.cards()) {

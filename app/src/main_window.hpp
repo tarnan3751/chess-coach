@@ -43,7 +43,6 @@ class QComboBox;
 class QLabel;
 class QListWidget;
 class QProgressDialog;
-class QTimer;
 
 namespace chesscoach::app {
 
@@ -285,7 +284,6 @@ class MainWindow : public QMainWindow {
     bool recorded_ = false;
     int grade_ = 0;
     bool applying_answer_ = false; // the board is showing the card's move, not the user's
-    QTimer* grade_timer_;          // ends the time to change a correct answer's grade
     int reviewed_ = 0;
     int correct_ = 0;
     int again_ = 0;

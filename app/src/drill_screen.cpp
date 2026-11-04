@@ -20,10 +20,9 @@ DrillScreen::DrillScreen(QWidget* parent)
       sync_(new QPushButton(tr("Update cards from your repertoire"), this)),
       start_(new QPushButton(tr("Start the drill"), this)), due_(new QLabel(this)),
       progress_(new QLabel(this)), status_(new QLabel(this)), verdict_(new QLabel(this)),
-      hard_(new QPushButton(tr("That was hard"), this)),
-      easy_(new QPushButton(tr("That was easy"), this)),
-      next_(new QPushButton(tr("Next card"), this)), summary_(new QFrame(this)),
-      summary_text_(new QLabel(summary_)) {
+      hard_(new QPushButton(tr("Hard"), this)), good_(new QPushButton(tr("About right"), this)),
+      easy_(new QPushButton(tr("Easy"), this)), next_(new QPushButton(tr("Next card"), this)),
+      summary_(new QFrame(this)), summary_text_(new QLabel(summary_)) {
     setObjectName(QStringLiteral("drill_screen"));
     white_->setObjectName(QStringLiteral("drill_white"));
     black_->setObjectName(QStringLiteral("drill_black"));
@@ -34,6 +33,7 @@ DrillScreen::DrillScreen(QWidget* parent)
     status_->setObjectName(QStringLiteral("drill_status"));
     verdict_->setObjectName(QStringLiteral("drill_verdict"));
     hard_->setObjectName(QStringLiteral("drill_hard"));
+    good_->setObjectName(QStringLiteral("drill_good"));
     easy_->setObjectName(QStringLiteral("drill_easy"));
     next_->setObjectName(QStringLiteral("drill_next"));
     summary_->setObjectName(QStringLiteral("drill_summary"));
@@ -55,6 +55,7 @@ DrillScreen::DrillScreen(QWidget* parent)
     controls->addWidget(start_);
     auto* grading = new QHBoxLayout();
     grading->addWidget(hard_);
+    grading->addWidget(good_);
     grading->addWidget(easy_);
     grading->addStretch(1);
     grading->addWidget(next_);
@@ -86,6 +87,8 @@ DrillScreen::DrillScreen(QWidget* parent)
     connect(next_, &QPushButton::clicked, this, &DrillScreen::next_requested);
     connect(hard_, &QPushButton::clicked, this,
             [this] { emit grade_chosen(static_cast<int>(Grade::hard)); });
+    connect(good_, &QPushButton::clicked, this,
+            [this] { emit grade_chosen(static_cast<int>(Grade::good)); });
     connect(easy_, &QPushButton::clicked, this,
             [this] { emit grade_chosen(static_cast<int>(Grade::easy)); });
     set_drilling(false);
@@ -133,44 +136,43 @@ void DrillScreen::set_drilling(bool drilling) {
     black_->setEnabled(!drilling);
     sync_->setEnabled(!drilling);
     start_->setEnabled(!drilling);
-    next_->setVisible(drilling);
-    next_->setEnabled(false);
-    hard_->hide();
-    easy_->hide();
+    show_grades(false);
+    next_->hide();
     if (drilling) {
         summary_->hide();
     }
 }
 
 void DrillScreen::show_card(const DrillCard& card) {
-    status_->setText(tr("Your move %1. Play it on the board.").arg(card.name));
+    status_->setText(tr("Your move %1.").arg(card.name));
     verdict_->clear();
-    next_->setEnabled(false);
-    hard_->hide();
-    easy_->hide();
+    show_grades(false);
+    next_->hide();
 }
 
-void DrillScreen::show_correct(const QString& san, bool grading) {
-    verdict_->setText(grading ? tr("Right. %1 is your move here. If it was hard or easy to find, "
-                                   "press the button that says so.")
-                                    .arg(san)
-                              : tr("Right. %1 is your move here.").arg(san));
-    hard_->setVisible(grading);
-    easy_->setVisible(grading);
-    next_->setEnabled(true);
+void DrillScreen::show_correct(const QString& san) {
+    // The user grades the answer; Next card comes once a grade is recorded.
+    verdict_->setText(tr("Right. %1 is your move here. How hard was it to find?").arg(san));
+    show_grades(true);
+    next_->hide();
 }
 
 void DrillScreen::show_wrong(const QString& played_san, const QString& answer_san) {
     verdict_->setText(tr("Not quite. Your move here is %2, not %1. The board shows it now.")
                           .arg(played_san, answer_san));
-    hard_->hide();
-    easy_->hide();
-    next_->setEnabled(true);
+    show_grades(false);
+    next_->show();
 }
 
 void DrillScreen::grade_recorded() {
-    hard_->hide();
-    easy_->hide();
+    show_grades(false);
+    next_->show();
+}
+
+void DrillScreen::show_grades(bool shown) {
+    for (QPushButton* button : {hard_, good_, easy_}) {
+        button->setVisible(shown);
+    }
 }
 
 void DrillScreen::show_summary(int reviewed, int correct, int again) {
@@ -180,7 +182,7 @@ void DrillScreen::show_summary(int reviewed, int correct, int again) {
         QString text = tr("The drill is over. You answered %1, %2 right and %3 wrong.")
                            .arg(cards_of(reviewed), number(correct), number(again));
         if (again > 0) {
-            text += QLatin1Char(' ') + tr("The ones you missed come back soon.");
+            text += QLatin1Char(' ') + tr("The ones you missed come back tomorrow.");
         }
         summary_text_->setText(text);
     }

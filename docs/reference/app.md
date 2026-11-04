@@ -432,7 +432,7 @@ repertoire creates nothing. Its slots, reached by queued connection:
 | `score_position(key, tier)` | `scores_ready(ScoreData)`: core's `score_moves` with each move's SAN |
 | `import_pgn(path, white)` | `pgn_imported(PgnImportInfo)`, then `repertoire_changed`: `import_repertoire_pgn` and `import_choices` |
 | `sync_cards(white)` | `cards_synced(white, created, reset, deleted)` |
-| `due_cards(white)` | `cards_ready(CardsData)`: the colour's cards due now, each with its FEN, its answer in SAN and its name, and both colours' due and total counts |
+| `due_cards(white)` | `cards_ready(CardsData)`: the colour's cards due now, each with its FEN (for the board), its answer in SAN and its name, and both colours' due and total counts |
 | `record_review(card_id, white, key, grade)` | `review_recorded(card_id, due_at)`; the card must be the colour's card with the id at the key, as `cards_ready` listed it |
 | `export_profiles(path)` | `profiles_exported(path)`, or `export_failed(message)` |
 | `import_profiles(path)` | `profiles_imported(path, error)`, error empty on success (**Export and import**) |
@@ -443,8 +443,8 @@ off Repertoire and Drill. **The tree** is the repertoire's lines from the start,
 first: where the colour is to move, its choice; where the opponent is, each legal reply, by UCI,
 that reaches a position with a choice. A position is walked once, by the first line that reaches
 it, so a transposition shows under one line only, and a card is named to follow "Your move" by
-that line ("after 1. e4 e5 2. Nf3"), "in the starting position", or by its FEN when the tree does
-not reach it ("in the position …"). "Now" is the clock's seconds, given to the store for the due cards and each
+that line ("after 1. e4 e5 2. Nf3"), "in the starting position", or "here" when the tree does not
+reach it, never by its FEN. "Now" is the clock's seconds, given to the store for the due cards and each
 review. A message says what happened and then one way forward, a profile store error in its own
 sentences ("That file is not a chess-coach backup. Choose a file saved with File > Back up your
 work."), and a read that throws names `profiles.db` and the restore.
@@ -493,29 +493,31 @@ repertoire* (`drill_white`, `drill_black`); the colour's cards due, "1 due now, 
 cards." (`drill_due`, or that there are none yet and how to make them); both repertoires'
 progress, "Your White repertoire has 2 cards, 1 due now. Your Black repertoire has no cards."
 (`drill_progress`); *Update cards from your repertoire* (`drill_sync`) and *Start the drill*
-(`drill_start`); the status line (`drill_status`); the verdict (`drill_verdict`); *That was
-hard*, *That was easy* and *Next card* (`drill_hard`, `drill_easy`, `drill_next`); and the
+(`drill_start`); the status line (`drill_status`); the verdict (`drill_verdict`); *Hard*, *About
+right* and *Easy* (`drill_hard`, `drill_good`, `drill_easy`), which grade a correct move, and
+*Next card* (`drill_next`), shown only once a card's answer is graded or was wrong; and the
 summary (`drill_summary`, `drill_summary_text`).
 
 Entering the screen, or Update cards from your repertoire, syncs the colour's cards with its
 repertoire ("Your cards now match your repertoire.", then the cards made, started again and
 removed) and then asks for the cards due. A drill takes the first due card each time: the board
-at the card's position, turned to its colour, and "Your move after 1. e4 e5. Play it on the
-board." (the opponent's last move is not known, so the position is named by its line). The board
-takes one move:
+at the card's position, turned to its colour, and "Your move after 1. e4 e5." (the opponent's
+last move is not known, so the position is named by its line), "Your move in the starting
+position.", or "Your move here." when the repertoire's tree does not reach it; no screen shows a
+FEN. The board takes one move:
 
-- **correct**: "Right. Nf3 is your move here.", graded good unless *That was hard* or *That was
-  easy* is pressed first; the grade is recorded once, at the first of a press, *Next card*, or the
-  end of two seconds, and the status bar gives the day the card comes back, "You will see this
-  card again on 5 November 2026.";
+- **correct**: "Right. Nf3 is your move here. How hard was it to find?", with *Hard*, *About
+  right* and *Easy*, the scheduler's hard, good and easy; nothing grades it by itself. The press
+  records the grade, once, and shows *Next card*, and the status bar gives the day the card comes
+  back, "You will see this card again on 5 November 2026."; a drill that ends before a press
+  (leaving the screen, closing the window, restoring a backup) records good;
 - **wrong**: recorded as again at once; the verdict, "Not quite. Your move here is Nf3, not Nc3.
   The board shows it now.", names the card's move, and the board goes back to the card's position
   and plays it.
 
 *Next card* asks for the cards due again, so a card answered is no longer among them; when none is
 due the drill ends with "The drill is over. You answered 2 cards, 1 right and 1 wrong. The ones
-you missed come back soon." Leaving the screen ends a drill the same way, and closing the window
-records a grade still open.
+you missed come back tomorrow." Leaving the screen ends a drill the same way.
 
 ## Export and import
 
@@ -819,9 +821,11 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   Screenshot: `file-chooser-open`.
 - `ui_drill_test`, on a white repertoire of two choices saved through `ProfileStore` with its
   cards then deleted (`drop_cards` in the fixture), so that entering the screen syncs them back:
-  a drill with a correct move, graded good at Next card and due again a day later, a wrong move,
-  graded again with the card's move played on the board, and the summary; and That was easy
-  changing a correct move's grade. Screenshots: `drill-card`, `drill-summary`.
+  a drill with each card's position named by its line, a correct move waiting for its grade with
+  Next card hidden and no grade coming by itself, About right grading it good and due again a day
+  later, a wrong move, graded again with the card's move played on the board, and the summary;
+  and Easy changing a correct move's grade. Screenshots: `drill-card`, `drill-grade`,
+  `drill-summary`.
 
 The window, Explore, Repertoire and Drill tests set `CHESS_COACH_STOCKFISH` to a path that does
 not exist, so no real engine runs in them, and the window and Explore tests write nothing; the

@@ -495,10 +495,11 @@ void ProfileWorker::due_cards(bool white) {
                         out.move_san = QString::fromStdString(*san);
                     }
                 }
-                // Named to follow "Your move": by its line, the start, or by its FEN.
+                // Named to follow "Your move": by its line, the start, or "here" when the tree does
+                // not reach it; never by its FEN.
                 const auto name = walk.names.constFind(card.key);
                 if (name == walk.names.constEnd()) {
-                    out.name = tr("in the position %1").arg(out.fen);
+                    out.name = tr("here");
                 } else if (name->isEmpty()) {
                     out.name = tr("in the starting position");
                 } else {
