@@ -1,5 +1,6 @@
 // The About dialog (Help > About chess-coach): the app's version, the open database's data
-// version, and the attributions of NOTICE in plain text, without links. GUI thread only.
+// version, and the attributions of NOTICE in plain text, without links, the bundled fonts' among
+// them. GUI thread only.
 #pragma once
 
 #include <QDialog>

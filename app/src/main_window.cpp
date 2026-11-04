@@ -14,6 +14,7 @@
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
 #include "file_chooser.hpp"
+#include "fonts.hpp"
 #include "help_dialog.hpp"
 #include "profile_worker.hpp"
 #include "repertoire_screen.hpp"
@@ -69,6 +70,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
       move_list_(new QListWidget()), tier_selector_(new QComboBox()),
       grade_timer_(new QTimer(this)) {
     keep_qt_settings_in(data_dir);
+    install_fonts(); // the bundled fonts, Source Sans 3 the application's
     register_explore_types();
     register_engine_types();
     register_spar_types();

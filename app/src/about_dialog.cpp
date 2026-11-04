@@ -39,6 +39,8 @@ QString AboutDialog::text(const QString& data_version) {
         tr("The cburnett chess pieces by Colin M.L. Burnett, from Wikimedia Commons, CC BY-SA "
            "3.0."),
         tr("The Lichess game dumps, evaluation database and opening names, CC0."),
+        tr("The fonts Source Serif 4 (version 4.005) and Source Sans 3 (version 3.052) by Adobe, "
+           "SIL Open Font License 1.1."),
         tr("SQLite, public domain."),
         tr("{fmt}, spdlog, JSON for Modern C++, SQLiteC++, toml++ and reproc, MIT licence."),
         tr("CLI11 and Zstandard, BSD 3-Clause licence."),

@@ -47,6 +47,7 @@ state (**Files**).
 | `file_chooser.{hpp,cpp}` | `FileChooser`, the app's own file chooser, and the functions that run it (**Files**) |
 | `locations.{hpp,cpp}` | The app bundle's resources, the opening database the window opens, the message when there is none (**The database**) |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
+| `fonts.{hpp,cpp}` | `install_fonts`, the bundled fonts registered and the application font set (**Themes**) |
 | `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
 | `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings (**Settings**) |
 | `about_dialog.{hpp,cpp}` | `AboutDialog`, the versions and the attributions (**About**) |
@@ -60,8 +61,9 @@ state (**Files**).
 | `wording.{hpp,cpp}` | How the app words a rating band, a count, a number, pawns, a day and a database's months (**Wording**) |
 
 All but `main.cpp` are the static library `app_lib` (namespace `chesscoach::app`, `AUTOMOC`),
-which the executable and the UI tests link. The piece set and the two stylesheets
-(`app/resources/light.qss`, `dark.qss`) are compiled into it as Qt resources.
+which the executable and the UI tests link. The piece set, the two stylesheets
+(`app/resources/light.qss`, `dark.qss`) and the fonts (`app/resources/fonts/`) are compiled into
+it as Qt resources.
 
 ## Shell
 
@@ -519,6 +521,13 @@ Theme* switches and saves the choice; the window applies the saved one at start.
 dynamic property `muted` is true, such as a screen's description, takes the palette's muted colour
 (`QLabel[muted="true"]` in both stylesheets).
 
+The fonts are static TTFs from Adobe's releases under the SIL Open Font License 1.1 (`NOTICE`,
+`legal/source-serif-4.txt`, `legal/source-sans-3.txt`): Source Serif 4 SemiBold 4.005, and Source
+Sans 3 Regular, SemiBold and Bold 3.052, compiled in under `:/fonts/`. `install_fonts`, which the
+window calls at start, registers them with `QFontDatabase` once and makes Source Sans 3 at 13 px
+the application font, so the app needs no font on the system (`app_resources_test` checks both
+families register).
+
 ## Help
 
 *Help > How to use chess-coach* opens `HelpDialog` (`help_dialog`, non-blocking): a `QTextBrowser`
@@ -539,8 +548,9 @@ calls once).
 the open database's data version ("Opening database, data version 1"), a line on what the app is,
 and the attributions of `NOTICE` in plain text without links:
 Qt under the LGPL, chess-library under MIT, the cburnett pieces by Colin M.L. Burnett from
-Wikimedia Commons under CC BY-SA 3.0, the Lichess data under CC0, SQLite in the public domain, and
-the other libraries with their licences. *About Qt* is Qt's own dialog.
+Wikimedia Commons under CC BY-SA 3.0, the Lichess data under CC0, the Source Serif 4 and Source
+Sans 3 fonts by Adobe under the SIL Open Font License 1.1 with their versions, SQLite in the public
+domain, and the other libraries with their licences. *About Qt* is Qt's own dialog.
 
 ## Board
 

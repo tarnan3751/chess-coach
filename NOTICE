@@ -105,6 +105,19 @@ chess-coach.app/Contents/Resources/engine/, with the licence text beside it (COP
 exact version, a link to its source and how the binary was obtained (SOURCE.txt).
     https://github.com/official-stockfish/Stockfish
 
+Fonts
+-----
+Source Serif 4 (SemiBold) version 4.005 and Source Sans 3 (Regular, SemiBold, Bold) version 3.052,
+by Adobe, SIL Open Font License 1.1: legal/source-serif-4.txt and legal/source-sans-3.txt, each
+release's LICENSE.md. The static TTFs are the releases' own, unmodified, compiled into the app as
+Qt resources (app/resources/fonts/), with their SHA-256 digests:
+    SourceSerif4-Semibold.ttf  36db62940cb5728b12b1802476dc7fcf4c6c519a7bdd476ba23a4e555fc4655f
+    SourceSans3-Regular.ttf    4644c81b86ec9caaa76b634889968ed3c4f4f52f054855933acc7c2b21e53b0f
+    SourceSans3-Semibold.ttf   a3f4f8dcf343a8f24dc61951de93f3ba1558b15cd250ba24af8a40e957081b7d
+    SourceSans3-Bold.ttf       9214b9d95e4231c609802815c2646c98174e2102d0d37f88978a7f8e71006e6a
+    https://github.com/adobe-fonts/source-serif/releases/tag/4.005R
+    https://github.com/adobe-fonts/source-sans/releases/tag/3.052R
+
 Data
 ----
 Lichess monthly game dumps (standard rated games) and the Lichess evaluation database,

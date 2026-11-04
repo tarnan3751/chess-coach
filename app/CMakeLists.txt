@@ -2,7 +2,8 @@
 # docs/reference/app.md). The only module that finds or links Qt, which comes from the system
 # through CMAKE_PREFIX_PATH, never from vcpkg. The window, the board and the screens are app_lib,
 # which the executable and the UI tests link; main.cpp only parses the command line. The piece
-# set is compiled in as a Qt resource, so the app needs no files beside it to draw the board.
+# set, the stylesheets and the fonts are compiled in as Qt resources, so the app needs no files
+# beside it, nor any font on the system, to draw itself.
 find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Svg SvgWidgets Test)
 set(CMAKE_AUTOMOC ON)
 
@@ -32,6 +33,8 @@ add_library(app_lib STATIC
   src/explore_screen.hpp
   src/file_chooser.cpp
   src/file_chooser.hpp
+  src/fonts.cpp
+  src/fonts.hpp
   src/help_dialog.cpp
   src/help_dialog.hpp
   src/locations.cpp
@@ -85,6 +88,12 @@ qt_add_resources(app_lib "themes"
   PREFIX "/themes"
   BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
   FILES resources/light.qss resources/dark.qss)
+# The Study look's fonts, static TTFs from Adobe's releases under the OFL (NOTICE).
+qt_add_resources(app_lib "fonts"
+  PREFIX "/fonts"
+  BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts"
+  FILES resources/fonts/SourceSerif4-Semibold.ttf resources/fonts/SourceSans3-Regular.ttf
+        resources/fonts/SourceSans3-Semibold.ttf resources/fonts/SourceSans3-Bold.ttf)
 
 add_executable(app
   src/main.cpp)
@@ -100,6 +109,11 @@ if(BUILD_TESTING)
   target_include_directories(app_test_fixture PUBLIC tests)
   target_link_libraries(app_test_fixture PUBLIC chesscoach::core PRIVATE SQLiteCpp
                                                                           chesscoach::warnings)
+
+  # The bundled fonts, on an offscreen QGuiApplication of the test's own.
+  chesscoach_add_test(app_resources_test MODULE app KIND unit
+                      SOURCES tests/resources_test.cpp
+                      LIBS chesscoach::app_lib)
 
   # Each UI test saves its screenshots here, as <test>-<state>.png (tools/ui_tests.sh).
   set(chesscoach_screenshots "${PROJECT_BINARY_DIR}/ui-screenshots")
