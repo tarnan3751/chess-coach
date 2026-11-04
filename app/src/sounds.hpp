@@ -53,8 +53,10 @@ class NullSoundBackend final : public SoundBackend {
 };
 
 #ifdef __APPLE__
-// macOS's (sounds_mac.mm): one NSSound per event, decoded from its WAV at construction; a play
-// stops the event's sound and starts it again, so a fast sequence drops none.
+// macOS's (sounds_mac.mm): one NSSound per event, decoded from its WAV when it is made, all living
+// on a serial dispatch queue of the backend's own, since NSSound's play blocks its caller; play
+// posts to the queue and returns, and there the event's sound is stopped and started again, so a
+// fast sequence drops none. decoded() and the destructor wait for the queue.
 class MacSoundBackend final : public SoundBackend {
   public:
     MacSoundBackend();

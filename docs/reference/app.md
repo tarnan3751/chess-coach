@@ -756,10 +756,16 @@ it carries `x`, else `move`. `Sounds` plays them, `play(event)` doing nothing af
 QtNetwork (`PLAN.md` §11, 2026-11-04):
 
 - on macOS, `MacSoundBackend` (`sounds_mac.mm`, Objective-C++ under ARC, linking the AppKit system
-  framework): one `NSSound` per event, made with `initWithData:` from the resource's bytes when the
-  window starts; a play stops the event's sound and starts it again, since `NSSound` will not play
-  a sound that is still playing, so a quick run of moves drops none, while different events
-  overlap;
+  framework): one `NSSound` per event, all living on a serial dispatch queue of the backend's own,
+  since `NSSound`'s `play` blocks its caller (about 60 to 110 ms the first time in a process and
+  10 to 15 ms after, measured on the GUI thread before the queue): the GUI thread only posts to the
+  queue, so `Sounds::play` returns in microseconds and never waits on audio. When the window starts,
+  the queue makes the sounds with `initWithData:` from the resource's bytes and plays one once at
+  volume 0, which opens the output, so the first move's sound comes as soon as the others; each
+  play there stops the event's sound and starts it again, since `NSSound` will not play a sound
+  that is still playing, so a quick run of moves drops none, while different events overlap. The
+  GUI thread waits on the queue only for `decoded()`, which the tests call, and when the backend
+  goes, the queue finishing first;
 - on other platforms, and whenever the environment variable `CHESS_COACH_SILENT` is set,
   `NullSoundBackend`, which plays nothing and records the last event and how often it was given
   each, for the tests (`Sounds::null_backend`).
