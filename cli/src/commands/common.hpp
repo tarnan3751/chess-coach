@@ -1,8 +1,8 @@
 // What the CLI's commands share (docs/reference/cli.md): the error a command returns, the words of
 // a line, finding and opening the opening database, resolving --fen or --moves to a position and
 // the path of keys that reached it, the deepest name along that path, and the number formats of the
-// output. Reads the
-// database only through core's OpeningStore; chess rules only through core's Position.
+// output. Reads the database only through core's OpeningStore; chess rules only through core's
+// Position.
 #pragma once
 
 #include <chesscoach/badges.hpp>

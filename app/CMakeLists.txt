@@ -184,8 +184,7 @@ if(BUILD_TESTING)
     target_compile_definitions(app_${test}
                                PRIVATE "CHESSCOACH_UI_SCREENSHOT_DIR=\"${chesscoach_screenshots}\"")
   endforeach()
-  # The engine tests drive core's fake engine through its wrapper in core's tests, set as the
-  # binary.
+  # The engine tests set core's fake engine as the binary, through its wrapper in core's tests.
   foreach(test IN ITEMS ui_engine_test ui_spar_test ui_lookup_test)
     add_dependencies(app_${test} fake-uci)
     target_compile_definitions(app_${test}
