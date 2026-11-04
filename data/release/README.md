@@ -63,3 +63,4 @@ later build from that month.
 
 | Data version | Months | Knobs (`min_games`, `max_ply`) | Size | Dump sha256 | Inputs (sha256) | Built on |
 |---|---|---|---|---|---|---|
+| 1 | 2026-10 | 100, 30 | 299,954,176 bytes (286 MiB) | `2b21481bd37ef7f958176711e974711ab2caf123dbeab4d5b02fcb4d29c4dbd6` | `lichess_db_standard_rated_2026-10.pgn.zst` `451f7baa823a9a4414410e1703ce806e0292e7a9f6875dd425d1eed6654b4527` (trimmed, `--max-ply` 30); `lichess_db_eval.jsonl.zst` `38726b82eac7388eed79c4bf122bd67c1162459fc2a49da760225f2676b68487` (trimmed) | 2026-11-04T03:46Z, pipeline 0.1.0, rebuilt byte-equal; published as `openings-v1.db` of the GitHub release `data-v1` |
