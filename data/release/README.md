@@ -26,8 +26,16 @@ database is published only when every check passes and the rebuild is equal.
 `docs/reference/pipeline.md`, **Release database**, describes both scripts.
 
 The plan's release target is twelve months (`PLAN.md` §6.6). A month's dump must be on disk while
-it is read, and today's disk holds one recent month at a time beside the evaluation database, so
-a database of more months waits on the owner's decision about storage.
+it is read, and today's disk holds one recent month at a time beside the evaluation database. So
+the release inputs may be trimmed files: `chess-coach-pipeline trim --out-dir <dir> <in>...`
+(`docs/reference/pipeline.md`, **Trim**) writes each month file and the evaluation database
+under its own name, holding only what the build reads. A trimmed month builds, at a `max_ply` no
+greater than the trim's, the database of its dump but for `meta`'s skip counts (`games_skipped`
+and `skipped_*`: the games trim drops never reach the build), and the trimmed evaluation database
+builds the same database exactly. A trimmed month needs `--sketch-mib`, sized for the month
+untrimmed (`build_release_db.sh`'s sizing note). Since a trimmed file and its dump share a name,
+a published database names its inputs by checksum: the sha256 of every file it was built from,
+trimmed or not, in its row's inputs column.
 
 ## Its data version
 
@@ -48,7 +56,10 @@ the two, the owner decides. `verify_db.sh` prints the verdict.
 
 One row per published database, filled in when it is published. The sha256 is the canonical
 dump's, from `openings.db.sha256`: two files with the same dump are the same database, whenever
-and wherever they were built.
+and wherever they were built. The inputs are each file the build read, by name and sha256 (`shasum
+-a 256`), the evaluation database among them, and whether it was trimmed, with the trim's
+`--max-ply` for a trimmed month: the file does not record it, and it bounds the `max_ply` of every
+later build from that month.
 
-| Data version | Months | Knobs (`min_games`, `max_ply`) | Size | Dump sha256 | Built on |
-|---|---|---|---|---|---|
+| Data version | Months | Knobs (`min_games`, `max_ply`) | Size | Dump sha256 | Inputs (sha256) | Built on |
+|---|---|---|---|---|---|---|

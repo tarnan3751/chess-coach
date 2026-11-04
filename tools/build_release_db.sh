@@ -20,7 +20,9 @@
 # two from 1 MiB that keeps them at min_games / 16 per counter or fewer, a row holding bytes / 4
 # counters when min_games is at most 255 and bytes / 8 above, up to the pipeline's 16 GiB. The
 # choice and the predicted visits per counter are printed before the build, and a prediction
-# above min_games / 16 at 16 GiB says so.
+# above min_games / 16 at 16 GiB says so. A trimmed month (chess-coach-pipeline trim,
+# pipeline.md, **Trim**) holds about ten times the visits per compressed byte, so the estimate
+# undersizes the sketch for one: pass --sketch-mib, sized for the months untrimmed.
 #
 # The pipeline's report goes to <out.db>.report.txt; the script then prints its key lines and the
 # elapsed time. Check the result with tools/verify_db.sh <out.db>.

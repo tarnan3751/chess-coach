@@ -100,6 +100,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | The CLI; a command that reads the opening database takes `--db <file>`, or `--data-dir <dir>` with an `openings.db` in it | `build/dev/cli/chess-coach-cli <command> [options]` |
 | Put an opening database into a data directory; show the one the CLI reads | `build/dev/cli/chess-coach-cli database --data-dir <dir> import <file>`; `... database --data-dir <dir> info` |
 | The pipeline on the sample dump | `build/dev/pipeline/chess-coach-pipeline build --in pipeline/tests/sample/lichess_db_standard_rated_2013-01.pgn.zst --out <file>` |
+| Trim month files and the evaluation database to what the build reads, under their names | `build/dev/pipeline/chess-coach-pipeline trim --out-dir <dir> [--max-ply N] <in>...` |
 | Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` |
 | Package: the macOS disk image; the image built and checked mounted | `cmake --build --preset release --target package`; `tools/package.sh` |

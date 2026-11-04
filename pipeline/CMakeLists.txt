@@ -31,6 +31,8 @@ add_library(pipeline_lib STATIC
   src/sketch.cpp
   src/sketch.hpp
   src/tree.hpp
+  src/trim.cpp
+  src/trim.hpp
   src/work_pool.hpp
   src/writer.cpp
   src/writer.hpp
@@ -73,6 +75,7 @@ if(BUILD_TESTING)
                               tests/report_test.cpp
                               tests/sketch_test.cpp
                               tests/test_files.hpp
+                              tests/trim_test.cpp
                               tests/work_pool_test.cpp
                               tests/zstd_istream_test.cpp
                               tests/zstd_ostream_test.cpp

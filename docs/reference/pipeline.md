@@ -8,10 +8,11 @@ run from a build tree; the app reads the file it writes.
 
 | Source (`pipeline/src/`) | Holds |
 |---|---|
-| `main.cpp` | the `build` command line (CLI11) |
+| `main.cpp` | the `build` and `trim` command lines (CLI11) |
 | `options` | the build's options; the month-file checks of the inputs |
 | `build` | `run_build`: the passes and the stages after them, in order |
 | `zstd_istream` | `ZstdStreambuf`, streaming decompression of one file |
+| `zstd_ostream` | `ZstdOstreambuf`, streaming compression into one file, for `trim` |
 | `chunker` | `Chunker` and `split_games`: the stream cut into batches of whole games or lines |
 | `work_pool` | `run_pool`: one producer, a bounded queue, the workers |
 | `game_filter` | the §3 header checks and `SkipCounts` |
@@ -24,6 +25,7 @@ run from a build tree; the app reads the file it writes.
 | `badges` | the §7 badges and their thresholds |
 | `writer` | the SQLite writer over core's schema |
 | `report` | the report lines and the peak resident size |
+| `trim` | `run_trim`: the inputs reduced to what the build reads (**Trim**) |
 
 ## Running it
 
@@ -51,6 +53,76 @@ Progress goes to stderr every million games of a pass. The exit status is 0 on s
 unreadable or truncated input, a refused option, a count past 2^32 − 1, a write failure. A bad
 game is counted, never fatal. On a fatal error no output is left behind: the writer writes
 `<out>.partial` and renames it only once the write succeeded.
+
+## Trim
+
+```
+chess-coach-pipeline trim --out-dir <dir> [--max-ply N] <in>...
+```
+
+Reduces the owner's inputs to what `build` reads, so that twelve months fit on disk. Each input
+is a month file, `lichess_db_standard_rated_YYYY-MM.pgn.zst`, or the evaluation database,
+`lichess_db_eval.jsonl.zst`, known by its name, and is written under the same name in `<dir>`,
+which is created when missing. Any other name, two inputs of one name, and an output or
+`<name>.partial` that exists in `<dir>` are refused before anything is written. Each file is
+streamed through zstd in (`ZstdStreambuf`) and out (`ZstdOstreambuf`: `ZSTD_compressStream2` at
+level 9 with four worker threads, in the calling thread when the zstd library has none), one
+game or one line at a time, into `<name>.partial`, renamed once whole, and reading stops once
+the write has failed. An unreadable input or a failed write leaves nothing behind for its file;
+the inputs are trimmed in order, so when a later one fails the earlier outputs stay, whole, and a
+rerun that names them again is refused for them, as for any output that exists. One line per
+file goes to stdout: `<name>: N games seen, M kept, B bytes in, C bytes out, S s` for a month,
+`<name>: N lines, M passed through unchanged, B bytes in, C bytes out, S s` for the evaluation
+file. The exit status is as for `build`.
+
+**A month file.** A game is its tag lines and its moves, which start, as they do for the
+parser, at the first blank line or movetext line after the tags; it ends where the build's
+chunker ends it, at a line that begins `[Event `, or at any line that begins `[` once its moves
+have started. A tag line is read as the parser reads one, `[Name "value"]`: the name up to the
+first space or tab, the value up to the first quote a backslash does not escape, then the
+closing bracket and the end of the line; the header checks are given the value without its
+backslashes, as the parser gives it, and the tag is written as it was. A game is kept when
+`check_headers` (`game_filter`, §3's checks 2 to 6) admits it or refuses it for its variant or
+its result: those two checks read tags trim writes, so the build makes them again and counts the
+game as it would have. An unrated game, one of another speed and one without two decimal ratings
+are dropped, and so are two kinds the build counts malformed: a game whose moves never start (its
+tags followed by the next game or the end of the file) and one with a tag line the parser rejects
+(its closing quote or bracket missing). A kept game is written as its tags Event, Result,
+WhiteElo, BlackElo and, when present, Variant, SetUp and FEN, in that order; a blank line; its
+first `--max-ply` (default 30, the build's default knob, 0 to 1000) moves as the parser reads
+them, without comments (the clocks and evaluations among them), NAGs, move numbers (a number
+glued to its move, `1.e4` or `1...e5`, leaves the move) and glyphs standing alone (`!`, `?!`,
+which the scanner ignores, so they are no ply), numbered again from `1.`; then its Result tag's
+result (`*` without one), alone for a game whose moves started empty; and a blank line. A result
+token in the movetext ends the moves; a glyph on a move (`Nf3?!`) stays there, and the scanner
+strips it as before.
+
+So a build from a trimmed month at a `max_ply` no greater than the trim's gives the database of
+the build from the dump, but for `meta`'s `games_skipped` and `skipped_*` counts: the games trim
+drops are skipped by the build before their moves either way, and from the trimmed file never
+reach it. Nothing in the trimmed file records the trim's `--max-ply`, and a build at a larger
+`max_ply` reads it without complaint but finds every game cut at the trim's: a trimmed month
+bounds the `max_ply` of every later build from it, and a release's row records the trim's
+(`data/release/README.md`). Differences remain only for text Lichess does not write. The one
+known is a game the parser counts malformed for a tag trim does not write (a value over its 255
+characters), which the trimmed file lets through. Beyond that, trim reads the text line by line
+and token by token in the shapes above, so a shape the parser reads in a way of its own, such as
+a variation in parentheses, a line inside a comment that begins with `[`, or text after a tag's
+closing bracket, may still read differently.
+
+**The evaluation file.** Line for line, in order. A line that is a JSON object with a `"fen"`
+string the merge's own reading of the raw line finds as it is (`fen_field`: the text after the
+first `"fen":"`, up to the next quote), and whose evaluation chosen by §9's rule 2 (the merge's
+own choice, `choose` in `eval_merge.cpp`: the deepest, then the greater knodes, then the earlier)
+has a usable first pv, is written in the same shape with that evaluation alone, its first pv
+reduced to its `cp` or `mate` and the first move of its `line`, its `knodes` and `depth` kept:
+`{"fen":"…","evals":[{"pvs":[{"cp":25,"line":"d2d4"}],"knodes":50,"depth":40}]}`. Any other line
+(malformed JSON, no `"fen"`, a `"fen"` the merge reads otherwise, with a space after its colon or
+an escape in its FEN, an evaluation without an integer depth or knodes, a chosen first pv without
+exactly one score or without a line) is written unchanged. The merge reads the same
+candidate from a trimmed line as from the original, checks the same move against the same
+position, and finds the same earlier line of two equal ones, so a build with the trimmed
+evaluation file gives the same database byte for byte.
 
 ## Passes
 
@@ -211,7 +283,9 @@ with fewer bytes per game, hold more per byte) and takes the smallest power of t
 whose width keeps them at `min_games` / 16 per counter or fewer (about six at the default),
 up to 16 GiB. For one recent month that is 2 GiB (width 2^29, about six per counter); twelve
 recent months would need more than the pipeline's 16 GiB, which the script then takes and says
-the prediction is above the target. A build of recent months holds every core for hours, so it
+the prediction is above the target. A trimmed month (**Trim**) holds about ten times the visits
+per compressed byte, so the estimate undersizes the sketch for one: pass `--sketch-mib`, sized
+for the months untrimmed. A build of recent months holds every core for hours, so it
 is the coordinator's or the owner's on a quiet machine, never a lane's (`CLAUDE.md`, **Lanes**).
 
 `tools/verify_db.sh <db> [--rebuild]` checks a built file, one line per check: sqlite3's
@@ -270,5 +344,12 @@ tier-6 zero sum, the loss from both sides and with mates), `eval_merge_test` (th
 both castling forms, the no-fallback rule, unreadable and non-surviving lines, en passant
 normalization, a file read by one and three threads), `options_test`, `report_test`, and
 `build_test` on the sample: the golden dump, two runs, one and four threads and a tiny sketch
-alike, the §6.4 invariants at `min_games` 1 and 2, and the refusals; and `pipeline_exit_status`
-(`exit_status.cmake`), the executable's exit statuses.
+alike, the §6.4 invariants at `min_games` 1 and 2, and the refusals; `zstd_ostream_test` (a
+stream larger than the buffers with worker threads read back, an empty stream, a file that
+cannot be created); `trim_test` (the names, the movetext filter's comments, NAGs, `1...`
+numbers, cap and result tokens, the games kept with their tags and the Chess960 game then
+refused by the scanner, the evaluation chosen by depth, knodes and order with a mate score and
+read back as the same candidate, the lines passed through, the refusals) and on the sample: the
+trimmed month builds the untrimmed month's dump but for the skip counts, and the trimmed
+evaluation file builds `golden.dump` exactly; and `pipeline_exit_status` (`exit_status.cmake`),
+the executable's exit statuses, `trim`'s among them.

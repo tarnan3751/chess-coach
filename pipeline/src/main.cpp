@@ -1,13 +1,15 @@
 // chess-coach-pipeline: the entry point. `build` runs run_build (build.hpp) with the options
-// docs/reference/pipeline.md, **Running it**, describes; --version and --help as in Phase 0, and
-// the help when run without arguments. Exit status 0 on success, 1 on a fatal error (an
-// unreadable input, a refused option, a write failure), never because of a bad game.
+// docs/reference/pipeline.md, **Running it**, describes; `trim` runs run_trim (trim.hpp, and
+// **Trim**); --version and --help as in Phase 0, and the help when run without arguments. Exit
+// status 0 on success, 1 on a fatal error (an unreadable input, a refused option, a write
+// failure), never because of a bad game.
 #include <chesscoach/version.hpp>
 
 #include "build.hpp"
 #include "options.hpp"
 #include "report.hpp"
 #include "sketch.hpp"
+#include "trim.hpp"
 
 #include <CLI/CLI.hpp>
 #include <fmt/format.h>
@@ -79,6 +81,20 @@ int main(int argc, char** argv) {
                 },
                 "POWER OF TWO"));
 
+        pipeline::TrimOptions trim_options;
+        CLI::App* trim = app.add_subcommand(
+            "trim", "Reduce monthly dumps and the evaluation database to what build reads");
+        trim->add_option("--out-dir", trim_options.out_dir,
+                         "The directory to write into, under the inputs' names")
+            ->required();
+        trim->add_option("--max-ply", trim_options.max_ply, "The plies kept per game")
+            ->check(CLI::Range(0U, 1000U))
+            ->capture_default_str();
+        trim->add_option("inputs", trim_options.inputs,
+                         "lichess_db_standard_rated_YYYY-MM.pgn.zst or lichess_db_eval.jsonl.zst")
+            ->required()
+            ->check(CLI::ExistingFile);
+
         if (argc <= 1) {
             fmt::print("{}", app.help());
             return 0;
@@ -90,6 +106,14 @@ int main(int argc, char** argv) {
             // exits 1, the pipeline's one failure status.
             const int status = app.exit(error);
             return error.get_exit_code() == static_cast<int>(CLI::ExitCodes::Success) ? status : 1;
+        }
+        if (trim->parsed()) {
+            const auto trimmed = pipeline::run_trim(trim_options, std::cout);
+            if (!trimmed) {
+                fmt::print(stderr, "chess-coach-pipeline: {}\n", trimmed.error());
+                return 1;
+            }
+            return 0;
         }
         if (!build->parsed()) {
             fmt::print("{}", app.help());

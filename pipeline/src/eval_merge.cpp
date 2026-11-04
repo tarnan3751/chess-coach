@@ -208,6 +208,45 @@ std::optional<EvalCandidate> read_eval_line(std::string_view line, std::uint64_t
     return candidate;
 }
 
+std::optional<std::string> trimmed_eval_line(std::string_view line) {
+    const nlohmann::json json = nlohmann::json::parse(line, nullptr, false);
+    if (json.is_discarded() || !json.is_object()) {
+        return std::nullopt;
+    }
+    const auto fen = json.find("fen");
+    if (fen == json.end() || !fen->is_string()) {
+        return std::nullopt;
+    }
+    // The merge reads the fen from the raw text (fen_field), so a line it reads otherwise (a
+    // space after the colon, an escape in the FEN) stays as it is.
+    if (fen_field(line) != fen->get_ref<const std::string&>()) {
+        return std::nullopt;
+    }
+    const auto choice = choose(json);
+    if (!choice) {
+        return std::nullopt;
+    }
+    const Choice& chosen = *choice;
+    // The Lichess shape, its keys in its order: the fen, then one eval holding one pv.
+    nlohmann::ordered_json pv = nlohmann::ordered_json::object();
+    if (chosen.cp) {
+        pv.emplace("cp", *chosen.cp);
+    } else if (chosen.mate) {
+        pv.emplace("mate", *chosen.mate);
+    }
+    pv.emplace("line", std::string(chosen.first_move));
+    const auto eval = nlohmann::ordered_json::object({
+        {"pvs", nlohmann::ordered_json::array({pv})},
+        {"knodes", chosen.knodes},
+        {"depth", chosen.depth},
+    });
+    const auto record = nlohmann::ordered_json::object({
+        {"fen", fen->get<std::string>()},
+        {"evals", nlohmann::ordered_json::array({eval})},
+    });
+    return record.dump();
+}
+
 tl::expected<EvalCounts, std::string> merge_evaluations(const std::filesystem::path& path,
                                                         std::size_t threads, Tree& tree) {
     ZstdStreambuf source(path);

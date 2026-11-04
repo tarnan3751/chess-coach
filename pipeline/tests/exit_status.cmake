@@ -1,8 +1,8 @@
 # The pipeline's exit statuses (pipeline; unit), run as
 #   cmake -DPIPELINE=<chess-coach-pipeline> -DSCRATCH=<directory> -P exit_status.cmake
-# docs/reference/pipeline.md, **Running it**: --version, --help and no arguments exit 0; a command
-# line CLI11 rejects, a refused option and an unreadable input exit 1. No case builds a database:
-# each is refused before the first pass.
+# docs/reference/pipeline.md, **Running it** and **Trim**: --version, --help and no arguments exit
+# 0; a command line CLI11 rejects, a refused option and an unreadable input exit 1. No case builds
+# a database: each is refused before the first pass; no case of trim leaves a file behind.
 cmake_minimum_required(VERSION 3.28)
 
 if(NOT PIPELINE OR NOT SCRATCH)
@@ -39,6 +39,18 @@ expect(1 build --in "${month}" --out "${SCRATCH}/out.db" --sketch-mib 3)
 expect(1 build --in "${month}" --out "${SCRATCH}/out.db" --sketch-mib 32768)
 expect(1 build --in "${misnamed}" --out "${SCRATCH}/out.db")
 expect(1 build --in "${month}" --out "${SCRATCH}/out.db" --sketch-mib 1)
+expect(0 trim --help)
+expect(1 trim)
+expect(1 trim --out-dir "${SCRATCH}/trimmed")
+expect(1 trim --out-dir "${SCRATCH}/trimmed" "${SCRATCH}/missing.pgn.zst")
+expect(1 trim --out-dir "${SCRATCH}/trimmed" "${misnamed}")
+expect(1 trim --out-dir "${SCRATCH}/trimmed" --max-ply 1001 "${month}")
+expect(1 trim --out-dir "${SCRATCH}" "${month}")
+expect(1 trim --out-dir "${SCRATCH}/trimmed" "${month}")
+if(EXISTS "${SCRATCH}/trimmed/lichess_db_standard_rated_2013-01.pgn.zst"
+   OR EXISTS "${SCRATCH}/trimmed/lichess_db_standard_rated_2013-01.pgn.zst.partial")
+  list(APPEND failures "trim left a file behind for an input that is not zstd")
+endif()
 
 if(failures)
   list(JOIN failures "\n  " listing)

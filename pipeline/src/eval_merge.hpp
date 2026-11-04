@@ -47,6 +47,15 @@ struct EvalCandidate {
 [[nodiscard]] std::optional<EvalCandidate>
 read_eval_line(std::string_view line, std::uint64_t order, const Tree& tree, EvalCounts& counts);
 
+// The line as `chess-coach-pipeline trim` writes it (docs/reference/pipeline.md, **Trim**): the
+// evaluation read_eval_line would choose, alone, in the same JSON shape, its first pv holding the
+// score and the first move of its line only, its knodes and depth kept, so the merge reads the
+// same candidate from it. nullopt for a line that is not a JSON object with a "fen" string, whose
+// "fen" the merge's raw read of the text (fen_field) does not find as that string, or that has no
+// usable choice, which the trim writes unchanged so that the merge's handling of it is unchanged
+// too.
+[[nodiscard]] std::optional<std::string> trimmed_eval_line(std::string_view line);
+
 // Streams the file and sets the evaluation of every surviving position it has a usable line for.
 [[nodiscard]] tl::expected<EvalCounts, std::string>
 merge_evaluations(const std::filesystem::path& path, std::size_t threads, Tree& tree);
