@@ -47,6 +47,10 @@ state (**Files**).
 | `file_chooser.{hpp,cpp}` | `FileChooser`, the app's own file chooser, and the functions that run it (**Files**) |
 | `locations.{hpp,cpp}` | The app bundle's resources, the opening database the window opens, the message when there is none (**The database**) |
 | `eval_bar.{hpp,cpp}` | `EvalBar`, the evaluation bar beside the board |
+| `board_row.{hpp,cpp}` | `BoardRow`, the evaluation bar and the board side by side (**Shell**) |
+| `columns.{hpp,cpp}` | `Columns`, the window's content: the board column and the screen column (**Shell**) |
+| `move_list_delegate.{hpp,cpp}` | `MoveListDelegate`, the move list's rows (**Shell**) |
+| `rating_chooser.{hpp,cpp}` | `RatingChooser`, the toolbar's Rating combo with its chevron (**Shell**) |
 | `study_palette.{hpp,cpp}` | `StudyPalette`, the Study look's colours per theme (**Themes**) |
 | `fonts.{hpp,cpp}` | `install_fonts`, the bundled fonts registered and the application font set (**Themes**) |
 | `icons.{hpp,cpp}` | `themed_icon` and `tinted_icon`, the toolbar's icons in a theme's colours (**Themes**) |

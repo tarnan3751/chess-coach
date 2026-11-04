@@ -6,8 +6,10 @@
 #include <chesscoach/version.hpp>
 
 #include "about_dialog.hpp"
+#include "board_row.hpp"
 #include "board_theme.hpp"
 #include "board_view.hpp"
+#include "columns.hpp"
 #include "db_worker.hpp"
 #include "drill_screen.hpp"
 #include "engine_worker.hpp"
@@ -17,7 +19,9 @@
 #include "fonts.hpp"
 #include "help_dialog.hpp"
 #include "icons.hpp"
+#include "move_list_delegate.hpp"
 #include "profile_worker.hpp"
+#include "rating_chooser.hpp"
 #include "repertoire_screen.hpp"
 #include "settings_dialog.hpp"
 #include "sounds.hpp"
@@ -29,14 +33,12 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
-#include <QColor>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDir>
 #include <QEvent>
 #include <QFile>
 #include <QFileInfo>
-#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QKeySequence>
@@ -45,21 +47,12 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QModelIndex>
-#include <QPaintEvent>
-#include <QPainter>
 #include <QPalette>
 #include <QProgressDialog>
-#include <QRect>
-#include <QResizeEvent>
 #include <QSize>
 #include <QSizePolicy>
 #include <QStackedWidget>
 #include <QStatusBar>
-#include <QStyle>
-#include <QStyleOptionComboBox>
-#include <QStyleOptionViewItem>
-#include <QStyledItemDelegate>
 #include <QTabBar>
 #include <QToolBar>
 #include <QToolButton>
@@ -106,179 +99,6 @@ QPalette qt_palette(const StudyPalette& study) {
     }
     return palette;
 }
-
-// The move list's rows, "1. e4 c5": the number in the muted colour (the palette's placeholder
-// text), right-aligned in a column of its own, then each move in its column, the last move of the
-// list, the board's position, marked in the selection colour (its highlight). The item's text
-// stays the plain row, which the tests read.
-class MoveListDelegate : public QStyledItemDelegate {
-  public:
-    using QStyledItemDelegate::QStyledItemDelegate;
-
-    void paint(QPainter* painter, const QStyleOptionViewItem& option,
-               const QModelIndex& index) const override {
-        const QStringList parts = index.data().toString().split(QLatin1Char(' '));
-        const QFontMetrics metrics(option.font);
-        const int number_width = metrics.horizontalAdvance(QStringLiteral("000."));
-        const int move_width = metrics.horizontalAdvance(QStringLiteral("Qxe8=Q+"));
-        const bool last_row = index.row() == index.model()->rowCount() - 1;
-        painter->save();
-        painter->setFont(option.font);
-        QRect cell = option.rect.adjusted(move_padding, 0, 0, 0);
-        cell.setWidth(number_width);
-        painter->setPen(option.palette.color(QPalette::PlaceholderText));
-        painter->drawText(cell, Qt::AlignRight | Qt::AlignVCenter, parts.value(0));
-        for (qsizetype move = 1; move < parts.size(); ++move) {
-            const int left = option.rect.left() + move_padding + number_width + move_gap +
-                             ((static_cast<int>(move) - 1) * (move_width + move_gap));
-            const QRect text(left, option.rect.top(), move_width, option.rect.height());
-            if (last_row && move == parts.size() - 1) {
-                const int width = metrics.horizontalAdvance(parts.at(move));
-                const QRect mark(left - mark_padding, option.rect.top() + 1,
-                                 width + (2 * mark_padding), option.rect.height() - 2);
-                painter->setRenderHint(QPainter::Antialiasing);
-                painter->setPen(Qt::NoPen);
-                painter->setBrush(option.palette.color(QPalette::Highlight));
-                painter->drawRoundedRect(mark, 2, 2);
-            }
-            painter->setPen(option.palette.color(QPalette::Text));
-            painter->drawText(text, Qt::AlignLeft | Qt::AlignVCenter, parts.at(move));
-        }
-        painter->restore();
-    }
-
-    [[nodiscard]] QSize sizeHint(const QStyleOptionViewItem& option,
-                                 const QModelIndex& index) const override {
-        QSize size = QStyledItemDelegate::sizeHint(option, index);
-        size.setHeight(QFontMetrics(option.font).height() + 6);
-        return size;
-    }
-
-  private:
-    static constexpr int move_padding = 10; // the panel's inner margin
-    static constexpr int move_gap = 8;
-    static constexpr int mark_padding = 4;
-};
-
-// The Rating chooser: a combo whose arrow is the chevron-down icon in the muted colour (the
-// palette's placeholder text), as the stylesheet, which draws the rest, cannot recolour an image.
-class RatingChooser : public QComboBox {
-  public:
-    using QComboBox::QComboBox;
-
-  protected:
-    void changeEvent(QEvent* event) override {
-        if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
-            const QColor muted = palette().color(QPalette::PlaceholderText);
-            chevron_ = tinted_icon(QStringLiteral("chevron-down"), muted, muted);
-        }
-        QComboBox::changeEvent(event);
-    }
-
-    void paintEvent(QPaintEvent* event) override {
-        QComboBox::paintEvent(event);
-        QStyleOptionComboBox option;
-        initStyleOption(&option);
-        QRect chevron(0, 0, 16, 16);
-        chevron.moveCenter(
-            style()
-                ->subControlRect(QStyle::CC_ComboBox, &option, QStyle::SC_ComboBoxArrow, this)
-                .center());
-        QPainter painter(this);
-        chevron_.paint(&painter, chevron);
-    }
-
-  private:
-    QIcon chevron_;
-};
-
-// The evaluation bar and the board side by side, 8 px apart at the row's top left: the board
-// square, the bar exactly its height. Columns sets the side the row asks for; the row is as tall as
-// it is wide, less the bar, so that the move list below takes the rest of the column.
-class BoardRow : public QWidget {
-  public:
-    static constexpr int bar_width = 14;
-    static constexpr int gap = 8;
-    static constexpr int min_side = 300;
-
-    BoardRow(QWidget* bar, QWidget* board) : bar_(bar), board_(board) {
-        bar_->setParent(this);
-        board_->setParent(this);
-        QSizePolicy policy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-        policy.setHeightForWidth(true);
-        setSizePolicy(policy);
-    }
-
-    void set_side(int side) {
-        if (side != side_) {
-            side_ = side;
-            updateGeometry();
-        }
-    }
-
-    [[nodiscard]] bool hasHeightForWidth() const override { return true; }
-    [[nodiscard]] int heightForWidth(int width) const override {
-        return std::max(0, width - bar_width - gap);
-    }
-    [[nodiscard]] QSize sizeHint() const override { return {side_ + bar_width + gap, side_}; }
-    [[nodiscard]] QSize minimumSizeHint() const override {
-        return {min_side + bar_width + gap, min_side};
-    }
-
-  protected:
-    void resizeEvent(QResizeEvent* /*event*/) override {
-        const int side = std::max(0, std::min(height(), width() - bar_width - gap));
-        bar_->setGeometry(0, 0, bar_width, side);
-        board_->setGeometry(bar_width + gap, 0, side, side);
-    }
-
-  private:
-    QWidget* bar_;
-    QWidget* board_;
-    int side_ = min_side;
-};
-
-// The window's content: the board column (the board row over the move list) and the screen column
-// (the tabs over the screens), 14 px from the window's edges and from each other, 10 px between a
-// column's parts. The board takes the side the window's height allows, as long as the screen
-// column keeps its minimum, at least screen_min_width; the screen column takes the rest.
-class Columns : public QWidget {
-  public:
-    static constexpr int margin = 14;
-    static constexpr int spacing = 10;
-    static constexpr int screen_min_width = 700;
-
-    Columns(BoardRow* row, QWidget* move_list, QWidget* tabs, QWidget* screens)
-        : row_(row), move_list_(move_list), right_(new QVBoxLayout()) {
-        auto* left = new QVBoxLayout();
-        left->setSpacing(spacing);
-        left->addWidget(row);
-        left->addWidget(move_list, 1);
-        screens->setMinimumWidth(screen_min_width);
-        right_->setSpacing(spacing);
-        right_->addWidget(tabs);
-        right_->addWidget(screens, 1);
-        auto* columns = new QHBoxLayout(this);
-        columns->setContentsMargins(margin, margin, margin, margin);
-        columns->setSpacing(margin);
-        columns->addLayout(left);
-        columns->addLayout(right_, 1);
-    }
-
-  protected:
-    void resizeEvent(QResizeEvent* event) override {
-        QWidget::resizeEvent(event);
-        const int by_height = height() - (2 * margin) - spacing - move_list_->minimumHeight();
-        const int by_width = width() - (3 * margin) - right_->minimumSize().width() -
-                             BoardRow::bar_width - BoardRow::gap;
-        row_->set_side(std::max(BoardRow::min_side, std::min(by_height, by_width)));
-    }
-
-  private:
-    BoardRow* row_;
-    QWidget* move_list_;
-    QVBoxLayout* right_; // owned by the columns' layout
-};
 
 } // namespace
 

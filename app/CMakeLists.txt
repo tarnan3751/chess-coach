@@ -21,12 +21,16 @@ endif()
 add_library(app_lib STATIC
   src/about_dialog.cpp
   src/about_dialog.hpp
+  src/board_row.cpp
+  src/board_row.hpp
   src/board_scene.cpp
   src/board_scene.hpp
   src/board_theme.cpp
   src/board_theme.hpp
   src/board_view.cpp
   src/board_view.hpp
+  src/columns.cpp
+  src/columns.hpp
   src/db_worker.cpp
   src/db_worker.hpp
   src/drill_screen.cpp
@@ -56,6 +60,8 @@ add_library(app_lib STATIC
   src/main_window.hpp
   src/main_window_drill.cpp
   src/main_window_repertoire.cpp
+  src/move_list_delegate.cpp
+  src/move_list_delegate.hpp
   src/piece_set.cpp
   src/piece_set.hpp
   src/profile_data.hpp
@@ -63,6 +69,8 @@ add_library(app_lib STATIC
   src/profile_worker.hpp
   src/promotion_chooser.cpp
   src/promotion_chooser.hpp
+  src/rating_chooser.cpp
+  src/rating_chooser.hpp
   src/repertoire_screen.cpp
   src/repertoire_screen.hpp
   src/result_delegate.cpp
