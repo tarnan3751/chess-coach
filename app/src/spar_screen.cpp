@@ -214,13 +214,8 @@ void SparScreen::show_interruption(const SparInterruption& interruption, bool co
     if (!interruption.dubious && !interruption.badges.isEmpty()) {
         said << tr("At this rating it is marked %1.").arg(interruption.badges);
     }
-    if (!interruption.loss) {
-        said << tr("The database has no engine evaluation for it.");
-    } else if (*interruption.loss <= 0) {
-        said << tr("The engine says it does not lose ground.");
-    } else {
-        said << tr("The engine says it gives away about %1 pawns.").arg(pawns(*interruption.loss));
-    }
+    said << (interruption.loss ? loss_sentence(*interruption.loss)
+                               : tr("The database has no engine evaluation for it."));
     played_->setText(said.join(QLatin1Char(' ')));
     better_->setRowCount(0);
     for (const SparChoice& choice : interruption.better) {

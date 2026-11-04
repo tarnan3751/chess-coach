@@ -125,6 +125,10 @@ if(BUILD_TESTING)
   chesscoach_add_test(app_resources_test MODULE app KIND unit
                       SOURCES tests/resources_test.cpp
                       LIBS chesscoach::app_lib)
+  # The wording of numbers, ratings, losses, days and months (wording.hpp).
+  chesscoach_add_test(app_wording_test MODULE app KIND unit
+                      SOURCES tests/wording_test.cpp
+                      LIBS chesscoach::app_lib)
 
   # Each UI test saves its screenshots here, as <test>-<state>.png (tools/ui_tests.sh).
   set(chesscoach_screenshots "${PROJECT_BINARY_DIR}/ui-screenshots")

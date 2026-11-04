@@ -580,11 +580,17 @@ that takes the default format to the data directory (`keep_qt_settings_in`:
 The sentences on every screen write their numbers one way, through `wording.hpp`, in English
 (`QLocale::English`) whatever the system's locale: a rating band as "under 1200", "1200–1399" to
 "2000–2199" and "2200 and above" (`rating_band`, from core's `tier_lower_bounds`), which reads
-after "players rated" and is what the Rating menu lists; a count with thousands separators,
+after "players rated" and, with a capital, is what the Rating menu lists; a count with thousands separators,
 "173,722" (`number`), and with its noun, "1 card" or "2 cards" (`counted`, there being no
-translation files to give plurals); a loss in pawns with one decimal, "1.1" for 109 centipawns
-(`pawns`); a day as "4 November 2026" (`day`); and the months an opening database holds as
-"October 2026" or "October 2026 to March 2027" (`month_range`, from `meta`'s `YYYY-MM` list).
+translation files to give plurals); pawns rounded to one decimal in integers, "1.1" for 109
+centipawns and "1.0" for 95 (`pawns`); a move's loss in three cases, as a sentence (`loss_sentence`:
+under 5 centipawns "The engine says it gives away almost nothing.", up to 999 "… gives away about
+1.1 pawns." or "about 1 pawn", from 1,000, as a forced mate reads, "The engine says it loses by
+force.") or in a table's cell (`loss_cell`: "almost none", "1.1", "loses by force"); a day as "4
+November 2026" (`day`); and the months an opening database holds (`month_range`, from `meta`'s
+`YYYY-MM` list): "October 2026", a run of months one after another as "October 2026 to March
+2027", and months with gaps listed with the year after each year's last, "January, March and April
+2013". `app_wording_test` checks each.
 
 ## Themes
 
