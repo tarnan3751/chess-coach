@@ -700,7 +700,8 @@ QString MainWindow::engine_status(EngineState state, const QString& name) {
     case EngineState::not_found:
         return tr("No engine found");
     case EngineState::failed:
-        return tr("The engine did not start");
+        // A binary that did not start has no name; a search that failed names its engine.
+        return name.isEmpty() ? tr("The engine did not start") : tr("%1 did not answer").arg(name);
     }
     return {};
 }

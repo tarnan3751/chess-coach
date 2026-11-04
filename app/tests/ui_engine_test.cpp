@@ -286,6 +286,19 @@ class EngineTest : public QObject {
                  QStringList{QStringLiteral("settings.ini")});
     }
 
+    void an_engine_that_dies_mid_search_is_reported_failed() {
+        // The script answers go with one info line and exits; cleanup puts the normal one back.
+        qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "die-mid-search");
+        const Session session(*db_, fake(0.1));
+        const MainWindow& window = *session.window;
+        // The status bar names the engine that failed, never "ready" beside the failure.
+        // Qt 6.4's expansion of this macro mixes / and + without parentheses.
+        // NOLINTNEXTLINE(readability-math-missing-parentheses)
+        QTRY_COMPARE_WITH_TIMEOUT(text_of(window, QStringLiteral("engine_status")),
+                                  QStringLiteral("FakeUCI 1.0 did not answer"), first_wait_ms);
+        QCOMPARE(line_count(window), 0);
+    }
+
     void a_binary_that_is_not_an_engine_fails_to_start() {
         EngineSettings broken = fake(0.1);
         broken.binary = QStringLiteral("/usr/bin/true"); // exits without a handshake

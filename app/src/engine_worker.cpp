@@ -224,15 +224,17 @@ void EngineWorker::evaluate(quint64 key, const QString& fen, int request_id) {
     emit engine_state(EngineState::searching, name, tr("searching"));
     const auto result = engine.search(
         *position, {.lines = lines, .seconds = settings_.seconds, .generation = request_id});
-    emit engine_state(EngineState::ready, name, name);
     if (!result) {
-        emit engine_failed(describe(name, result.error()) + QLatin1Char(' ') +
+        const QString failure = describe(name, result.error());
+        emit engine_state(EngineState::failed, name, failure);
+        emit engine_failed(failure + QLatin1Char(' ') +
                            tr("chess-coach tries again at your next move."));
         if (!engine.is_alive()) {
             drop_engine(); // the next search starts a new one
         }
         return;
     }
+    emit engine_state(EngineState::ready, name, name);
     if (stale(request_id) || result->stopped) {
         return; // a stopped search answers a request already left, and is not cached
     }

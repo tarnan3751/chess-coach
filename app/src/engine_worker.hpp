@@ -51,8 +51,9 @@ struct EngineLine {
 };
 
 // What the engine is doing, as the worker reports it: not started (before the first search),
-// starting (its process and handshake), ready (idle), searching, not found (no binary), or failed
-// (the binary did not answer the handshake). The window words it in the status bar.
+// starting (its process and handshake), ready (idle after a good search, or once started),
+// searching, not found (no binary), or failed: the binary did not answer the handshake, or a
+// search failed (it timed out, or the engine died). The window words it in the status bar.
 enum class EngineState : std::uint8_t {
     not_started,
     starting,
@@ -99,10 +100,10 @@ class EngineWorker : public QObject {
     Q_SLOT void evaluate(quint64 key, const QString& fen, int request_id);
 
   signals:
-    // The engine's state; name is the engine's own, from its handshake, when it is ready or
-    // searching, else empty; detail is the state in the worker's words, which Explore's engine
-    // panel shows: "starting", "searching", "not found", "failed to start", or the name when
-    // ready.
+    // The engine's state; name is the engine's own, from its handshake, once it has started
+    // (ready, searching, and failed after a search), else empty; detail is the state in the
+    // worker's words, which Explore's engine panel shows: "starting", "searching", "not found",
+    // "failed to start", what went wrong with a search, or the name when ready.
     void engine_state(chesscoach::app::EngineState state, const QString& name,
                       const QString& detail);
     void lines_ready(quint64 key, int request_id, const QVector<chesscoach::app::EngineLine>& lines,

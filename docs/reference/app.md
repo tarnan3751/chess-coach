@@ -124,10 +124,11 @@ resources.
   as the engine worker reports it by `EngineState` (`not_started`, `starting`, `ready`,
   `searching`, `not_found`, `failed`) beside the engine's name, never by the worker's words:
   "Engine not started" until then, "Engine starting…", "<name> ready" when idle ("Stockfish 17
-  ready"), "<name> thinking…" while it searches, "No engine found", or "The engine did not start"
-  for a binary that does not answer the handshake. Explore's engine panel says the same state with
-  the way forward (**Explore**, `engine_words`); the worker's `detail` is no longer shown. The
-  three labels share the status bar's muted 12 px type.
+  ready"), "<name> thinking…" while it searches, "No engine found", "The engine did not start"
+  for a binary that does not answer the handshake, or "<name> did not answer" for a search that
+  failed (it timed out, or the engine died). Explore's engine panel says the same state with the
+  way forward (**Explore**, `engine_words`); the worker's `detail` is no longer shown. The three
+  labels share the status bar's muted 12 px type.
 
 **The line.** The window keeps the moves played from the start position (UCI and SAN) and the key of
 every position along them. On Explore, a move on the board (`move_played`) appends to it (on the
@@ -229,10 +230,11 @@ the packaging puts it (**The bundle**), and reports "not found" when there is no
 answer the UCI handshake. The engine starts at the first search (Threads and Hash from the settings)
 and again after it dies or times out, the worker reporting "starting" meanwhile and the engine's
 name once it has started. The worker reports "searching", runs `search` for the settings' line
-count and seconds, reports the engine's name, and stores a full result with `cache_store`,
-answering with what the cache then holds. `profiles.db` is opened only when it exists, for a
-lookup, or when a search is to be stored, so it is created by the first stored search and a run
-that searches nothing writes nothing.
+count and seconds, reports the engine's name when the search succeeded, or a failure with what
+went wrong when it did not, and stores a full result with `cache_store`, answering with what the
+cache then holds. `profiles.db` is opened only when it exists, for a lookup, or when a search is
+to be stored, so it is created by the first stored search and a run that searches nothing writes
+nothing.
 
 **One search at a time, cancelled by moving on.** The worker's slots run one at a time on its
 thread, and `Engine::search` blocks there, so two searches are never in flight. Each request the
@@ -889,8 +891,8 @@ the UI tests run silent on every platform, their sounds going to the null backen
   lines after a request, white to move and black to move, and the evaluation bar following the first
   line where nothing is stored; a cache seeded through `ProfileStore` served without starting the
   engine; a 30 s search stopped by a move while a timer keeps firing, and the window closing at
-  once; a missing binary, and one that fails the handshake; a checkmated side to move, white's and
-  black's, read from the fake's mate 0; the engine panel's head and body for each state, a cached
+  once; a missing binary, one that fails the handshake, and one that dies mid-search, reported
+  failed, never ready; a checkmated side to move, white's and black's, read from the fake's mate 0; the engine panel's head and body for each state, a cached
   search and a failure; the Settings dialog saving and applying its values, and a new window
   starting with them. Screenshots: `explore-engine`, `explore-engine-dark`, `settings-dialog`.
 - `ui_spar_test`, on the fixture database's tier-4 tree (the start position's e4, a Dubious a3 and
