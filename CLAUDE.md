@@ -40,8 +40,9 @@ Drill screens on a profile worker with profile export and import, the opening da
 through `--db`, the data directory and the app bundle and imported with File > Import database…,
 the bundled Stockfish found by itself, themes, settings in `<data-dir>/settings.ini`, About, the
 UI harness with screenshots; `docs/reference/app.md`);
-and the macOS package with Qt and Stockfish inside, the licence texts in `legal/`,
-`tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`);
+and the macOS package with Qt, Stockfish and the published opening database inside (the one
+`data/release/bundled.txt` names), the licence texts in `legal/`, `tools/package.sh` and the
+tag-triggered release workflow (`docs/reference/testing-tools.md`);
 and the release-database tooling, `tools/build_release_db.sh` and `tools/verify_db.sh`
 (`docs/reference/pipeline.md`, **Release database**; `data/release/README.md`). In progress: the
 review folds, the public-milestone files, and the release database (a recent month builds on the
@@ -103,7 +104,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | Trim month files and the evaluation database to what the build reads, under their names | `build/dev/pipeline/chess-coach-pipeline trim --out-dir <dir> [--max-ply N] <in>...` |
 | Golden corpora: the sample dump through the pipeline, the CLI queries | `tools/run_corpus.sh` |
 | UI tests with screenshots, offscreen | `tools/ui_tests.sh` |
-| Package: the macOS disk image; the image built and checked mounted | `cmake --build --preset release --target package`; `tools/package.sh` |
+| Package: the macOS disk image; the image built and checked mounted, with the opening database at `<file>` bundled when given (the release workflow bundles the one `data/release/bundled.txt` names) | `cmake --build --preset release --target package`; `tools/package.sh [--db <file>]` |
 | A release database: built from a data directory (the coordinator's or the owner's, never a lane's, but on the sample); verified, with the reproducibility rebuild | `tools/build_release_db.sh <data-dir> <out.db> --data-version N [--months ...]`; `tools/verify_db.sh <db> [--rebuild]` |
 | Land a delivered series; in a batch, every series but the last with `--no-gate` | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--no-gate]` |
 | The changelog section for a release, from the commit log | `tools/changelog.sh <version> [<from-ref>] [<to-ref>]` |

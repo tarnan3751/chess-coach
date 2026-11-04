@@ -75,11 +75,13 @@ Security. Or clear the quarantine flag once from a terminal:
 xattr -dr com.apple.quarantine /Applications/chess-coach.app
 ```
 
-The opening database is a separate file, built by the pipeline (**The pipeline**). Import it
-once with File > Import database…, which copies it into the data directory as `openings.db`,
-where the app finds it at every start; a database inside the app bundle, or one given with
-`--db` from a terminal, is found too. The app finds the bundled Stockfish by itself, unless
-Edit > Settings or `stockfish` on the `PATH` names another.
+The app carries the opening database too, built by the pipeline (**The pipeline**), as
+`Contents/Resources/openings.db`, and opens it by itself; the About dialog shows its data
+version. A newer database is a separate file: import it once with File > Import database…,
+which copies it into the data directory as `openings.db`, where the app finds it at every start
+ahead of the bundled one; one given with `--db` from a terminal comes before both. The app finds
+the bundled Stockfish by itself, unless Edit > Settings or `stockfish` on the `PATH` names
+another.
 
 The app keeps profiles, repertoires, settings and the engine cache in its data directory,
 `~/Library/Application Support/chess-coach`, or the directory `--data-dir` names; replacing or

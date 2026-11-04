@@ -46,11 +46,21 @@ session saved in a profile records the data version it was played against.
 
 ## Where the file goes
 
-Not into the repository. Under the delivery rule (`PLAN.md` §12 item 2, `docs/database.md` §8) a
-database under 500 MB is bundled into the installer (configure the release preset with
-`-DCHESS_COACH_BUNDLE_DB=<file>`; `docs/reference/testing-tools.md`, **Packaging**); one over
-1 GB is a separate download, attached to the GitHub release as an asset (at most 2 GB); between
-the two, the owner decides. `verify_db.sh` prints the verdict.
+Not into the repository. A published database is the asset of a GitHub release of its own, tagged
+`data-vN` for its data version N and named `openings-vN.db`: the first is `data-v1` with
+`openings-v1.db`. Under the delivery rule (`PLAN.md` §12 item 2, `docs/database.md` §8) a database
+under 500 MB is bundled into the installer; one over 1 GB is a separate download, attached to the
+GitHub release as an asset (at most 2 GB); between the two, the owner decides. `verify_db.sh`
+prints the verdict.
+
+`bundled.txt` here names the database a release bundles, in three lines: the data release's tag,
+the asset's name, and the sha256 of the file itself (`shasum -a 256`, not the canonical dump's of
+the table below). The release workflow reads it, downloads the asset with `gh release download`,
+fails when the file's sha256 is not that one, and packages it with `tools/package.sh --db <file>`
+as `Contents/Resources/openings.db` (`docs/reference/testing-tools.md`, **Packaging** and
+**Release**). This is a download of a published artefact by CI, as its brew and vcpkg installs
+are, not a download in the build, which stays offline. To bundle a new database: publish it as
+`data-vN`, fill its row below, and change the three lines of `bundled.txt` to it.
 
 ## Published databases
 

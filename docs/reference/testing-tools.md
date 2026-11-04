@@ -230,31 +230,44 @@ pieces and the themes are compiled into the executable. CPack then runs
   which Apple silicon requires once `macdeployqt` has rewritten the binaries. Releases are not
   signed with an identity or notarized.
 
-**The opening database is not bundled.** When the size rule (`PLAN.md` §12) lets a release carry
-one, configure with the cache variable `CHESS_COACH_BUNDLE_DB` set to the file
-(`cmake --preset release -DCHESS_COACH_BUNDLE_DB=<file>`), and the install rules copy it to
-`Contents/Resources/openings.db`; `-DCHESS_COACH_BUNDLE_DB=` clears it.
+**The opening database** is bundled when the release preset is configured with the cache variable
+`CHESS_COACH_BUNDLE_DB` set to a file (`cmake --preset release -DCHESS_COACH_BUNDLE_DB=<file>`,
+which `tools/package.sh --db <file>` does): the install rules copy it to
+`Contents/Resources/openings.db`, where the app finds it when neither `--db` nor the data directory
+names one (`docs/reference/app.md`, **The database**). `-DCHESS_COACH_BUNDLE_DB=` clears it, which
+`tools/package.sh` without `--db` does, so its package then holds no database whatever an earlier
+configure cached. The release workflow bundles the published database `data/release/bundled.txt`
+names (**Release**).
 
-`tools/package.sh` builds the `release` preset and the package, mounts the image read-only and
-checks the bundle: `otool -L` of the app binary shows only Qt frameworks through `@rpath`,
-`@loader_path` or `@executable_path` and system libraries, and no run path outside the bundle;
-the app, started under the offscreen platform with a scratch `--data-dir`, loads the bundle's
-offscreen plugin and is still running three seconds later, having loaded no library from
-outside the bundle but the system's (`DYLD_PRINT_LIBRARIES`), which a Homebrew Qt on the build
-machine would otherwise hide; and the bundled Stockfish answers `uci` with `uciok`, with
-`COPYING` and `SOURCE.txt` beside it. It prints the image's path and size and exits non-zero on
-the first failure. It takes minutes, so it is not part of the gate; the release workflow runs it,
-and so does anyone changing the packaging.
+`tools/package.sh [--db <file>]` builds the `release` preset and the package, refusing a `--db`
+file that is not readable before the configure and one that the build's own `chess-coach-cli stats
+--db` does not read as an opening database before the package (a relative path is the caller's),
+mounts the image read-only and checks the bundle: `otool -L` of the app binary shows only Qt
+frameworks through `@rpath`, `@loader_path` or `@executable_path` and system libraries, and no run
+path outside the bundle; the app, started under the offscreen platform with a scratch `--data-dir`,
+loads the bundle's offscreen plugin and is still running three seconds later, having loaded no
+library from outside the bundle but the system's (`DYLD_PRINT_LIBRARIES`), which a Homebrew Qt on
+the build machine would otherwise hide; the bundled Stockfish answers `uci` with `uciok`, with
+`COPYING` and `SOURCE.txt` beside it; and with `--db`, `Contents/Resources/openings.db` is that
+file byte for byte (`cmp`), without it there is none. It prints the image's path and size and exits
+non-zero on the first failure. It takes minutes, so it is not part of the gate; the release
+workflow runs it, and so does anyone changing the packaging.
 
 ## Release
 
-`.github/workflows/release.yml` runs on every pushed tag `v*` and by hand (`workflow_dispatch`),
-as one `macos-15` job: the same Homebrew tools, vcpkg at the baseline and binary cache as CI,
-then `tools/package.sh`. On a tag it checks that the image's version is the tag's, then makes a
-draft GitHub release named for the tag with the image attached and `tools/changelog.sh
-<version>` as its body (`gh release create --draft --verify-tag`; the checkout fetches the whole
-history and the tags for it). Run by hand on a branch, it keeps the image as the run's artifact
-`chess-coach-macos` instead. Publishing the draft is a person's step.
+`.github/workflows/release.yml` runs on every pushed tag `v*` and by hand (`workflow_dispatch`), as
+one `macos-15` job: the same Homebrew tools, vcpkg at the baseline and binary cache as CI, then the
+opening database to bundle and `tools/package.sh --db` on it. `data/release/bundled.txt` names the
+database in three lines, the tag of the data release that holds it (`data-vN`), the asset's name and
+the file's sha256; the job downloads the asset with `gh release download <tag> --pattern <asset>`
+under the workflow's token, fails when `shasum -a 256` gives another sum, and hands the file to the
+package (`data/release/README.md`, **Where the file goes**). That download fetches a published
+artefact in CI, as the job's brew and vcpkg installs do; nothing is downloaded in the build, so the
+no-network rule stands. On a tag it checks that the image's version is the tag's, then makes a draft
+GitHub release named for the tag with the image attached and `tools/changelog.sh <version>` as its
+body (`gh release create --draft --verify-tag`; the checkout fetches the whole history and the tags
+for it). Run by hand on a branch, it keeps the image as the run's artifact `chess-coach-macos`
+instead. Publishing the draft is a person's step.
 
 To release: set `project(VERSION)` in the root `CMakeLists.txt`, land it, tag `main` as
 `vX.Y.Z` and push the tag; check the draft and publish it. `CHANGELOG.md` is generated from the
