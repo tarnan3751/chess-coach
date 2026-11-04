@@ -220,9 +220,10 @@ pieces and the themes are compiled into the executable. CPack then runs
   or `17.1`, fails the package. The binary is the build machine's CPU's.
 - **Qt.** `macdeployqt` from `brew --prefix qt` copies the frameworks the app links and their
   libraries into `Contents/Frameworks/` and rewrites the references. It runs with `-no-plugins`
-  and is given three plugins to deploy for, copied into `Contents/PlugIns/` first: the cocoa
-  platform, the macOS style, and the offscreen platform, which lets the bundled app run
-  headless. Homebrew's `qt` installs every module's plugins in one directory, and
+  and is given two plugins to deploy for, copied into `Contents/PlugIns/` first: the cocoa
+  platform and the offscreen platform, which lets the bundled app run headless. There is no style
+  plugin: the app draws with Fusion, which QtWidgets builds in (`docs/reference/app.md`,
+  **Themes**). Homebrew's `qt` installs every module's plugins in one directory, and
   `macdeployqt`'s own plugin set would deploy the virtual keyboard and through it QtQuick, QtQml
   and QtNetwork. `Contents/Resources/qt.conf` sets `Plugins = PlugIns`, so the app never loads a
   plugin, and with it a second Qt, from Homebrew's prefix.

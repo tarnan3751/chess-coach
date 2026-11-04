@@ -9,14 +9,14 @@
 # release and how the binary was obtained (from Homebrew's install receipt when it is a Homebrew
 # keg's). No binary, or one that is not a numbered release, fails the package.
 #
-# Qt: macdeployqt with -no-plugins, given the three plugins the app needs as executables to
-# deploy for: the cocoa platform, the macOS style, and the offscreen platform for headless runs
-# (tools/package.sh launches the bundled app with it). Homebrew's qt installs every module's
-# plugins in one directory, and macdeployqt's own plugin set would deploy the virtual keyboard
-# and through it QtQuick, QtQml and QtNetwork. qt.conf then points Qt at the bundle's PlugIns,
-# as macdeployqt writes it when it deploys plugins itself, so a Homebrew Qt on the machine is
-# never loaded beside the bundle's; tools/package.sh checks that the bundled app loads no
-# library from outside the bundle but the system's.
+# Qt: macdeployqt with -no-plugins, given the two plugins the app needs as executables to deploy
+# for: the cocoa platform and the offscreen platform for headless runs (tools/package.sh launches
+# the bundled app with it); no style plugin, as the app draws with Fusion, which is built into Qt.
+# Homebrew's qt installs every module's plugins in one directory, and macdeployqt's own plugin set
+# would deploy the virtual keyboard and through it QtQuick, QtQml and QtNetwork. qt.conf then
+# points Qt at the bundle's PlugIns, as macdeployqt writes it when it deploys plugins itself, so a
+# Homebrew Qt on the machine is never loaded beside the bundle's; tools/package.sh checks that the
+# bundled app loads no library from outside the bundle but the system's.
 #
 # The licences: every library macdeployqt copied in beside the Qt frameworks comes from a
 # Homebrew formula, the keg <brew prefix>/opt/*/lib/<library> resolves to, whose licence text
@@ -98,8 +98,7 @@ if(NOT CPACK_CHESSCOACH_MACDEPLOYQT)
                       "and configure again")
 endif()
 set(plugin_args "")
-foreach(plugin IN ITEMS platforms/libqcocoa.dylib platforms/libqoffscreen.dylib
-                        styles/libqmacstyle.dylib)
+foreach(plugin IN ITEMS platforms/libqcocoa.dylib platforms/libqoffscreen.dylib)
   cmake_path(GET plugin PARENT_PATH plugin_dir)
   file(MAKE_DIRECTORY "${contents}/PlugIns/${plugin_dir}")
   file(COPY_FILE "${CPACK_CHESSCOACH_QT_PLUGINS}/${plugin}" "${contents}/PlugIns/${plugin}")
