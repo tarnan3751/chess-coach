@@ -5,6 +5,7 @@
 // edited last, and refusing a name with a slash; and Browse in the Settings dialog opening it at
 // the folder last used and keeping the new one in settings.ini. The platform's settings folder
 // gains no file while the tests run. A screenshot of the chooser (ui_harness.hpp).
+#include "application.hpp"
 #include "file_chooser.hpp"
 #include "main_window.hpp"
 #include "settings.hpp"
@@ -66,6 +67,7 @@ class FileChooserTest : public QObject {
 
   private slots:
     void initTestCase() {
+        chesscoach::app::configure_application();
         preferences_before_ = preferences();
         // The window test keeps the engine out: the binary named here does not exist.
         qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-chooser-tests");

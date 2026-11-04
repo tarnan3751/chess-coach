@@ -8,6 +8,7 @@
 #include <chesscoach/position.hpp>
 #include <chesscoach/version.hpp>
 
+#include "application.hpp"
 #include "board_view.hpp"
 #include "eval_bar.hpp"
 #include "explore_model.hpp"
@@ -145,6 +146,7 @@ class ExploreTest : public QObject {
 
   private slots:
     void initTestCase() {
+        chesscoach::app::configure_application();
         db_ = std::make_unique<FixtureDb>();
         // These tests keep the engine out: the binary named here does not exist.
         qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-explore-tests");

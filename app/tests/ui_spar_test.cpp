@@ -10,6 +10,7 @@
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
 
+#include "application.hpp"
 #include "board_view.hpp"
 #include "eval_bar.hpp"
 #include "fixture_db.hpp"
@@ -284,6 +285,7 @@ class SparTest : public QObject {
 
   private slots:
     void initTestCase() {
+        chesscoach::app::configure_application();
         db_ = std::make_unique<FixtureDb>();
         qputenv("CHESSCOACH_FAKE_UCI", CHESSCOACH_FAKE_UCI);
         qputenv("CHESSCOACH_FAKE_UCI_SCRIPT", "legal");

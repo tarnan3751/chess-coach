@@ -4,6 +4,7 @@
 // screenshot of each state (ui_harness.hpp).
 #include <chesscoach/position.hpp>
 
+#include "application.hpp"
 #include "board_scene.hpp"
 #include "board_view.hpp"
 #include "piece_set.hpp"
@@ -67,6 +68,10 @@ class BoardTest : public QObject {
     BoardView* view_ = nullptr;
 
   private slots:
+    // A Qt Test slot, which cannot be static.
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+    void initTestCase() const { chesscoach::app::configure_application(); }
+
     void init() {
         view_ = new BoardView();
         view_->resize(board_pixels, board_pixels);

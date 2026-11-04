@@ -7,6 +7,7 @@
 // app_lib's.
 #include <chesscoach/version.hpp>
 
+#include "application.hpp"
 #include "main_window.hpp"
 
 #include <QApplication>
@@ -19,6 +20,7 @@
 
 int main(int argc, char* argv[]) {
     const QApplication application(argc, argv);
+    chesscoach::app::configure_application();
     QApplication::setApplicationName(QStringLiteral("chess-coach"));
     QApplication::setApplicationVersion(
         QString::fromStdString(chesscoach::to_string(chesscoach::current_version())));

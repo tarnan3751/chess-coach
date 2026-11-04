@@ -8,6 +8,7 @@
 #include <chesscoach/tier.hpp>
 #include <chesscoach/version.hpp>
 
+#include "application.hpp"
 #include "board_view.hpp"
 #include "drill_screen.hpp"
 #include "explore_screen.hpp"
@@ -74,6 +75,7 @@ class MainWindowTest : public QObject {
 
   private slots:
     void initTestCase() const {
+        chesscoach::app::configure_application();
         QVERIFY(root_.isValid());
         // These tests keep the engine out: the binary named here does not exist.
         qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-window-tests");

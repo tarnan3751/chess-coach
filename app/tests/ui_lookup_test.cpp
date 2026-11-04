@@ -6,6 +6,7 @@
 // and the engine found in the bundle's resources when nothing else names one. The bundle is a
 // scratch folder named by CHESS_COACH_BUNDLE_RESOURCES, the app's test hook (ui_harness.hpp,
 // fixture_db.hpp).
+#include "application.hpp"
 #include "board_view.hpp"
 #include "explore_model.hpp"
 #include "file_chooser.hpp"
@@ -95,6 +96,7 @@ class LookupTest : public QObject {
 
   private slots:
     void initTestCase() {
+        chesscoach::app::configure_application();
         path_ = qgetenv("PATH");
         // The engine stays out but in the one test that puts it in the bundle.
         qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-lookup-tests");

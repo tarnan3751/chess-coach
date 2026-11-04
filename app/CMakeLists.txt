@@ -21,6 +21,8 @@ endif()
 add_library(app_lib STATIC
   src/about_dialog.cpp
   src/about_dialog.hpp
+  src/application.cpp
+  src/application.hpp
   src/board_row.cpp
   src/board_row.hpp
   src/board_scene.cpp

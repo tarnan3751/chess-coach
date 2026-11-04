@@ -11,6 +11,7 @@
 #include <chesscoach/profile_store.hpp>
 #include <chesscoach/repertoire.hpp>
 
+#include "application.hpp"
 #include "board_view.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
@@ -216,6 +217,7 @@ class RepertoireTest : public QObject {
 
   private slots:
     void initTestCase() {
+        chesscoach::app::configure_application();
         db_ = std::make_unique<FixtureDb>();
         // These tests keep the engine out: the binary named here does not exist.
         qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-repertoire-tests");

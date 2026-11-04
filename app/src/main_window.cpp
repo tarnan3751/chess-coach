@@ -16,7 +16,6 @@
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
 #include "file_chooser.hpp"
-#include "fonts.hpp"
 #include "help_dialog.hpp"
 #include "icons.hpp"
 #include "move_list_delegate.hpp"
@@ -115,11 +114,6 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
       repertoire_(new RepertoireScreen()), drill_(new DrillScreen()), tabs_(new QTabBar()),
       move_list_(new QListWidget()), tier_selector_(new RatingChooser()) {
     keep_qt_settings_in(data_dir);
-    // The Study look on every platform: Fusion, which draws what the stylesheet cannot reach
-    // (radio buttons, spin boxes, scroll bars, the tab strip's alignment) in the theme's palette,
-    // where the macOS style draws them in the system's colours; and the bundled fonts.
-    QApplication::setStyle(QStringLiteral("Fusion"));
-    install_fonts();
     register_explore_types();
     register_engine_types();
     register_spar_types();

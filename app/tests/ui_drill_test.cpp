@@ -10,6 +10,7 @@
 #include <chesscoach/repertoire.hpp>
 #include <chesscoach/scheduler.hpp>
 
+#include "application.hpp"
 #include "board_view.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
@@ -129,6 +130,7 @@ class DrillTest : public QObject {
 
   private slots:
     void initTestCase() {
+        chesscoach::app::configure_application();
         db_ = std::make_unique<FixtureDb>();
         qputenv("CHESS_COACH_STOCKFISH", "/nonexistent/stockfish-for-the-drill-tests");
     }

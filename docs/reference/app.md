@@ -51,6 +51,7 @@ state (**Files**).
 | `columns.{hpp,cpp}` | `Columns`, the window's content: the board column and the screen column (**Shell**) |
 | `move_list_delegate.{hpp,cpp}` | `MoveListDelegate`, the move list's rows (**Shell**) |
 | `rating_chooser.{hpp,cpp}` | `RatingChooser`, the toolbar's Rating combo with its chevron (**Shell**) |
+| `application.{hpp,cpp}` | `configure_application`: the Fusion style and the bundled fonts, set once (**Themes**) |
 | `study_palette.{hpp,cpp}` | `StudyPalette`, the Study look's colours per theme (**Themes**) |
 | `fonts.{hpp,cpp}` | `install_fonts`, the bundled fonts registered and the application font set (**Themes**) |
 | `icons.{hpp,cpp}` | `themed_icon` and `tinted_icon`, the toolbar's icons in a theme's colours (**Themes**) |
@@ -666,15 +667,16 @@ themes keep their names, *Light* and *Dark*, and their setting values, `light` a
   switches and saves the choice; the window applies the saved one at start. A label whose
   dynamic property `muted` is true, such as a screen's description, takes the muted colour
   (`QLabel[muted="true"]` in both stylesheets).
-- **The style** is Fusion on every platform, set by the window at start: it draws what the
-  stylesheet does not reach (radio buttons, spin boxes, whose arrows a stylesheet rule would hide,
-  scroll bars, and a standalone tab bar's alignment, which the macOS style centres) in the theme's
-  palette, where the macOS style draws them in the system's colours.
+- **The style** is Fusion on every platform, set with the fonts by `configure_application`, which
+  `main.cpp` calls once and every UI test's `initTestCase` too. It draws what the stylesheet does
+  not reach (radio buttons, spin boxes, whose arrows a stylesheet rule would hide, scroll bars,
+  and a standalone tab bar's alignment, which the macOS style centres) in the theme's palette,
+  where the macOS style draws them in the system's colours.
 - **The fonts** are static TTFs from Adobe's releases under the SIL Open Font License 1.1
   (`NOTICE`, `legal/source-serif-4.txt`, `legal/source-sans-3.txt`): Source Serif 4 SemiBold 4.005,
   and Source Sans 3 Regular, SemiBold and Bold 3.052, compiled in under `:/fonts/`.
-  `install_fonts`, which the window calls at start, registers them with `QFontDatabase` once and
-  makes Source Sans 3 at 13 px the application font, so the app needs no font on the system
+  `install_fonts`, which `configure_application` calls, registers them with `QFontDatabase` once
+  and makes Source Sans 3 at 13 px the application font, so the app needs no font on the system
   (`app_resources_test` checks both families register). The stylesheets name Source Serif 4 for
   the screen tabs (15 px, 600) and the position's name (`explore_name`, 17 px, 600), and the small
   size for the status bar and the table headers, which is 12 px: Qt takes whole pixels in a
@@ -831,8 +833,9 @@ board.
 
 The UI tests are Qt Test classes, `app/tests/ui_<name>_test.cpp`, each one ctest test labelled
 `app;ui` through `chesscoach_add_test(... KIND ui ...)` and run under the offscreen platform, so
-they need no display. They drive the widgets with `QTest`'s mouse events on the board's viewport
-at the centres of squares and find the window's widgets by object name.
+they need no display; each calls `configure_application` in its `initTestCase`, so what it opens
+has the app's style and fonts. They drive the widgets with `QTest`'s mouse events on the board's
+viewport at the centres of squares and find the window's widgets by object name.
 `app/tests/ui_harness.hpp` holds the helpers: `child<T>(parent, name)` (the widget of that object
 name, stopping the run when it is missing), `click(view, "e2")`, `square_point(view, "e2")`,
 `taken(spy)` for the moves a `QSignalSpy` on `move_played` recorded, `played(window.sounds())` for
