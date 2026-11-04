@@ -21,10 +21,10 @@
 #include <QObject>
 #include <QStackedWidget>
 #include <QString>
+#include <QStringList>
 #include <QTabBar>
 #include <QTemporaryDir>
 #include <QTest>
-#include <string_view>
 
 using chesscoach::app::BoardView;
 using chesscoach::app::DrillScreen;
@@ -64,11 +64,14 @@ class MainWindowTest : public QObject {
         const MainWindow window(data_dir_, QString());
         const auto& tiers = child<QComboBox>(window, QStringLiteral("tier_selector"));
         QCOMPARE(tiers.count(), chesscoach::tier_count);
+        const QStringList bands{
+            QStringLiteral("under 1200"),     QStringLiteral("1200–1399"),
+            QStringLiteral("1400–1599"),      QStringLiteral("1600–1799"),
+            QStringLiteral("1800–1999"),      QStringLiteral("2000–2199"),
+            QStringLiteral("2200 and above"),
+        };
         for (int index = 0; index < chesscoach::tier_count; ++index) {
-            const std::string_view label =
-                chesscoach::tier_label(static_cast<chesscoach::Tier>(index));
-            QCOMPARE(tiers.itemText(index),
-                     QString::fromUtf8(label.data(), static_cast<qsizetype>(label.size())));
+            QCOMPARE(tiers.itemText(index), bands.at(index));
             QCOMPARE(tiers.itemData(index).toInt(), index);
         }
         QCOMPARE(tiers.currentIndex(), MainWindow::default_tier);

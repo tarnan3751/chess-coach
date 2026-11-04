@@ -115,7 +115,7 @@ QString expected_coverage(const FixtureDb& db, const QString& data_dir) {
     const auto repertoire = profiles->repertoire(profiles->profiles().front().id, Color::white);
     const auto coverage = chesscoach::compute_coverage(
         *store, repertoire, Color::white, static_cast<chesscoach::Tier>(tier), {.max_plies = 20});
-    return QStringLiteral("Coverage at 1800-1999 to 20 plies: %1%")
+    return QStringLiteral("Coverage at 1800–1999 to 20 plies: %1%")
         .arg(coverage.covered * 100.0, 0, 'f', 1);
 }
 
@@ -137,7 +137,7 @@ class RepertoireTest : public QObject {
         const auto& board = child<BoardView>(window, QStringLiteral("board"));
         // An empty repertoire: the start is the one gap.
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800-1999 to 20 plies: 0.0%"));
+                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 0.0%"));
         QTRY_COMPARE(rows(window, QStringLiteral("repertoire_gaps")), 1);
         QCOMPARE(cell(window, QStringLiteral("repertoire_gaps"), 0, 1),
                  QStringLiteral("the start"));
@@ -147,7 +147,7 @@ class RepertoireTest : public QObject {
         click(board, "e4");
         QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. e4")});
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800-1999 to 20 plies: 100.0%"));
+                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 100.0%"));
         QCOMPARE(text(window, QStringLiteral("repertoire_coverage")),
                  expected_coverage(*db_, session.data_dir));
 
@@ -159,7 +159,7 @@ class RepertoireTest : public QObject {
         click(board, "a3");
         QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. a3")});
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800-1999 to 20 plies: 0.0%"));
+                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 0.0%"));
         QCOMPARE(text(window, QStringLiteral("repertoire_coverage")),
                  expected_coverage(*db_, session.data_dir));
         QTRY_COMPARE(cell(window, QStringLiteral("repertoire_gaps"), 0, 1),
@@ -186,7 +186,7 @@ class RepertoireTest : public QObject {
                      (QStringList{QStringLiteral("1. a3"), QStringLiteral("  1... e5"),
                                   QStringLiteral("    2. Nf3")}));
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800-1999 to 20 plies: 100.0%"));
+                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 100.0%"));
         QCOMPARE(text(window, QStringLiteral("repertoire_coverage")),
                  expected_coverage(*db_, session.data_dir));
         QCOMPARE(text(window, QStringLiteral("repertoire_position")),
@@ -198,7 +198,7 @@ class RepertoireTest : public QObject {
         press(window, QStringLiteral("repertoire_remove"));
         QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. a3")});
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800-1999 to 20 plies: 0.0%"));
+                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 0.0%"));
     }
 
   private slots:

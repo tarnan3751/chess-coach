@@ -167,7 +167,7 @@ void reach_the_move_limit(MainWindow& window, const BoardView& board) {
     QVERIFY(!board.isEnabled());
     QVERIFY(child<QComboBox>(window, QStringLiteral("tier_selector")).isEnabled());
     QTRY_COMPARE(rows(window, QStringLiteral("spar_sessions")), 1);
-    QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 1), QStringLiteral("1800-1999"));
+    QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 1), QStringLiteral("1800–1999"));
     QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 2), QStringLiteral("White"));
     QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 3), QStringLiteral("6"));
     QCOMPARE(cell(window, QStringLiteral("spar_sessions"), 0, 4), QStringLiteral("2"));

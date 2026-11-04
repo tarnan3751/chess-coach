@@ -114,7 +114,7 @@ class ExploreTest : public QObject {
                  QStringLiteral("openings.db (--db)"));
         // Tier 2 to start, where the fixture has no games: the start position is off book.
         QCOMPARE(window.tier(), MainWindow::default_tier);
-        QTRY_COMPARE(message(window), QStringLiteral("Off book at 1400-1599: 0 games"));
+        QTRY_COMPARE(message(window), QStringLiteral("Off book at 1400–1599: 0 games"));
         QVERIFY(message_shown(window));
 
         select_tier(window, 3);
@@ -143,7 +143,7 @@ class ExploreTest : public QObject {
         QCOMPARE(child<QLabel>(window, QStringLiteral("explore_evaluation")).text(),
                  QStringLiteral("Evaluation: +0.2"));
         QCOMPARE(child<QLabel>(window, QStringLiteral("explore_games")).text(),
-                 QStringLiteral("1000 games at 1600-1799"));
+                 QStringLiteral("1000 games at 1600–1799"));
         save_screenshot(window, QStringLiteral("explore"), QStringLiteral("start-tier3"));
 
         // Tier 4: 1. a3 is Popular and Dubious, losing 109 cp.
@@ -171,7 +171,7 @@ class ExploreTest : public QObject {
         QTRY_COMPARE(table_moves(window),
                      (QStringList{QStringLiteral("e4"), QStringLiteral("f3")}));
         QCOMPARE(child<QLabel>(window, QStringLiteral("explore_games")).text(),
-                 QStringLiteral("20 games at <1200"));
+                 QStringLiteral("20 games at under 1200"));
     }
 
     void moves_on_the_board_show_the_replies_and_the_name() {
@@ -273,7 +273,7 @@ class ExploreTest : public QObject {
         click(board, "e4");
         click(board, "e7");
         click(board, "e6");
-        QTRY_COMPARE(message(window), QStringLiteral("Off book at 1600-1799: 0 games"));
+        QTRY_COMPARE(message(window), QStringLiteral("Off book at 1600–1799: 0 games"));
         QVERIFY(message_shown(window));
         QVERIFY(!child<QTableView>(window, QStringLiteral("explore_table")).isVisible());
         QCOMPARE(child<QLabel>(window, QStringLiteral("explore_name")).text(),

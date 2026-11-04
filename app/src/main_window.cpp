@@ -19,6 +19,7 @@
 #include "settings_dialog.hpp"
 #include "spar_screen.hpp"
 #include "spar_worker.hpp"
+#include "wording.hpp"
 
 #include <QAction>
 #include <QActionGroup>
@@ -49,16 +50,11 @@
 #include <algorithm>
 #include <array>
 #include <limits>
-#include <string_view>
 #include <utility>
 
 namespace chesscoach::app {
 
-QString MainWindow::tier_text(int tier) {
-    // Tier's values are the indices 0 to tier_count - 1.
-    const std::string_view label = tier_label(static_cast<Tier>(tier));
-    return QString::fromUtf8(label.data(), static_cast<qsizetype>(label.size()));
-}
+QString MainWindow::tier_text(int tier) { return rating_band(tier); }
 
 MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* parent)
     : QMainWindow(parent), data_dir_(data_dir), settings_(data_dir), resources_(bundle_resources()),

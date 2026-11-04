@@ -55,6 +55,7 @@ state (**Files**).
 | `piece_set.{hpp,cpp}` | `PieceSet`, one `QSvgRenderer` per piece from the Qt resource |
 | `promotion_chooser.{hpp,cpp}` | `PromotionChooser`, the four-button promotion popup |
 | `squares.{hpp,cpp}` | Square numbers and names, UCI parsing, the placement read from the FEN |
+| `wording.{hpp,cpp}` | How the app words a rating band, a count, a number, pawns, a day and a database's months (**Wording**) |
 
 All but `main.cpp` are the static library `app_lib` (namespace `chesscoach::app`, `AUTOMOC`),
 which the executable and the UI tests link. The piece set and the two stylesheets
@@ -67,8 +68,8 @@ which the executable and the UI tests link. The piece set and the two stylesheet
 - **A toolbar** (`toolbar`): *New game* (`new_game_action`: back to the start position), *Back*
   (`back_action`, the platform's Back shortcut: one move back), both working on Explore's line and
   Repertoire's and disabled on Spar and Drill, *Flip board* (`flip_action`), and the tier selector
-  (`tier_selector`), a `QComboBox` of the seven `tier_label` strings with the tier index as each
-  item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`).
+  (`tier_selector`), a `QComboBox` of the seven rating bands (**Wording**) with the tier index as
+  each item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`).
 - **The menus**: *File* with *Export profile…* and *Import profile…* (`export_action`,
   `import_action`, **Export and import**) and *Import database…* (`import_database_action`, **The
   database**), *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with *Light* and
@@ -356,7 +357,7 @@ shows and *New game*, *Back* and the move list's rows go back along. `Repertoire
   choices, 1 added, 0 already made, 1 conflicts, 0 unparsable.", a conflict being a later move in
   the file for a position it has chosen, or a choice the repertoire already answers differently,
   which it keeps;
-- the coverage (`repertoire_coverage`), "Coverage at 1800-1999 to 20 plies: 62.5%", at the tier
+- the coverage (`repertoire_coverage`), "Coverage at 1800–1999 to 20 plies: 62.5%", at the tier
   selected and the depth in the settings, computed again after every change and at a change of
   tier;
 - the tree (`repertoire_tree`, a `QTreeView`), the choices in bold, the opponent's replies plain;
@@ -455,6 +456,17 @@ in `settings.ini`), else the home folder, and keeps no state of its own. `choose
 Import profile… (`*.db`). As a second guard the window first sends Qt's settings for anything else
 that takes the default format to the data directory (`keep_qt_settings_in`:
 `QSettings::setDefaultFormat(IniFormat)` and `setPath` for both scopes).
+
+## Wording
+
+The sentences on every screen write their numbers one way, through `wording.hpp`, in English
+(`QLocale::English`) whatever the system's locale: a rating band as "under 1200", "1200–1399" to
+"2000–2199" and "2200 and above" (`rating_band`, from core's `tier_lower_bounds`), which reads
+after "players rated" and is what the Rating menu lists; a count with thousands separators,
+"173,722" (`number`), and with its noun, "1 card" or "2 cards" (`counted`, there being no
+translation files to give plurals); a loss in pawns with one decimal, "1.1" for 109 centipawns
+(`pawns`); a day as "4 November 2026" (`day`); and the months an opening database holds as
+"October 2026" or "October 2026 to March 2027" (`month_range`, from `meta`'s `YYYY-MM` list).
 
 ## Themes
 

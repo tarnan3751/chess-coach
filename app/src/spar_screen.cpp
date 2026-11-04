@@ -1,10 +1,9 @@
 // The Spar screen (spar_screen.hpp).
 #include "spar_screen.hpp"
 
-#include <chesscoach/tier.hpp>
-
 #include "result_delegate.hpp"
 #include "tables.hpp"
+#include "wording.hpp"
 
 #include <QDateTime>
 #include <QFrame>
@@ -18,7 +17,6 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 #include <QVariant>
-#include <string_view>
 
 namespace chesscoach::app {
 
@@ -201,10 +199,7 @@ void SparScreen::show_sessions(const QVector<SparSessionInfo>& sessions) {
                                     .toString(QStringLiteral("yyyy-MM-dd HH:mm")));
         date->setData(Qt::UserRole, QVariant::fromValue(session.id));
         sessions_->setItem(row, 0, date);
-        const std::string_view tier = tier_label(static_cast<Tier>(session.tier));
-        sessions_->setItem(
-            row, 1,
-            table_item(QString::fromUtf8(tier.data(), static_cast<qsizetype>(tier.size()))));
+        sessions_->setItem(row, 1, table_item(rating_band(session.tier)));
         sessions_->setItem(row, 2, table_item(session.user_white ? tr("White") : tr("Black")));
         sessions_->setItem(row, 3, table_item(QString::number(session.moves)));
         sessions_->setItem(row, 4, table_item(QString::number(session.interruptions)));

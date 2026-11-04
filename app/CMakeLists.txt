@@ -63,7 +63,9 @@ add_library(app_lib STATIC
   src/study_palette.cpp
   src/study_palette.hpp
   src/tables.cpp
-  src/tables.hpp)
+  src/tables.hpp
+  src/wording.cpp
+  src/wording.hpp)
 add_library(chesscoach::app_lib ALIAS app_lib)
 target_include_directories(app_lib PUBLIC src)
 target_link_libraries(app_lib PUBLIC chesscoach::core Qt6::Widgets Qt6::Svg Qt6::SvgWidgets
