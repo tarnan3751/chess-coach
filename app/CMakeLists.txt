@@ -32,6 +32,8 @@ add_library(app_lib STATIC
   src/explore_screen.hpp
   src/file_chooser.cpp
   src/file_chooser.hpp
+  src/help_dialog.cpp
+  src/help_dialog.hpp
   src/locations.cpp
   src/locations.hpp
   src/main_window.cpp

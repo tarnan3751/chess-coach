@@ -1,6 +1,7 @@
 // UI tests of the main window's frame under the offscreen platform (app; ui): the title, the
 // tier selector, the move list following the board, New game, Flip board, the screen switcher,
-// the screens' descriptions and the status bar, with screenshots (ui_harness.hpp).
+// Help > How to use chess-coach, the toolbar's tooltips, the screens' descriptions and the status
+// bar, with screenshots (ui_harness.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 #include <chesscoach/version.hpp>
@@ -15,6 +16,7 @@
 
 #include <QAction>
 #include <QComboBox>
+#include <QDialog>
 #include <QFileInfo>
 #include <QLabel>
 #include <QListWidget>
@@ -25,6 +27,7 @@
 #include <QTabBar>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTextBrowser>
 
 using chesscoach::app::BoardView;
 using chesscoach::app::DrillScreen;
@@ -139,6 +142,47 @@ class MainWindowTest : public QObject {
         }
         tabs.setCurrentIndex(2);
         QCOMPARE(screens.currentIndex(), 2);
+    }
+
+    void help_says_how_to_use_each_screen() const {
+        MainWindow window(data_dir_, QString());
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        child<QAction>(window, QStringLiteral("help_action")).trigger();
+        auto& dialog = child<QDialog>(window, QStringLiteral("help_dialog"));
+        QTRY_VERIFY(dialog.isVisible());
+        const auto& browser = child<QTextBrowser>(dialog, QStringLiteral("help_text"));
+        QVERIFY(!browser.openLinks());
+        QVERIFY(!browser.openExternalLinks());
+        const QString text = browser.toPlainText();
+        const QStringList headings{
+            QStringLiteral("Explore"),
+            QStringLiteral("Practice"),
+            QStringLiteral("Repertoire"),
+            QStringLiteral("Drill"),
+            QStringLiteral("The database and the engine"),
+        };
+        for (const QString& heading : headings) {
+            QVERIFY2(text.contains(heading), qPrintable(heading));
+        }
+        QVERIFY(text.contains(QStringLiteral("Book (the move strong players choose)")));
+        QVERIFY(text.contains(QStringLiteral("nothing you do leaves it")));
+        // Nothing links out of the app, and the house style has no semicolons.
+        QVERIFY(!browser.toHtml().contains(QStringLiteral("href")));
+        QVERIFY(!text.contains(QLatin1Char(';')));
+        save_screenshot(dialog, QStringLiteral("help"), QStringLiteral("dialog"));
+    }
+
+    void the_toolbar_explains_its_buttons() const {
+        const MainWindow window(data_dir_, QString());
+        QCOMPARE(child<QAction>(window, QStringLiteral("new_game_action")).toolTip(),
+                 QStringLiteral("Go back to the starting position."));
+        QCOMPARE(child<QAction>(window, QStringLiteral("back_action")).toolTip(),
+                 QStringLiteral("Take back the last move."));
+        QCOMPARE(child<QAction>(window, QStringLiteral("flip_action")).toolTip(),
+                 QStringLiteral("Turn the board around."));
+        QCOMPARE(child<QWidget>(window, QStringLiteral("tier_selector")).toolTip(),
+                 QStringLiteral("Choose the rating of the players whose games you see."));
     }
 
     void every_screen_says_what_it_is_for() const {

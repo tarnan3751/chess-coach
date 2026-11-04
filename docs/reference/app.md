@@ -2,8 +2,9 @@
 
 `chess-coach` is the Qt 6 Widgets application (`CLAUDE.md`, **app/ is presentation**). This file
 covers the main window, the board, the database worker, the engine worker, the Explore screen,
-the Spar screen and its worker, the profile worker, the Repertoire and Drill screens, export and
-import, the settings, the themes, the About dialog, and the UI harness.
+the Spar screen (labelled Practice) and its worker, the profile worker, the Repertoire and Drill
+screens, export and import, the settings, the files, the wording, the themes, the Help and About
+dialogs, and the UI harness.
 
 Every widget lives on the GUI thread. The opening database, the file the window found at start or an
 import put in place (**The database**), is opened read-only and read only by the database worker on
@@ -49,6 +50,7 @@ state (**Files**).
 | `settings.{hpp,cpp}` | `Settings`: the theme, the last tier, the engine, Spar and Repertoire in `settings.ini` (**Settings**) |
 | `settings_dialog.{hpp,cpp}` | `SettingsDialog`, Edit > Settings (**Settings**) |
 | `about_dialog.{hpp,cpp}` | `AboutDialog`, the versions and the attributions (**About**) |
+| `help_dialog.{hpp,cpp}` | `HelpDialog`, Help > How to use chess-coach, and the toolbar's tooltips (**Help**) |
 | `board_view.{hpp,cpp}` | `BoardView`, the board: position, input, animation (**Board**) |
 | `board_scene.{hpp,cpp}` | `BoardScene`, the board's items and their layout, and the hit test |
 | `board_theme.{hpp,cpp}` | `BoardTheme`, the board's colours, with the light and dark presets |
@@ -73,8 +75,8 @@ which the executable and the UI tests link. The piece set and the two stylesheet
 - **The menus**: *File* with *Back up your work…* and *Restore a backup…* (`export_action`,
   `import_action`, **Export and import**) and *Import database…* (`import_database_action`, **The
   database**), *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with *Light* and
-  *Dark* (`theme_light`, `theme_dark`), and *Help* with *About chess-coach* (`about_action`) and
-  *About Qt* (`about_qt_action`).
+  *Dark* (`theme_light`, `theme_dark`), and *Help* with *How to use chess-coach* (`help_action`,
+  **Help**), *About chess-coach* (`about_action`) and *About Qt* (`about_qt_action`).
 - **The evaluation bar** (`eval_bar`) and **the board** (`board`, a `BoardView`) on the left, and
   below them **the move list** (`move_list`, a `QListWidget`) with one row per move pair,
   `1. e4 e5`.
@@ -517,6 +519,20 @@ Theme* switches and saves the choice; the window applies the saved one at start.
 dynamic property `muted` is true, such as a screen's description, takes the palette's muted colour
 (`QLabel[muted="true"]` in both stylesheets).
 
+## Help
+
+*Help > How to use chess-coach* opens `HelpDialog` (`help_dialog`, non-blocking): a `QTextBrowser`
+(`help_text`) of five short sections in rich text, a heading and two to four sentences each:
+Explore, Practice, Repertoire, Drill, and "The database and the engine" (the games the database is
+built from, what a rating band is, Book, Popular and Dubious each in a few words, and that nothing
+leaves the computer). The text holds no link, and the browser opens none (`setOpenLinks(false)`).
+
+The toolbar's buttons and the Rating menu each carry a one-sentence tooltip: *New game* "Go back
+to the starting position.", *Back* "Take back the last move.", *Flip board* "Turn the board
+around." and the tier selector "Choose the rating of the players whose games you see."
+(`add_toolbar_tooltips`, which finds them by their object names and which the toolbar's setup
+calls once).
+
 ## About
 
 *Help > About chess-coach* opens `AboutDialog` (`about_dialog`, non-blocking): the app's version,
@@ -614,8 +630,10 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   `board-after-e4`, `board-dragging`, `board-flipped`, `board-promotion`, `board-check`,
   `board-fen`.
 - `ui_main_window_test`: the title, the tier selector's seven tiers, the move list following the
-  board and New game clearing it, Flip board, the four screens, the status bar without a
-  database. Screenshots: `main-window-start`, `main-window-after-moves`, `main-window-flipped`.
+  board and New game clearing it, Flip board, the four screens, Help > How to use chess-coach
+  with its five sections and no link, the toolbar's tooltips, each screen's description, the
+  status bar without a database. Screenshots: `main-window-start`, `main-window-after-moves`,
+  `main-window-flipped`, `help-dialog`.
 - `ui_explore_test`, on a fixture database the test writes into `core`'s schema with real keys
   (`app/tests/fixture_db.cpp`, the CLI fixture's rows, with the badges §7.3 gives them): opening it,
   with the data version, the start position off book at tier 2 and its moves with badges, bars,

@@ -14,6 +14,7 @@
 #include "eval_bar.hpp"
 #include "explore_screen.hpp"
 #include "file_chooser.hpp"
+#include "help_dialog.hpp"
 #include "profile_worker.hpp"
 #include "repertoire_screen.hpp"
 #include "settings_dialog.hpp"
@@ -330,6 +331,7 @@ void MainWindow::build_toolbar() {
         }
     });
     toolbar->addWidget(tier_selector_);
+    add_toolbar_tooltips(*this);
 }
 
 void MainWindow::build_menus() {
@@ -390,6 +392,13 @@ void MainWindow::build_menus() {
             [this] { choose_theme(QStringLiteral("dark")); });
 
     QMenu* help = menuBar()->addMenu(tr("&Help"));
+    QAction* how_to = help->addAction(tr("&How to use chess-coach"));
+    how_to->setObjectName(QStringLiteral("help_action"));
+    connect(how_to, &QAction::triggered, this, [this] {
+        auto* dialog = new HelpDialog(this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->open();
+    });
     QAction* about = help->addAction(tr("&About chess-coach"));
     about->setObjectName(QStringLiteral("about_action"));
     about->setMenuRole(QAction::AboutRole);
