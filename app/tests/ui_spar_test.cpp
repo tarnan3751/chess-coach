@@ -2,7 +2,8 @@
 // with core's fake engine and its legal script as the coach off book (tests/fake-stockfish.sh): a
 // session as white meeting an interruption on a Dubious move and another on an off-book move, the
 // hand-off to the engine, the end at the move limit with the summary and the saved session listed,
-// its replay with the interruptions at their plies; a session as black, where the coach moves
+// its replay with the interruptions at their plies, each live interruption sounding once and the
+// replay's not at all; a session as black, where the coach moves
 // first; End the game saving a stopped session, and closing the window saving one too; the tier
 // selector disabled only on Spar while a session runs; and the Settings dialog's spar entries.
 // Screenshots of the interruption, the summary and the replay (ui_harness.hpp, fixture_db.hpp).
@@ -14,6 +15,7 @@
 #include "fixture_db.hpp"
 #include "main_window.hpp"
 #include "settings.hpp"
+#include "sounds.hpp"
 #include "spar_screen.hpp"
 #include "study_palette.hpp"
 #include "ui_harness.hpp"
@@ -47,12 +49,14 @@ using chesscoach::app::BoardView;
 using chesscoach::app::EngineSettings;
 using chesscoach::app::MainWindow;
 using chesscoach::app::Settings;
+using chesscoach::app::SoundEvent;
 using chesscoach::app::SparScreen;
 using chesscoach::app::SparSettings;
 using chesscoach::app::SparSummary;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
 using chesscoach::app::test::FixtureDb;
+using chesscoach::app::test::played;
 using chesscoach::app::test::save_screenshot;
 
 namespace {
@@ -150,6 +154,7 @@ void meet_a_dubious_move(MainWindow& window, const BoardView& board) {
     click(board, "a2");
     click(board, "a3");
     QTRY_VERIFY(interruption_shown(window));
+    QCOMPARE(played(window.sounds()).count(SoundEvent::interruption), 1);
     QCOMPARE(
         child<QLabel>(window, QStringLiteral("spar_reason")).text(),
         QStringLiteral("Players at your rating often choose a3, but it loses ground (Dubious)."));
@@ -188,6 +193,7 @@ void leave_the_book(MainWindow& window, const BoardView& board) {
     click(board, "h2");
     click(board, "h4");
     QTRY_VERIFY(interruption_shown(window));
+    QCOMPARE(played(window.sounds()).count(SoundEvent::interruption), 2);
     QCOMPARE(child<QLabel>(window, QStringLiteral("spar_reason")).text(), off_book_h4());
     QCOMPARE(rows(window, QStringLiteral("spar_better")), 1);
     QCOMPARE(cell(window, QStringLiteral("spar_better"), 0, 0), QStringLiteral("Nf3"));
@@ -229,6 +235,7 @@ void reach_the_move_limit(MainWindow& window, const BoardView& board) {
 
 void replay_the_session(MainWindow& window, const BoardView& board) {
     // The replay steps through it, the interruptions at their plies.
+    const int moves_before = played(window.sounds()).count(SoundEvent::move);
     press(window, QStringLiteral("spar_replay"));
     QTRY_COMPARE(child<QLabel>(window, QStringLiteral("spar_replay_position")).text(),
                  QStringLiteral("Position 0 of 6"));
@@ -251,6 +258,9 @@ void replay_the_session(MainWindow& window, const BoardView& board) {
     QCOMPARE(child<QLabel>(window, QStringLiteral("spar_replay_position")).text(),
              QStringLiteral("Position 2 of 6"));
     QVERIFY(!board.isEnabled());
+    // A replay sets its positions and shows its interruptions without a sound.
+    QCOMPARE(played(window.sounds()).count(SoundEvent::interruption), 2);
+    QCOMPARE(played(window.sounds()).count(SoundEvent::move), moves_before);
 }
 
 class SparTest : public QObject {

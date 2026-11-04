@@ -8,9 +8,10 @@
 // spar worker; and it builds the repertoires and drills their cards through the profile worker,
 // each worker on its own thread, and shows their answers. It never touches the opening store, the
 // profile store or an engine itself: the imports run on the database and profile workers too, once
-// the others have let go. GUI thread only. It writes settings.ini itself (settings.hpp) and sends
-// Qt's own settings to the data directory; the workers write profiles.db; a profile export goes
-// where the user picks.
+// the others have let go. It plays the sounds: each move the board shows, a wrong answer in Drill
+// and the coach's interruption in Spar, unless they are turned off. GUI thread only. It writes
+// settings.ini itself (settings.hpp) and sends Qt's own settings to the data directory; the
+// workers write profiles.db; a profile export goes where the user picks.
 #pragma once
 
 #include <chesscoach/position.hpp>
@@ -20,6 +21,7 @@
 #include "locations.hpp"
 #include "profile_data.hpp"
 #include "settings.hpp"
+#include "sounds.hpp"
 #include "spar_data.hpp"
 
 #include <QHash>
@@ -73,6 +75,8 @@ class MainWindow : public QMainWindow {
     [[nodiscard]] int tier() const;
     // The moves played from the start position to the board's position, in UCI.
     [[nodiscard]] const std::vector<std::string>& line() const { return line_uci_; }
+    // The sounds the window plays, for the tests.
+    [[nodiscard]] const Sounds& sounds() const { return sounds_; }
 
     // File > Back up your work and Restore a backup (the profile's export and import) once their
     // file dialogs have answered: a copy of profiles.db written to path; profiles.db replaced by
@@ -193,6 +197,8 @@ class MainWindow : public QMainWindow {
     void engine_failed(const QString& message);
     void update_eval_bar();
     void show_settings();
+    // Turns the sounds on or off and saves the choice.
+    void set_sounds_enabled(bool enabled);
     void database_opened(const QString& data_version, const QString& months);
     void database_failed(const QString& message);
     void position_ready(const ExploreData& explore);
@@ -202,6 +208,7 @@ class MainWindow : public QMainWindow {
 
     QString data_dir_;
     Settings settings_;
+    Sounds sounds_;
     // The app bundle's resources, worked out once here and handed to the workers.
     std::optional<std::filesystem::path> resources_;
     std::optional<DatabaseChoice> located_; // the opening database, and where it was found

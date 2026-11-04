@@ -4,6 +4,7 @@
 #include "file_chooser.hpp"
 #include "wording.hpp"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -18,13 +19,13 @@
 namespace chesscoach::app {
 
 SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings& spar,
-                               int repertoire_depth, Settings& files,
+                               int repertoire_depth, bool sounds, Settings& files,
                                const std::optional<std::filesystem::path>& resources,
                                QWidget* parent)
     : QDialog(parent), binary_(new QLineEdit(engine.binary, this)), threads_(new QSpinBox(this)),
       hash_mb_(new QSpinBox(this)), seconds_(new QDoubleSpinBox(this)), lines_(new QSpinBox(this)),
       spar_end_move_(new QSpinBox(this)), spar_seconds_(new QDoubleSpinBox(this)),
-      repertoire_depth_(new QSpinBox(this)) {
+      repertoire_depth_(new QSpinBox(this)), sounds_(new QCheckBox(tr("Play sounds"), this)) {
     setObjectName(QStringLiteral("settings_dialog"));
     setWindowTitle(tr("Settings"));
     binary_->setObjectName(QStringLiteral("engine_binary"));
@@ -77,6 +78,8 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     // Shown in moves, as a game counts them, and stored in plies: an odd stored depth rounds up.
     repertoire_depth_->setRange(1, 20);
     repertoire_depth_->setValue(moves_from_plies(repertoire_depth));
+    sounds_->setObjectName(QStringLiteral("sounds_setting"));
+    sounds_->setChecked(sounds);
 
     auto* form = new QFormLayout();
     form->setHorizontalSpacing(12);
@@ -89,6 +92,7 @@ SettingsDialog::SettingsDialog(const EngineSettings& engine, const SparSettings&
     form->addRow(tr("Practice games end at move"), spar_end_move_);
     form->addRow(tr("Thinking time per practice reply"), spar_seconds_);
     form->addRow(tr("Check coverage up to move"), repertoire_depth_);
+    form->addRow(QString(), sounds_);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -114,5 +118,7 @@ SparSettings SettingsDialog::spar() const {
 }
 
 int SettingsDialog::repertoire_depth() const { return 2 * repertoire_depth_->value(); }
+
+bool SettingsDialog::sounds_enabled() const { return sounds_->isChecked(); }
 
 } // namespace chesscoach::app

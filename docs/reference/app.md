@@ -556,16 +556,18 @@ the cores, at least one), `engine/hash_mb` (64), `engine/seconds` (2.0, 0.1 to 6
 `engine/lines` (3, 1 to 10), and sparring's `spar/end_move` (25, 1 to 200: the move number that ends
 a session), `spar/seconds` (0.5, 0.1 to 60: each off-book reply's search) and `spar/seed` (unset:
 each session's seed is the clock's seconds; set, every session uses it), and Repertoire's
-`repertoire/depth` (20, 2 to 40: the coverage depth in plies), and `files/last_dir`, the folder the
-file chooser last chose in (**Files**), each at its default when unset or out of range. *Edit >
+`repertoire/depth` (20, 2 to 40: the coverage depth in plies), `files/last_dir`, the folder the
+file chooser last chose in (**Files**), and `sounds` (`true` or `false`: whether the app plays its
+sounds, on unless `false`, **Sounds**), each at its default when unset or out of range. *Edit >
 Settings…* (`SettingsDialog`, `settings_dialog`) edits, under plain names, the engine's (Engine
 program, the binary with a Browse button, which opens the file chooser, and, while it is empty,
 the default binary's path as its placeholder, "Leave empty to use /opt/homebrew/bin/stockfish", or
 that none is found; Processor cores to use, the threads; Engine memory, the hash; Thinking time per
 position, the seconds; Engine lines to show), Practice's move limit and seconds per reply
-(Practice games end at move, `spar_end_move`; Thinking time per practice reply, `spar_seconds`)
-and the coverage depth in moves (Check coverage up to move, `repertoire_depth`, 1 to 20, saved as
-twice as many plies, an odd stored depth rounding up when shown); accepting saves them, sends them to the
+(Practice games end at move, `spar_end_move`; Thinking time per practice reply, `spar_seconds`),
+the coverage depth in moves (Check coverage up to move, `repertoire_depth`, 1 to 20, saved as
+twice as many plies, an odd stored depth rounding up when shown), and, in its last row, the sounds
+(Play sounds, `sounds_setting`); accepting saves them, turns the sounds on or off, sends them to the
 engine worker and the spar worker, which restart their engines with them at the next search,
 evaluates the position again and, on Repertoire, computes the coverage again. A new move limit
 applies from the next session. Reading does not create anything; the first write, when the theme or
@@ -703,6 +705,15 @@ QtNetwork (`PLAN.md` §11, 2026-11-04):
   `NullSoundBackend`, which plays nothing and records the last event and how often it was given
   each, for the tests (`Sounds::null_backend`).
 
+**When they play.** The window has one `Sounds` (`MainWindow::sounds`), and every sound goes
+through it, one per event: each move the board shows (`BoardView::move_shown`), the user's and those
+the window plays on it with `play_move` (Explore's rows, the coach's replies in Practice, the
+card's move after a wrong answer in Drill), sounds `move_sound` of its SAN; a wrong answer in
+Drill sounds `wrong` as its verdict shows; and an interruption in Practice sounds `interruption` as
+its panel opens. A position set with `set_position` (New game, Back, the move list, a card, a
+replay's steps) sounds nothing, nor does a replay's interruption. The sounds are on unless the
+`sounds` setting is `false` (**Settings**), which Play sounds in the Settings dialog sets.
+
 `app_sounds_test`, a unit test, checks the SAN rule, the null backend playing only while enabled,
 the five files' format, length and peak, and on macOS that `NSSound` decodes all five, which it
 does not play.
@@ -716,6 +727,7 @@ does not play.
 | `set_position(const Position&)` | Shows a position at once, without animation, with no piece picked, no last move, and the check highlight set from the position |
 | `position()` | The view's own copy of the position, which its moves are played on |
 | `flip()`, `flipped()` | Black at the bottom, or white again |
+| `move_shown(QString san)` | Emitted when a legal move is put on the board, by the user or by `play_move`, just before `move_played`: its SAN, which the window's sounds read (**Sounds**) |
 | `move_played(QString uci, QString san)` | Emitted after a legal move is played: its UCI and its SAN in the position before it |
 | `board_scene()`, `animating()` | Read access for tests: the scene's state, and whether a move is still moving |
 
@@ -782,10 +794,11 @@ they need no display. They drive the widgets with `QTest`'s mouse events on the 
 at the centres of squares and find the window's widgets by object name.
 `app/tests/ui_harness.hpp` holds the helpers: `child<T>(parent, name)` (the widget of that object
 name, stopping the run when it is missing), `click(view, "e2")`, `square_point(view, "e2")`,
-`taken(spy)` for the moves a `QSignalSpy` on `move_played` recorded, and
-`save_screenshot(widget, test, state)`, which saves `QWidget::grab()` as
+`taken(spy)` for the moves a `QSignalSpy` on `move_played` recorded, `played(window.sounds())` for
+what a window's sounds played, and `save_screenshot(widget, test, state)`, which saves `QWidget::grab()` as
 `build/<preset>/ui-screenshots/<test>-<state>.png` (the directory is the compile definition
-`CHESSCOACH_UI_SCREENSHOT_DIR`).
+`CHESSCOACH_UI_SCREENSHOT_DIR`). Including the harness sets `CHESS_COACH_SILENT` before `main`, so
+the UI tests run silent on every platform, their sounds going to the null backend (**Sounds**).
 
 - `ui_board_test`: the start position's 32 pieces on their squares; two clicks playing 1. e4 with
   its hints, animation and last-move highlight; a drag from g1 to f3 after 1. e4 e5; illegal
@@ -797,7 +810,9 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
 - `ui_main_window_test`: the title, the tier selector's seven tiers, the move list following the
   board and New game clearing it, Flip board, the four screens, Help > How to use chess-coach
   with its five sections and no link, the toolbar's tooltips, each screen's description, the
-  status bar without a database. Screenshots: `main-window-start`, `main-window-after-moves`,
+  status bar without a database; 1. e4 d5 2. exd5 Qxd5 3. Nc3 Qe5+ sounding a move, a capture or a
+  check once each and New game nothing; and Play sounds in the Settings dialog turning them off and
+  on, saved for the next window. Screenshots: `main-window-start`, `main-window-after-moves`,
   `main-window-flipped`, `help-dialog`.
 - `ui_explore_test`, on a fixture database the test writes into `core`'s schema with real keys
   (`app/tests/fixture_db.cpp`, the CLI fixture's rows, with the badges §7.3 gives them): opening it,
@@ -829,7 +844,8 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   interrupted on 1. a3 with its better choices, their results bar repainted in the dark palette,
   Keep playing, interrupted again on 2. h4 off book and
   answered by the engine, ended at its move limit with the summary and the saved session listed,
-  and replayed with the interruptions at plies one and three; a session as black, where the
+  and replayed with the interruptions at plies one and three, each live interruption sounding
+  once and the replay's none; a session as black, where the
   coach moves first and the board turns; End the game saving a stopped session, and closing the
   window saving one; a second session sending the coach's engine `ucinewgame`, read from the fake's
   log; the Settings dialog's spar entries ending the next session at the new limit; the summary's
@@ -865,13 +881,14 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   cards then deleted (`drop_cards` in the fixture), so that entering the screen syncs them back:
   a drill with each card's position named by its line, a correct move waiting for its grade with
   Next card hidden and no grade coming by itself, About right grading it good and due again a day
-  later, a wrong move, graded again with the card's move played on the board, and the summary;
-  and Easy changing a correct move's grade. Screenshots: `drill-card`, `drill-grade`,
+  later, a wrong move, graded again with its tone and the card's move played on the board, and the
+  summary; and Easy changing a correct move's grade. Screenshots: `drill-card`, `drill-grade`,
   `drill-summary`.
 
 The window, Explore, Repertoire and Drill tests set `CHESS_COACH_STOCKFISH` to a path that does
-not exist, so no real engine runs in them, and the window and Explore tests write nothing; the
-engine and Spar tests name the fake engine in their settings.
+not exist, so no real engine runs in them, and the window and Explore tests write nothing but the
+window test's sounds setting, in a data directory of its own; the engine and Spar tests name the
+fake engine in their settings.
 
 `tools/ui_tests.sh [<regex>]` builds the `dev` preset, runs the UI tests (`ctest -L ui`, filtered
 by name with the regex), and lists the screenshots of the run; the full gate runs the same tests

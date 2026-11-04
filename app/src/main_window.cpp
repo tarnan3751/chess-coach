@@ -20,6 +20,7 @@
 #include "profile_worker.hpp"
 #include "repertoire_screen.hpp"
 #include "settings_dialog.hpp"
+#include "sounds.hpp"
 #include "spar_screen.hpp"
 #include "spar_worker.hpp"
 #include "study_palette.hpp"
@@ -306,6 +307,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     setWindowTitle(tr("chess-coach %1").arg(QString::fromStdString(to_string(current_version()))));
     resize(1200, 780);
     line_keys_.append(Position::start().key());
+    sounds_.set_enabled(settings_.sounds_enabled());
 
     build_toolbar();
     build_menus();
@@ -314,6 +316,9 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     move_list_->setItemDelegate(new MoveListDelegate(move_list_));
     move_list_->setSelectionMode(QAbstractItemView::NoSelection);
     move_list_->setMinimumHeight(96);
+    // Every move the board shows, the user's or one it is given, sounds once.
+    connect(board_, &BoardView::move_shown, this,
+            [this](const QString& san) { sounds_.play(move_sound(san)); });
     connect(board_, &BoardView::move_played, this, &MainWindow::move_played);
     connect(move_list_, &QListWidget::itemClicked, this, [this](const QListWidgetItem* item) {
         // Explore's line and the repertoire's are lines to go back along; a session's moves and
@@ -897,8 +902,9 @@ void MainWindow::update_eval_bar() {
 }
 
 void MainWindow::show_settings() {
-    auto* dialog = new SettingsDialog(settings_.engine(), settings_.spar(),
-                                      settings_.repertoire_depth(), settings_, resources_, this);
+    auto* dialog =
+        new SettingsDialog(settings_.engine(), settings_.spar(), settings_.repertoire_depth(),
+                           sounds_.enabled(), settings_, resources_, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &QDialog::accepted, this, [this, dialog] {
         // Applying saves the settings and restarts the engines with them at the next search; a
@@ -908,6 +914,7 @@ void MainWindow::show_settings() {
         settings_.set_engine(engine);
         settings_.set_spar(spar);
         settings_.set_repertoire_depth(dialog->repertoire_depth());
+        set_sounds_enabled(dialog->sounds_enabled());
         emit configure_requested(engine);
         emit spar_configure_requested(engine, spar.seconds);
         request_evaluation();
@@ -916,6 +923,11 @@ void MainWindow::show_settings() {
         }
     });
     dialog->open();
+}
+
+void MainWindow::set_sounds_enabled(bool enabled) {
+    settings_.set_sounds_enabled(enabled);
+    sounds_.set_enabled(enabled);
 }
 
 void MainWindow::export_profile(const QString& path) { emit export_requested(path); }
@@ -1209,6 +1221,7 @@ void MainWindow::spar_move_accepted(const QString& /*san*/, const QString& /*uci
     spar_->show_state(state);
     if (interruption) {
         spar_->show_interruption(*interruption);
+        sounds_.play(SoundEvent::interruption);
     }
     update_board_input();
 }

@@ -176,7 +176,9 @@ void BoardView::play(const std::string& uci, bool animate) {
             animate_piece(square_of(king_side ? 7 : 0, rank), square_of(king_side ? 5 : 3, rank));
         }
     }
-    emit move_played(QString::fromStdString(played->uci), QString::fromStdString(played->san));
+    const QString san = QString::fromStdString(played->san);
+    emit move_shown(san);
+    emit move_played(QString::fromStdString(played->uci), san);
 }
 
 void BoardView::animate_piece(int from, int to) {

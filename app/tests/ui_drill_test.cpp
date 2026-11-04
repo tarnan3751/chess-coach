@@ -2,9 +2,9 @@
 // ProfileStore, its cards taken away so that entering the screen syncs them back; a drill showing
 // a card at its position named by its line, a correct move waiting for the user's grade, About
 // right recording it as good and only then Next card, the card no longer due, a wrong move
-// recorded as again with the card's move played on the board, and the summary when no card is
-// due; and Easy changing a correct move's grade. Screenshots of a card, its grading and the
-// summary (ui_harness.hpp, fixture_db.hpp).
+// recorded as again with its tone and the card's move played on the board, and the summary when
+// no card is due; and Easy changing a correct move's grade. Screenshots of a card, its grading and
+// the summary (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/position.hpp>
 #include <chesscoach/profile_store.hpp>
 #include <chesscoach/repertoire.hpp>
@@ -13,6 +13,7 @@
 #include "board_view.hpp"
 #include "fixture_db.hpp"
 #include "main_window.hpp"
+#include "sounds.hpp"
 #include "ui_harness.hpp"
 
 #include <QAbstractButton>
@@ -32,9 +33,12 @@ using chesscoach::Position;
 using chesscoach::ProfileStore;
 using chesscoach::app::BoardView;
 using chesscoach::app::MainWindow;
+using chesscoach::app::NullSoundBackend;
+using chesscoach::app::SoundEvent;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
 using chesscoach::app::test::FixtureDb;
+using chesscoach::app::test::played;
 using chesscoach::app::test::save_screenshot;
 
 namespace {
@@ -192,6 +196,10 @@ class DrillTest : public QObject {
         Position answered = second;
         static_cast<void>(answered.play_uci(answer));
         QTRY_COMPARE(board.position().fen(), answered.fen());
+        // The answers' sounds: the right move, then the wrong move, its tone and the card's move.
+        const NullSoundBackend& sounds = played(window.sounds());
+        QCOMPARE(sounds.count(SoundEvent::wrong), 1);
+        QCOMPARE(sounds.count(SoundEvent::move), 3);
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
                      QStringLiteral("1 due now, out of your 2 cards."));
         press(window, QStringLiteral("drill_next"));

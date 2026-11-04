@@ -110,6 +110,14 @@ void Settings::set_last_dir(const QString& directory) {
     write(QStringLiteral("files/last_dir"), directory);
 }
 
+bool Settings::sounds_enabled() const {
+    return read(QStringLiteral("sounds")) != QStringLiteral("false");
+}
+
+void Settings::set_sounds_enabled(bool enabled) {
+    write(QStringLiteral("sounds"), enabled ? QStringLiteral("true") : QStringLiteral("false"));
+}
+
 void Settings::set_repertoire_depth(int depth) {
     write(QStringLiteral("repertoire/depth"), QString::number(depth));
 }

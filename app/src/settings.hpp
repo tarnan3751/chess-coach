@@ -1,5 +1,5 @@
-// The app's settings: the theme, the last tier, the engine's, Spar's and Repertoire's, in
-// <data-dir>/settings.ini through QSettings in INI format, never the registry or the platform's
+// The app's settings: the theme, the last tier, the engine's, Spar's and Repertoire's, the sounds,
+// in <data-dir>/settings.ini through QSettings in INI format, never the registry or the platform's
 // own settings store (docs/reference/app.md, **Settings**), with the file chooser's last folder;
 // and Qt's own settings sent to the data directory too. Reading never creates anything; the first
 // write creates the data directory and the file. GUI thread only.
@@ -49,6 +49,8 @@ class Settings {
     [[nodiscard]] int repertoire_depth() const;
     // The folder the file chooser last chose in (files/last_dir), else the home folder.
     [[nodiscard]] QString last_dir() const;
+    // Whether the app plays its sounds (sounds): on unless set to false.
+    [[nodiscard]] bool sounds_enabled() const;
 
     void set_theme(const QString& theme);
     void set_last_tier(int tier);
@@ -56,6 +58,7 @@ class Settings {
     void set_spar(const SparSettings& spar);
     void set_repertoire_depth(int depth);
     void set_last_dir(const QString& directory);
+    void set_sounds_enabled(bool enabled);
 
     [[nodiscard]] QString file() const { return file_; }
 

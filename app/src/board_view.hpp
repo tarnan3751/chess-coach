@@ -2,9 +2,9 @@
 // clicks or by drag and drop (docs/reference/app.md, **Board**). Hit testing is ours: a press,
 // a drag and a release are mapped from the viewport to scene coordinates and from there to a
 // square by BoardScene::square_at, honouring the flip. A legal move is played on the view's own
-// copy of the position through core's Position, then announced by move_played; the view never
-// decides legality itself. Picking a piece shows its targets; a played move animates over
-// 150 ms, except a dropped piece, which is already there; set_position replaces the position
+// copy of the position through core's Position, then announced by move_shown and move_played;
+// the view never decides legality itself. Picking a piece shows its targets; a played move animates
+// over 150 ms, except a dropped piece, which is already there; set_position replaces the position
 // without animation. GUI thread only.
 #pragma once
 
@@ -41,7 +41,7 @@ class BoardView : public QGraphicsView {
     [[nodiscard]] const Position& position() const { return position_; }
 
     // Plays a legal move given in UCI as if it had been clicked: animated, then announced by
-    // move_played. Returns false, and plays nothing, for any other text.
+    // move_shown and move_played. Returns false, and plays nothing, for any other text.
     bool play_move(const QString& uci);
 
     void set_theme(const BoardTheme& theme);
@@ -55,6 +55,9 @@ class BoardView : public QGraphicsView {
     [[nodiscard]] bool animating() const;
 
   signals:
+    // A legal move was put on the board, by the user or by play_move: its SAN in the position
+    // before it, which the window's sounds read. Emitted just before move_played.
+    void move_shown(const QString& san);
     // A legal move was played on the board: its UCI and its SAN in the position before it.
     void move_played(const QString& uci, const QString& san);
 

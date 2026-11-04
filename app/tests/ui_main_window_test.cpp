@@ -1,7 +1,8 @@
 // UI tests of the main window's frame under the offscreen platform (app; ui): the title, the
 // tier selector, the move list following the board, New game, Flip board, the screen switcher,
 // Help > How to use chess-coach, the toolbar's tooltips, the screens' descriptions and the status
-// bar, with screenshots (ui_harness.hpp).
+// bar, with screenshots (ui_harness.hpp); and the sounds, one per move by its SAN and none for a
+// position set, which the Settings dialog turns off and on.
 #include <chesscoach/position.hpp>
 #include <chesscoach/tier.hpp>
 #include <chesscoach/version.hpp>
@@ -11,10 +12,13 @@
 #include "explore_screen.hpp"
 #include "main_window.hpp"
 #include "repertoire_screen.hpp"
+#include "settings.hpp"
+#include "sounds.hpp"
 #include "spar_screen.hpp"
 #include "ui_harness.hpp"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QFileInfo>
@@ -29,15 +33,22 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTextBrowser>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 using chesscoach::app::BoardView;
 using chesscoach::app::DrillScreen;
 using chesscoach::app::ExploreScreen;
 using chesscoach::app::MainWindow;
+using chesscoach::app::NullSoundBackend;
 using chesscoach::app::RepertoireScreen;
+using chesscoach::app::Settings;
+using chesscoach::app::SoundEvent;
 using chesscoach::app::SparScreen;
 using chesscoach::app::test::child;
 using chesscoach::app::test::click;
+using chesscoach::app::test::played;
 using chesscoach::app::test::save_screenshot;
 
 namespace {
@@ -46,7 +57,7 @@ class MainWindowTest : public QObject {
     Q_OBJECT
 
     // A data directory the windows never write to: these tests change neither the theme nor
-    // the tier.
+    // the tier. The sound tests write theirs beside it, each its own.
     QTemporaryDir root_;
     const QString data_dir_ = root_.filePath(QStringLiteral("data"));
 
@@ -221,6 +232,71 @@ class MainWindowTest : public QObject {
             QCOMPARE(label.text(), descriptions.at(i));
             QVERIFY(label.property("muted").toBool()); // the stylesheets' muted colour
         }
+    }
+
+    void each_move_sounds_once_by_its_san() const {
+        const MainWindow window(data_dir_, QString());
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        QVERIFY(window.sounds().enabled()); // on when the setting is absent
+        const NullSoundBackend& sounds = played(window.sounds());
+        QVERIFY(!sounds.last().has_value());
+        // 1. e4 d5 2. exd5 Qxd5 3. Nc3 Qe5+: each move one sound, by its SAN.
+        const std::vector<std::pair<std::string_view, SoundEvent>> moves{
+            {"e2e4", SoundEvent::move},    {"d7d5", SoundEvent::move},
+            {"e4d5", SoundEvent::capture}, {"d8d5", SoundEvent::capture},
+            {"b1c3", SoundEvent::move},    {"d5e5", SoundEvent::check},
+        };
+        for (const auto& [uci, sound] : moves) {
+            click(board, uci.substr(0, 2));
+            click(board, uci.substr(2, 2));
+            QVERIFY(sounds.last() == sound);
+        }
+        QCOMPARE(sounds.count(SoundEvent::move), 3);
+        QCOMPARE(sounds.count(SoundEvent::capture), 2);
+        QCOMPARE(sounds.count(SoundEvent::check), 1);
+        // A position set rather than played, as New game sets the start, sounds nothing.
+        child<QAction>(window, QStringLiteral("new_game_action")).trigger();
+        QCOMPARE(sounds.count(SoundEvent::move), 3);
+        click(board, "d2");
+        click(board, "d4");
+        QCOMPARE(sounds.count(SoundEvent::move), 4);
+        QCOMPARE(sounds.count(SoundEvent::capture) + sounds.count(SoundEvent::check) +
+                     sounds.count(SoundEvent::wrong) + sounds.count(SoundEvent::interruption),
+                 3);
+    }
+
+    void the_settings_dialog_turns_the_sounds_off_and_on() const {
+        const QString data_dir = root_.filePath(QStringLiteral("sounds-dialog"));
+        const MainWindow window(data_dir, QString());
+        child<QAction>(window, QStringLiteral("settings_action")).trigger();
+        auto& dialog = child<QDialog>(window, QStringLiteral("settings_dialog"));
+        auto& box = child<QCheckBox>(dialog, QStringLiteral("sounds_setting"));
+        QCOMPARE(box.text(), QStringLiteral("Play sounds"));
+        QVERIFY(box.isChecked());
+        box.setChecked(false);
+        dialog.accept();
+        QVERIFY(!window.sounds().enabled());
+        QVERIFY(!Settings(data_dir).sounds_enabled());
+        const auto& board = child<BoardView>(window, QStringLiteral("board"));
+        click(board, "e2");
+        click(board, "e4");
+        QVERIFY(!played(window.sounds()).last().has_value());
+
+        // A new window on the same data directory starts silent; turned on, a move sounds.
+        const MainWindow again(data_dir, QString());
+        QVERIFY(!again.sounds().enabled());
+        child<QAction>(again, QStringLiteral("settings_action")).trigger();
+        auto& reopened = child<QDialog>(again, QStringLiteral("settings_dialog"));
+        auto& reopened_box = child<QCheckBox>(reopened, QStringLiteral("sounds_setting"));
+        QVERIFY(!reopened_box.isChecked());
+        reopened_box.setChecked(true);
+        reopened.accept();
+        QVERIFY(again.sounds().enabled());
+        QVERIFY(Settings(data_dir).sounds_enabled());
+        const auto& again_board = child<BoardView>(again, QStringLiteral("board"));
+        click(again_board, "e2");
+        click(again_board, "e4");
+        QVERIFY(played(again.sounds()).last() == SoundEvent::move);
     }
 
     void the_status_bar_shows_no_database_and_the_engine() const {
