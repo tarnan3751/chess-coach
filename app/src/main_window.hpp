@@ -150,7 +150,6 @@ class MainWindow : public QMainWindow {
     void spar_replay_ready(const SparReplay& replay);
     void spar_replay_step(int delta);
     void face(bool white);
-    [[nodiscard]] static QString tier_text(int tier);
     // Repertoire (main_window_repertoire.cpp).
     void enter_repertoire();
     void repertoire_move_played(const QString& uci, const QString& san);

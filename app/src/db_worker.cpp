@@ -85,7 +85,6 @@ ExploreData explore(const OpeningStore& store, const QVector<quint64>& line_keys
         }
         top_sum = sum;
     }
-    data.top_tier_sum = top_sum;
     // SAN needs the position, rebuilt from its stored FEN; a node's key always has a positions
     // row (docs/database.md §6.2), and a move that is not legal there keeps its UCI.
     const auto position = Position::from_fen(fen);

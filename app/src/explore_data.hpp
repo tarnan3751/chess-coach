@@ -39,8 +39,6 @@ struct ExploreData {
     QVector<ExploreMove> moves;
     // The ECO code and name of the deepest named position along the line (§10), or empty.
     QString name;
-    // The sum of the totals of the position's moves at tier 6, when it has a tier-6 node.
-    std::optional<qint64> top_tier_sum;
 };
 
 // Registers ExploreData, ExploreMove and the line of keys for queued connections; idempotent.

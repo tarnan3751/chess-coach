@@ -102,8 +102,6 @@ QPalette qt_palette(const StudyPalette& study) {
 
 } // namespace
 
-QString MainWindow::tier_text(int tier) { return rating_band(tier); }
-
 MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* parent)
     : QMainWindow(parent), data_dir_(data_dir), settings_(data_dir), resources_(bundle_resources()),
       located_(find_opening_database(db, data_dir, resources_)),
@@ -379,7 +377,7 @@ void MainWindow::build_toolbar() {
     tier_selector_->setObjectName(QStringLiteral("tier_selector"));
     for (int index = 0; index < tier_count; ++index) {
         // The chooser's items stand alone, so each starts with a capital: "Under 1200".
-        QString band = tier_text(index);
+        QString band = rating_band(index);
         band.replace(0, 1, band.at(0).toUpper());
         tier_selector_->addItem(band, index);
     }
@@ -657,7 +655,7 @@ void MainWindow::position_ready(const ExploreData& explore) {
     if (explore.key != line_keys_.back() || explore.tier != tier()) {
         return;
     }
-    explore_->show_data(explore, tier_text(explore.tier),
+    explore_->show_data(explore, rating_band(explore.tier),
                         line_uci_.size() % 2 == 0 ? Color::white : Color::black);
     stored_score_.reset();
     if (explore.position && explore.position->eval_depth) {

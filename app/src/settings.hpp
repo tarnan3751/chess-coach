@@ -39,7 +39,6 @@ class Settings {
     // half the cores (at least one), 64 MB of hash, 2 s per search (0.1 to 60), 3 lines (1 to
     // 10).
     [[nodiscard]] EngineSettings engine() const;
-    [[nodiscard]] static EngineSettings default_engine();
 
     // Spar's, each at its default when unset or out of range; and a fixed seed, which only a
     // harness sets (nullopt: the clock's).

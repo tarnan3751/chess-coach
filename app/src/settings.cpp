@@ -12,6 +12,16 @@
 
 namespace chesscoach::app {
 
+namespace {
+
+EngineSettings default_engine() {
+    EngineSettings engine;
+    engine.threads = std::max(1, QThread::idealThreadCount() / 2);
+    return engine;
+}
+
+} // namespace
+
 void keep_qt_settings_in(const QString& data_dir) {
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, data_dir);
@@ -33,12 +43,6 @@ std::optional<int> Settings::last_tier() const {
         return std::nullopt;
     }
     return tier;
-}
-
-EngineSettings Settings::default_engine() {
-    EngineSettings engine;
-    engine.threads = std::max(1, QThread::idealThreadCount() / 2);
-    return engine;
 }
 
 EngineSettings Settings::engine() const {

@@ -146,7 +146,7 @@ void MainWindow::coverage_ready(const CoverageData& coverage) {
     if (coverage.white != repertoire_white_ || coverage.tier != tier()) {
         return;
     }
-    repertoire_->show_coverage(coverage, tier_text(coverage.tier));
+    repertoire_->show_coverage(coverage, rating_band(coverage.tier));
 }
 
 void MainWindow::scores_ready(const ScoreData& scores) {
