@@ -85,7 +85,9 @@ struct DrillCard {
     QString fen;
     QString move;     // UCI
     QString move_san; // the answer as SAN
-    QString name;     // the SAN line the repertoire tree reaches it by, else the FEN
+    QString name;     // to follow "Your move": "after 1. e4 e5" (the tree's line), "in the
+                      // starting position", or "in the position <FEN>" when the tree does not
+                      // reach it
     qint64 due_at = 0;
 };
 

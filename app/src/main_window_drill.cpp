@@ -1,9 +1,9 @@
 // The main window's Drill screen (main_window.hpp; docs/reference/app.md, **Drill**): the cards
 // synced on entering, a drill taking the first due card each time, the board at the card's
 // position for the user's move, the grade recorded once through the profile worker (again at
-// once for a wrong move, whose answer the board then plays; good for a correct one unless Hard or
-// Easy is pressed first, recorded at Next or when the two seconds to change it end), and the
-// summary when no card is due.
+// once for a wrong move, whose answer the board then plays; good for a correct one unless That
+// was hard or That was easy is pressed first, recorded at Next card or when the two seconds to
+// change it end), and the summary when no card is due.
 #include <chesscoach/position.hpp>
 #include <chesscoach/scheduler.hpp>
 
@@ -11,9 +11,10 @@
 #include "drill_screen.hpp"
 #include "main_window.hpp"
 #include "repertoire_screen.hpp"
+#include "wording.hpp"
 
-#include <QDateTime>
 #include <QStatusBar>
+#include <QStringList>
 #include <QTimer>
 
 namespace chesscoach::app {
@@ -75,7 +76,8 @@ void MainWindow::cards_ready(const CardsData& cards) {
     const auto position = Position::from_fen(next.fen.toStdString());
     if (!position) {
         // Cannot happen: the profile store keeps only FENs that parse to their keys.
-        drill_->show_message(tr("The card's position does not read: %1").arg(next.fen));
+        drill_->show_message(tr("This card's position could not be read. Press Update cards "
+                                "from your repertoire and start again."));
         return;
     }
     card_ = next;
@@ -146,17 +148,23 @@ void MainWindow::cards_synced(bool white, int created, int reset, int deleted) {
     if (white != drill_->user_white() || drilling_ || created + reset + deleted == 0) {
         return;
     }
-    drill_->show_message(tr("Cards synced with the repertoire: %1 created, %2 reset, %3 deleted.")
-                             .arg(created)
-                             .arg(reset)
-                             .arg(deleted));
+    QStringList said{tr("Your cards now match your repertoire.")};
+    if (created > 0) {
+        said << counted(created, tr("%1 new card was made."), tr("%1 new cards were made."));
+    }
+    if (reset > 0) {
+        said << counted(reset, tr("%1 card starts again because its move changed."),
+                        tr("%1 cards start again because their moves changed."));
+    }
+    if (deleted > 0) {
+        said << counted(deleted, tr("%1 card was removed with its move."),
+                        tr("%1 cards were removed with their moves."));
+    }
+    drill_->show_message(said.join(QLatin1Char(' ')));
 }
 
 void MainWindow::review_recorded(qint64 /*card_id*/, qint64 due_at) {
-    statusBar()->showMessage(
-        tr("Next review %1")
-            .arg(QDateTime::fromSecsSinceEpoch(due_at).toString(QStringLiteral("yyyy-MM-dd"))),
-        5000);
+    statusBar()->showMessage(tr("You will see this card again on %1.").arg(day(due_at)), 5000);
 }
 
 void MainWindow::profile_failed(const QString& message) {

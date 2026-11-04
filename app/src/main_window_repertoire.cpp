@@ -7,8 +7,10 @@
 #include "board_view.hpp"
 #include "main_window.hpp"
 #include "repertoire_screen.hpp"
+#include "wording.hpp"
 
 #include <QListWidget>
+#include <QStringList>
 
 namespace chesscoach::app {
 
@@ -32,7 +34,7 @@ void MainWindow::repertoire_refresh() {
     emit repertoire_requested(repertoire_white_);
     if (db_path_.isEmpty()) {
         repertoire_->show_coverage_message(
-            tr("Coverage needs an opening database: import one with File > Import database…"));
+            tr("Coverage needs an opening database. Import one with File > Import database."));
     } else {
         emit coverage_requested(repertoire_white_, tier(), settings_.repertoire_depth());
     }
@@ -156,16 +158,31 @@ void MainWindow::scores_ready(const ScoreData& scores) {
 }
 
 void MainWindow::pgn_imported(const PgnImportInfo& import) {
-    repertoire_->show_message(
-        tr("Imported %1 games and %2 variations: %3 choices, %4 added, %5 already made, %6 "
-           "conflicts, %7 unparsable.")
-            .arg(import.games)
-            .arg(import.variations)
-            .arg(import.choices)
-            .arg(import.added)
-            .arg(import.unchanged)
-            .arg(import.conflicts)
-            .arg(import.unparsable));
+    // What the file held, then what the repertoire took of it, a sentence each.
+    const QString games = counted(import.games, tr("%1 game"), tr("%1 games"));
+    QStringList said{
+        import.variations > 0
+            ? tr("Read %1 and %2 from the file.")
+                  .arg(games, counted(import.variations, tr("%1 side line"), tr("%1 side lines")))
+            : tr("Read %1 from the file.").arg(games),
+    };
+    said << (import.added > 0 ? counted(import.added, tr("Added %1 new move to your repertoire."),
+                                        tr("Added %1 new moves to your repertoire."))
+                              : tr("No new moves were added to your repertoire."));
+    if (import.unchanged > 0) {
+        said << counted(import.unchanged, tr("%1 move was there already."),
+                        tr("%1 moves were there already."));
+    }
+    if (import.conflicts > 0) {
+        said << counted(import.conflicts,
+                        tr("Left out %1 move where your repertoire already has a different one."),
+                        tr("Left out %1 moves where your repertoire already has different ones."));
+    }
+    if (import.unparsable > 0) {
+        said << counted(import.unparsable, tr("%1 game could not be read."),
+                        tr("%1 games could not be read."));
+    }
+    repertoire_->show_message(said.join(QLatin1Char(' ')));
 }
 
 } // namespace chesscoach::app

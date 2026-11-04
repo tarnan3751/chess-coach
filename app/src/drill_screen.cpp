@@ -3,6 +3,8 @@
 
 #include <chesscoach/scheduler.hpp>
 
+#include "wording.hpp"
+
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -13,12 +15,14 @@
 namespace chesscoach::app {
 
 DrillScreen::DrillScreen(QWidget* parent)
-    : QWidget(parent), white_(new QRadioButton(tr("White"), this)),
-      black_(new QRadioButton(tr("Black"), this)), sync_(new QPushButton(tr("Sync cards"), this)),
-      start_(new QPushButton(tr("Start drill"), this)), due_(new QLabel(this)),
+    : QWidget(parent), white_(new QRadioButton(tr("White repertoire"), this)),
+      black_(new QRadioButton(tr("Black repertoire"), this)),
+      sync_(new QPushButton(tr("Update cards from your repertoire"), this)),
+      start_(new QPushButton(tr("Start the drill"), this)), due_(new QLabel(this)),
       progress_(new QLabel(this)), status_(new QLabel(this)), verdict_(new QLabel(this)),
-      hard_(new QPushButton(tr("Hard"), this)), easy_(new QPushButton(tr("Easy"), this)),
-      next_(new QPushButton(tr("Next"), this)), summary_(new QFrame(this)),
+      hard_(new QPushButton(tr("That was hard"), this)),
+      easy_(new QPushButton(tr("That was easy"), this)),
+      next_(new QPushButton(tr("Next card"), this)), summary_(new QFrame(this)),
       summary_text_(new QLabel(summary_)) {
     setObjectName(QStringLiteral("drill_screen"));
     white_->setObjectName(QStringLiteral("drill_white"));
@@ -35,6 +39,8 @@ DrillScreen::DrillScreen(QWidget* parent)
     summary_->setObjectName(QStringLiteral("drill_summary"));
     summary_text_->setObjectName(QStringLiteral("drill_summary_text"));
     white_->setChecked(true);
+    due_->setWordWrap(true);
+    progress_->setWordWrap(true);
     status_->setWordWrap(true);
     verdict_->setWordWrap(true);
     summary_text_->setWordWrap(true);
@@ -75,18 +81,43 @@ DrillScreen::DrillScreen(QWidget* parent)
     connect(easy_, &QPushButton::clicked, this,
             [this] { emit grade_chosen(static_cast<int>(Grade::easy)); });
     set_drilling(false);
-    show_message(tr("Start a drill to answer the cards that are due."));
+    show_message(tr("Press Start the drill to answer the cards that are due now."));
 }
 
 bool DrillScreen::user_white() const { return white_->isChecked(); }
 
+namespace {
+
+// "2 cards" or "1 card".
+QString cards_of(qint64 n) {
+    return counted(n, DrillScreen::tr("%1 card"), DrillScreen::tr("%1 cards"));
+}
+
+// One repertoire's cards in a sentence.
+QString progress(const QString& colour, int due, int total) {
+    if (total == 0) {
+        return DrillScreen::tr("Your %1 repertoire has no cards.").arg(colour);
+    }
+    return DrillScreen::tr("Your %1 repertoire has %2, %3 due now.")
+        .arg(colour, cards_of(total), number(due));
+}
+
+} // namespace
+
 void DrillScreen::show_cards(const CardsData& cards) {
-    due_->setText(tr("Due: %1 of %2 cards").arg(cards.due.size()).arg(cards.total));
-    progress_->setText(tr("White: %1 due / %2 total · Black: %3 due / %4 total")
-                           .arg(cards.white_due)
-                           .arg(cards.white_total)
-                           .arg(cards.black_due)
-                           .arg(cards.black_total));
+    const auto due = static_cast<qint64>(cards.due.size());
+    if (cards.total == 0) {
+        due_->setText(tr("You have no cards for this repertoire yet. Save moves on the Repertoire "
+                         "tab to make them."));
+    } else if (due == 0) {
+        due_->setText(counted(cards.total, tr("Your %1 card is not due now."),
+                              tr("None of your %1 cards is due now.")));
+    } else {
+        due_->setText(tr("%1 due now, out of your %2.").arg(number(due), cards_of(cards.total)));
+    }
+    progress_->setText(progress(tr("White"), cards.white_due, cards.white_total) +
+                       QLatin1Char(' ') +
+                       progress(tr("Black"), cards.black_due, cards.black_total));
 }
 
 void DrillScreen::set_drilling(bool drilling) {
@@ -104,7 +135,7 @@ void DrillScreen::set_drilling(bool drilling) {
 }
 
 void DrillScreen::show_card(const DrillCard& card) {
-    status_->setText(tr("Your move after %1").arg(card.name));
+    status_->setText(tr("Your move %1. Play it on the board.").arg(card.name));
     verdict_->clear();
     next_->setEnabled(false);
     hard_->hide();
@@ -112,15 +143,18 @@ void DrillScreen::show_card(const DrillCard& card) {
 }
 
 void DrillScreen::show_correct(const QString& san, bool grading) {
-    verdict_->setText(grading ? tr("Correct: %1. Good, unless it was hard or easy.").arg(san)
-                              : tr("Correct: %1.").arg(san));
+    verdict_->setText(grading ? tr("Right. %1 is your move here. If it was hard or easy to find, "
+                                   "press the button that says so.")
+                                    .arg(san)
+                              : tr("Right. %1 is your move here.").arg(san));
     hard_->setVisible(grading);
     easy_->setVisible(grading);
     next_->setEnabled(true);
 }
 
 void DrillScreen::show_wrong(const QString& played_san, const QString& answer_san) {
-    verdict_->setText(tr("%1 is not the move: it is %2.").arg(played_san, answer_san));
+    verdict_->setText(tr("Not quite. Your move here is %2, not %1. The board shows it now.")
+                          .arg(played_san, answer_san));
     hard_->hide();
     easy_->hide();
     next_->setEnabled(true);
@@ -132,10 +166,18 @@ void DrillScreen::grade_recorded() {
 }
 
 void DrillScreen::show_summary(int reviewed, int correct, int again) {
-    summary_text_->setText(
-        tr("Drill over: %1 reviewed, %2 correct, %3 again.").arg(reviewed).arg(correct).arg(again));
+    if (reviewed == 0) {
+        summary_text_->setText(tr("The drill is over. You did not answer any cards."));
+    } else {
+        QString text = tr("The drill is over. You answered %1, %2 right and %3 wrong.")
+                           .arg(cards_of(reviewed), number(correct), number(again));
+        if (again > 0) {
+            text += QLatin1Char(' ') + tr("The ones you missed come back soon.");
+        }
+        summary_text_->setText(text);
+    }
     summary_->show();
-    status_->setText(tr("No card is due."));
+    status_->setText(tr("No more cards are due now. Come back later."));
     verdict_->clear();
 }
 

@@ -1,8 +1,9 @@
 // The Repertoire screen (docs/reference/app.md, **Repertoire**): the colour whose repertoire is
-// shown; Import PGN; the coverage at the selected tier to the settings' depth; the repertoire as a
-// tree of lines from the start, a click on a move going there on the board; the current position,
-// with its choice and Remove choice; the recommendation score of its moves when the colour is to
-// move, with Choose; and the gaps by how often they will be met, with Go to. It shows what the
+// shown; Add lines from a PGN file; the coverage at the selected tier to the settings' depth; the
+// repertoire as a tree of lines from the start, a click on a move going there on the board; the
+// current position, with its choice and Remove this move; the recommendation score of its moves
+// when the colour is to move, with Save this move; and the gaps by how often they will be met,
+// with Go to this position. It shows what the
 // window passes on from the profile worker and asks for everything through its signals. GUI
 // thread only.
 #pragma once
@@ -46,7 +47,7 @@ class RepertoireScreen : public QWidget {
 
   signals:
     void colour_changed(bool white);
-    // Import PGN… was pressed: the window asks for the file.
+    // Add lines from a PGN file… was pressed: the window asks for the file.
     void import_clicked();
     void import_requested(const QString& path);
     // The board to the position at the end of the line, UCI from the start.

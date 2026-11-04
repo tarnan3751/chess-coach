@@ -1,8 +1,9 @@
 // UI tests of the Repertoire screen (app; ui) on the fixture database's tier-4 tree: a choice set
 // by a board move and shown in the tree, the coverage equal to core's compute_coverage on the same
 // stores, a choice replaced by another move, the gap it leaves listed and Go to taking the board
-// there, Choose setting a recommended move, Remove choice clearing it, and a PGN import with its
-// counts; the black repertoire; and File > Export and Import profile restoring a repertoire.
+// there, Save this move setting a recommended move, Remove this move clearing it, and a PGN import
+// with its counts; the black repertoire; and File > Back up your work and Restore a backup
+// restoring a repertoire.
 // Screenshots of the repertoire and its gaps (ui_harness.hpp, fixture_db.hpp).
 #include <chesscoach/opening_store.hpp>
 #include <chesscoach/position.hpp>
@@ -105,6 +106,13 @@ QStringList tree(const MainWindow& window) {
     return out;
 }
 
+// The coverage line at tier 4 to the default depth, for a share written "62.5%".
+QString coverage_text(const QString& share) {
+    return QStringLiteral("Coverage is %1 against players rated 1800–1999, over the first 20 "
+                          "half-moves.")
+        .arg(share);
+}
+
 // The coverage line core's compute_coverage gives for the white repertoire saved in data_dir.
 QString expected_coverage(const FixtureDb& db, const QString& data_dir) {
     const auto store = chesscoach::OpeningStore::open(db.path());
@@ -115,8 +123,7 @@ QString expected_coverage(const FixtureDb& db, const QString& data_dir) {
     const auto repertoire = profiles->repertoire(profiles->profiles().front().id, Color::white);
     const auto coverage = chesscoach::compute_coverage(
         *store, repertoire, Color::white, static_cast<chesscoach::Tier>(tier), {.max_plies = 20});
-    return QStringLiteral("Coverage at 1800–1999 to 20 plies: %1%")
-        .arg(coverage.covered * 100.0, 0, 'f', 1);
+    return coverage_text(QStringLiteral("%1%").arg(coverage.covered * 100.0, 0, 'f', 1));
 }
 
 Position after(std::initializer_list<const char*> moves) {
@@ -137,17 +144,17 @@ class RepertoireTest : public QObject {
         const auto& board = child<BoardView>(window, QStringLiteral("board"));
         // An empty repertoire: the start is the one gap.
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 0.0%"));
+                     coverage_text(QStringLiteral("0.0%")));
         QTRY_COMPARE(rows(window, QStringLiteral("repertoire_gaps")), 1);
         QCOMPARE(cell(window, QStringLiteral("repertoire_gaps"), 0, 1),
-                 QStringLiteral("the start"));
+                 QStringLiteral("the starting position"));
 
         // 1. e4 is chosen: e4's node at tier 4 has no replies, so all is covered.
         click(board, "e2");
         click(board, "e4");
         QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. e4")});
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 100.0%"));
+                     coverage_text(QStringLiteral("100.0%")));
         QCOMPARE(text(window, QStringLiteral("repertoire_coverage")),
                  expected_coverage(*db_, session.data_dir));
 
@@ -159,7 +166,7 @@ class RepertoireTest : public QObject {
         click(board, "a3");
         QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. a3")});
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 0.0%"));
+                     coverage_text(QStringLiteral("0.0%")));
         QCOMPARE(text(window, QStringLiteral("repertoire_coverage")),
                  expected_coverage(*db_, session.data_dir));
         QTRY_COMPARE(cell(window, QStringLiteral("repertoire_gaps"), 0, 1),
@@ -176,7 +183,7 @@ class RepertoireTest : public QObject {
         QCOMPARE(child<QListWidget>(window, QStringLiteral("move_list")).item(0)->text(),
                  QStringLiteral("1. a3 e5"));
         QVERIFY(text(window, QStringLiteral("repertoire_position"))
-                    .startsWith(QStringLiteral("No choice here yet")));
+                    .startsWith(QStringLiteral("You have no move saved here yet.")));
 
         // The recommendation panel has the position's one move; Choose makes it the choice.
         QTRY_COMPARE(rows(window, QStringLiteral("repertoire_scores")), 1);
@@ -186,19 +193,19 @@ class RepertoireTest : public QObject {
                      (QStringList{QStringLiteral("1. a3"), QStringLiteral("  1... e5"),
                                   QStringLiteral("    2. Nf3")}));
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 100.0%"));
+                     coverage_text(QStringLiteral("100.0%")));
         QCOMPARE(text(window, QStringLiteral("repertoire_coverage")),
                  expected_coverage(*db_, session.data_dir));
         QCOMPARE(text(window, QStringLiteral("repertoire_position")),
-                 QStringLiteral("Your move here: Nf3"));
+                 QStringLiteral("Your move here is Nf3."));
         QTRY_VERIFY(!board.animating());
         save_screenshot(window, QStringLiteral("repertoire"), QStringLiteral("tree"));
 
-        // Remove choice takes it back out.
+        // Remove this move takes it back out.
         press(window, QStringLiteral("repertoire_remove"));
         QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. a3")});
         QTRY_COMPARE(text(window, QStringLiteral("repertoire_coverage")),
-                     QStringLiteral("Coverage at 1800–1999 to 20 plies: 0.0%"));
+                     coverage_text(QStringLiteral("0.0%")));
     }
 
   private slots:
@@ -226,8 +233,8 @@ class RepertoireTest : public QObject {
             .import_pgn(pgn);
         QTRY_COMPARE(
             text(window, QStringLiteral("repertoire_message")),
-            QStringLiteral("Imported 1 games and 0 variations: 2 choices, 1 added, 0 already "
-                           "made, 1 conflicts, 0 unparsable."));
+            QStringLiteral("Read 1 game from the file. Added 1 new move to your repertoire. Left "
+                           "out 1 move where your repertoire already has a different one."));
         QTRY_COMPARE(tree(window), QStringList{QStringLiteral("1. a3")});
     }
 
@@ -241,7 +248,7 @@ class RepertoireTest : public QObject {
         click(board, "a2");
         click(board, "a3");
         QTRY_VERIFY(text(window, QStringLiteral("repertoire_position"))
-                        .startsWith(QStringLiteral("No choice here yet")));
+                        .startsWith(QStringLiteral("You have no move saved here yet.")));
         click(board, "e7");
         click(board, "e5");
         QTRY_COMPARE(tree(window),

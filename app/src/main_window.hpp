@@ -1,7 +1,7 @@
 // The main window (docs/reference/app.md, **Shell**): a toolbar with New game, Back, Flip board
 // and the tier selector; the evaluation bar and the board on the left with the move list below
 // them; the screen switcher on the right over Explore, Spar, Repertoire and Drill; the File >
-// Export and Import profile, Edit > Settings, View > Theme and Help menus; the database and the
+// Back up and Restore, Edit > Settings, View > Theme and Help menus; the database and the
 // engine in the status bar. The board belongs to the current screen: it keeps Explore's line and
 // sends each position at the selected tier to the database worker and each position to the
 // engine worker; it runs Spar's sessions through the spar worker; and it builds the repertoires
@@ -73,9 +73,10 @@ class MainWindow : public QMainWindow {
     // The moves played from the start position to the board's position, in UCI.
     [[nodiscard]] const std::vector<std::string>& line() const { return line_uci_; }
 
-    // File > Export profile and Import profile once their file dialogs have answered: a copy of
-    // profiles.db written to path; profiles.db replaced by the file at path on the profile
-    // worker, every screen then reading it. Errors in a message box (profile_error).
+    // File > Back up your work and Restore a backup (the profile's export and import) once their
+    // file dialogs have answered: a copy of profiles.db written to path; profiles.db replaced by
+    // the file at path on the profile worker, every screen then reading it. Errors in a message
+    // box (profile_error).
     void export_profile(const QString& path);
     void import_profile(const QString& path);
     // File > Import database once its chooser has answered: the opening database at path put in
@@ -222,7 +223,7 @@ class MainWindow : public QMainWindow {
     QTabBar* tabs_;
     QAction* new_game_action_ = nullptr;
     QAction* back_action_ = nullptr;
-    QAction* import_action_ = nullptr;          // File > Import profile…
+    QAction* import_action_ = nullptr;          // File > Restore a backup…
     QAction* import_database_action_ = nullptr; // File > Import database…
     QPointer<QProgressDialog> import_progress_; // while an import runs
     QListWidget* move_list_;

@@ -1,9 +1,9 @@
 // The Drill screen (docs/reference/app.md, **Drill**): the colour whose cards are drilled; the
-// cards due of the cards there are, and both repertoires' progress; Sync cards and Start drill;
-// during a drill, the card's position named by its line, the verdict on the move played, Hard and
-// Easy for a correct one while its grade can still change, and Next; the summary when no card is
-// due. It shows what the window passes on and asks for everything through its signals. GUI thread
-// only.
+// cards due of the cards there are, and both repertoires' progress; Update cards from your
+// repertoire and Start the drill; during a drill, the card's position named by its line, the
+// verdict on the move played, That was hard and That was easy for a correct one while its grade
+// can still change, and Next card; the summary when no card is due. It shows what the window passes
+// on and asks for everything through its signals. GUI thread only.
 #pragma once
 
 #include "profile_data.hpp"

@@ -35,29 +35,46 @@ QString translate(const char* text) {
 QString ProfileWorker::describe(ProfileError error) {
     switch (error) {
     case ProfileError::unwritable:
-        return translate("profiles.db cannot be created or written there");
+        return translate("chess-coach cannot write profiles.db in its data folder. Check that the "
+                         "folder exists and that you may write to it.");
     case ProfileError::not_profiles:
-        return translate("the file is not a chess-coach profile");
+        return translate("That file is not a chess-coach backup. Choose a file saved with File > "
+                         "Back up your work.");
     case ProfileError::newer_version:
-        return translate("the file comes from a newer chess-coach");
+        return translate("That file comes from a newer chess-coach. Update chess-coach to open "
+                         "it.");
     case ProfileError::migration_failed:
-        return translate("the file could not be brought up to this version");
+        return translate("That file could not be brought up to date for this chess-coach. Choose "
+                         "another backup.");
     case ProfileError::invalid_name:
     case ProfileError::duplicate_name:
     case ProfileError::no_such_profile:
     case ProfileError::last_profile:
-        return translate("the profile is not there");
+        return translate("Your saved work could not be found. Restart chess-coach and try again.");
     case ProfileError::storage:
-        return translate("the write failed");
+        return translate("Writing to the disk failed. Check that it has free space.");
     case ProfileError::invalid_choice:
-        return translate("the move is not a choice for this colour here");
+        return translate("That move is not one your repertoire's colour plays here. Play a move "
+                         "for your own side.");
     case ProfileError::no_such_card:
-        return translate("the card is not there");
+        return translate("That card is no longer there. Press Update cards from your "
+                         "repertoire.");
     case ProfileError::busy:
-        return translate("another program has the file open; nothing was changed");
+        return translate("Another program has the file open, so nothing was changed. Close it "
+                         "and try again.");
     }
     return {};
 }
+
+namespace {
+
+// A read of profiles.db that threw.
+QString unreadable() {
+    return translate("Your saved work in profiles.db could not be read. Restore a backup with "
+                     "File > Restore a backup.");
+}
+
+} // namespace
 
 namespace {
 
@@ -193,7 +210,7 @@ ProfileStore* ProfileWorker::open_profiles(bool create) {
     }
     auto profiles = ProfileStore::open(data_dir_);
     if (!profiles) {
-        fail(tr("The profile could not be opened: %1.").arg(describe(profiles.error())));
+        fail(tr("Your saved work could not be opened. %1").arg(describe(profiles.error())));
         return nullptr;
     }
     return &profiles_.emplace(std::move(*profiles));
@@ -220,7 +237,8 @@ std::optional<ProfileWorker::Writable> ProfileWorker::writable_profile() {
     }
     const auto profile = default_profile(*profiles);
     if (!profile) {
-        fail(tr("The profile store holds no profile."));
+        fail(tr("Your saved work could not be found. Restore a backup with File > Restore a "
+                "backup."));
         return std::nullopt;
     }
     return Writable{.store = profiles, .profile = *profile};
@@ -248,15 +266,15 @@ void ProfileWorker::set_choice(bool white, quint64 key, const QString& fen, cons
                                                              .move = uci.toStdString(),
                                                          });
         if (!changed) {
-            fail(tr("The choice was not saved: %1.").arg(describe(changed.error())));
+            fail(tr("The move was not saved. %1").arg(describe(changed.error())));
             return;
         }
         emit repertoire_changed(white, *changed == ChoiceChange::unchanged
-                                           ? tr("The choice was already made.")
-                                           : tr("Choice saved."));
+                                           ? tr("This move is in your repertoire already.")
+                                           : tr("Saved to your repertoire."));
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(tr("profiles.db could not be read."));
+        fail(unreadable());
     }
 }
 
@@ -269,14 +287,14 @@ void ProfileWorker::remove_choice(bool white, quint64 key) {
         const auto removed =
             writable->store->remove_choice(writable->profile, colour_of(white), key);
         if (!removed) {
-            fail(tr("The choice was not removed: %1.").arg(describe(removed.error())));
+            fail(tr("The move was not removed. %1").arg(describe(removed.error())));
             return;
         }
-        emit repertoire_changed(white,
-                                *removed ? tr("Choice removed.") : tr("There was no choice here."));
+        emit repertoire_changed(white, *removed ? tr("Removed from your repertoire.")
+                                                : tr("There was no move saved here."));
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(tr("profiles.db could not be read."));
+        fail(unreadable());
     }
 }
 
@@ -296,7 +314,7 @@ void ProfileWorker::load_repertoire(bool white) {
         }
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(tr("profiles.db could not be read."));
+        fail(unreadable());
     }
     emit repertoire_ready(data);
 }
@@ -306,8 +324,8 @@ void ProfileWorker::compute_coverage(bool white, int tier, int depth) {
     try {
         const OpeningStore* store = open_store();
         if (store == nullptr || !at.has_value()) {
-            fail(tr("Coverage needs an opening database: import one with File > Import "
-                    "database…"));
+            fail(tr("Coverage needs an opening database. Import one with File > Import "
+                    "database."));
             return;
         }
         Repertoire repertoire;
@@ -340,7 +358,8 @@ void ProfileWorker::compute_coverage(bool white, int tier, int depth) {
     } catch (const std::exception&) {
         store_.reset();
         profiles_.reset();
-        fail(tr("The coverage could not be computed: a database could not be read."));
+        fail(tr("Coverage could not be worked out, because a database could not be read. "
+                "Restart chess-coach and try again."));
     }
 }
 
@@ -372,7 +391,8 @@ void ProfileWorker::score_position(quint64 key, int tier) {
         }
     } catch (const std::exception&) {
         store_.reset();
-        fail(tr("The opening database could not be read."));
+        fail(tr("The opening database could not be read. Import it again with File > Import "
+                "database."));
     }
     emit scores_ready(data);
 }
@@ -380,12 +400,13 @@ void ProfileWorker::score_position(quint64 key, int tier) {
 void ProfileWorker::import_pgn(const QString& path, bool white) {
     std::ifstream in(std::filesystem::path(path.toStdString()), std::ios::binary);
     if (!in) {
-        fail(tr("%1 could not be opened.").arg(path));
+        fail(tr("%1 could not be opened. Check that the file is still there.").arg(path));
         return;
     }
     const auto read = import_repertoire_pgn(in, colour_of(white));
     if (!read) {
-        fail(tr("%1 is not a PGN file this import reads.").arg(QFileInfo(path).fileName()));
+        fail(tr("%1 is not a PGN file chess-coach can read. Choose a .pgn file of games.")
+                 .arg(QFileInfo(path).fileName()));
         return;
     }
     try {
@@ -396,7 +417,7 @@ void ProfileWorker::import_pgn(const QString& path, bool white) {
         const auto applied =
             writable->store->import_choices(writable->profile, colour_of(white), read->choices);
         if (!applied) {
-            fail(tr("The choices were not saved: %1.").arg(describe(applied.error())));
+            fail(tr("The lines were not saved. %1").arg(describe(applied.error())));
             return;
         }
         emit pgn_imported(PgnImportInfo{
@@ -412,7 +433,7 @@ void ProfileWorker::import_pgn(const QString& path, bool white) {
         emit repertoire_changed(white, QString()); // pgn_imported says what changed
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(tr("profiles.db could not be read."));
+        fail(unreadable());
     }
 }
 
@@ -428,13 +449,13 @@ void ProfileWorker::sync_cards(bool white) {
         }
         const auto synced = writable->store->sync_cards(writable->profile, colour_of(white));
         if (!synced) {
-            fail(tr("The cards were not synced: %1.").arg(describe(synced.error())));
+            fail(tr("Your cards were not updated. %1").arg(describe(synced.error())));
             return;
         }
         emit cards_synced(white, synced->created, synced->reset, synced->deleted);
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(tr("profiles.db could not be read."));
+        fail(unreadable());
     }
 }
 
@@ -474,13 +495,14 @@ void ProfileWorker::due_cards(bool white) {
                         out.move_san = QString::fromStdString(*san);
                     }
                 }
+                // Named to follow "Your move": by its line, the start, or by its FEN.
                 const auto name = walk.names.constFind(card.key);
                 if (name == walk.names.constEnd()) {
-                    out.name = out.fen;
+                    out.name = tr("in the position %1").arg(out.fen);
                 } else if (name->isEmpty()) {
-                    out.name = tr("the start position");
+                    out.name = tr("in the starting position");
                 } else {
-                    out.name = *name;
+                    out.name = tr("after %1").arg(*name);
                 }
                 out.due_at = card.state.due_at;
                 data.due.append(out);
@@ -488,7 +510,7 @@ void ProfileWorker::due_cards(bool white) {
         }
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(tr("profiles.db could not be read."));
+        fail(unreadable());
     }
     emit cards_ready(data);
 }
@@ -503,7 +525,7 @@ void ProfileWorker::record_review(qint64 card_id, bool white, quint64 key, int g
         applied = static_cast<Grade>(grade);
         break;
     default:
-        fail(tr("No grade %1.").arg(grade));
+        fail(tr("That answer could not be graded. Press Next card to go on."));
         return;
     }
     try {
@@ -514,13 +536,13 @@ void ProfileWorker::record_review(qint64 card_id, bool white, quint64 key, int g
         const auto card = writable->store->record_review(writable->profile, colour_of(white),
                                                          card_id, key, applied, now());
         if (!card) {
-            fail(tr("The review was not recorded: %1.").arg(describe(card.error())));
+            fail(tr("Your answer was not saved. %1").arg(describe(card.error())));
             return;
         }
         emit review_recorded(card_id, card->state.due_at);
     } catch (const std::exception&) {
         profiles_.reset();
-        fail(tr("profiles.db could not be read."));
+        fail(unreadable());
     }
 }
 
@@ -529,19 +551,21 @@ void ProfileWorker::import_profiles(const QString& path) {
     const auto imported = ProfileStore::import_profiles(data_dir_, path.toStdString());
     emit profiles_imported(
         path, imported ? QString()
-                       : tr("The profile was not imported: %1.").arg(describe(imported.error())));
+                       : tr("Your work was not restored. %1").arg(describe(imported.error())));
 }
 
 void ProfileWorker::export_profiles(const QString& path) {
     // An export never replaces a file (docs/database.md §12.5).
     if (QFileInfo::exists(path)) {
-        emit export_failed(tr("The profile was not exported: %1 exists.").arg(path));
+        emit export_failed(
+            tr("The backup was not saved, because %1 exists already. Choose another name.")
+                .arg(path));
         return;
     }
     const auto exported =
         ProfileStore::export_profiles(data_dir_, std::filesystem::path(path.toStdString()));
     if (!exported) {
-        emit export_failed(tr("The profile was not exported: %1.").arg(describe(exported.error())));
+        emit export_failed(tr("The backup was not saved. %1").arg(describe(exported.error())));
         return;
     }
     emit profiles_exported(path);

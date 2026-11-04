@@ -70,7 +70,7 @@ which the executable and the UI tests link. The piece set and the two stylesheet
   Repertoire's and disabled on Spar and Drill, *Flip board* (`flip_action`), and the tier selector
   (`tier_selector`), a `QComboBox` of the seven rating bands (**Wording**) with the tier index as
   each item's data, at the last tier the settings hold, else tier 2 (`MainWindow::default_tier`).
-- **The menus**: *File* with *Export profile…* and *Import profile…* (`export_action`,
+- **The menus**: *File* with *Back up your work…* and *Restore a backup…* (`export_action`,
   `import_action`, **Export and import**) and *Import database…* (`import_database_action`, **The
   database**), *Edit > Settings…* (`settings_action`, **Settings**), *View > Theme* with *Light* and
   *Dark* (`theme_light`, `theme_dark`), and *Help* with *About chess-coach* (`about_action`) and
@@ -351,67 +351,85 @@ A failure answers `profile_failed(message)`, which the current screen shows, or 
 off Repertoire and Drill. **The tree** is the repertoire's lines from the start, walked depth
 first: where the colour is to move, its choice; where the opponent is, each legal reply, by UCI,
 that reaches a position with a choice. A position is walked once, by the first line that reaches
-it, so a transposition shows under one line only, and a card is named by that line ("1. e4 e5
-2. Nf3"), by "the start position", or by its FEN when the tree does not reach it. "Now" is the
-clock's seconds, given to the store for the due cards and each review.
+it, so a transposition shows under one line only, and a card is named to follow "Your move" by
+that line ("after 1. e4 e5 2. Nf3"), "in the starting position", or by its FEN when the tree does
+not reach it ("in the position …"). "Now" is the clock's seconds, given to the store for the due cards and each
+review. A message says what happened and then one way forward, a profile store error in its own
+sentences ("That file is not a chess-coach backup. Choose a file saved with File > Back up your
+work."), and a read that throws names `profiles.db` and the restore.
 
 ## Repertoire
 
 On Repertoire the board is at a line of the screen's own, from the start, which the move list
 shows and *New game*, *Back* and the move list's rows go back along. `RepertoireScreen` holds:
 
-- the colour (`repertoire_white`, `repertoire_black`), whose repertoire is shown and edited; the
-  board turns to its side;
-- *Import PGN…* (`repertoire_import`), the file chooser (**Files**) and then `import_pgn`; the
-  message line (`repertoire_message`) gives the counts: "Imported 1 games and 0 variations: 2
-  choices, 1 added, 0 already made, 1 conflicts, 0 unparsable.", a conflict being a later move in
-  the file for a position it has chosen, or a choice the repertoire already answers differently,
-  which it keeps;
-- the coverage (`repertoire_coverage`), "Coverage at 1800–1999 to 20 plies: 62.5%", at the tier
-  selected and the depth in the settings, computed again after every change and at a change of
-  tier;
+- the colour, *White repertoire* and *Black repertoire* (`repertoire_white`,
+  `repertoire_black`), whose repertoire is shown and edited; the board turns to its side;
+- *Add lines from a PGN file…* (`repertoire_import`), the file chooser (**Files**) and then
+  `import_pgn`; the message line (`repertoire_message`) says what was read and what was taken, a
+  sentence for each count that is not zero: "Read 1 game from the file. Added 1 new move to your
+  repertoire. Left out 1 move where your repertoire already has a different one.", a move left
+  out being a later move in the file for a position it has chosen, or a choice the repertoire
+  already answers differently, which it keeps;
+- the coverage (`repertoire_coverage`), "Coverage is 62.5% against players rated 1800–1999, over
+  the first 20 half-moves.", at the tier selected and the depth in the settings, computed again
+  after every change and at a change of tier;
 - the tree (`repertoire_tree`, a `QTreeView`), the choices in bold, the opponent's replies plain;
   a click on a move takes the board to the position after it;
-- the position (`repertoire_position`): "Your move here: Nf3", "No choice here yet…", or "The
-  opponent is to move…", and *Remove choice* (`repertoire_remove`);
-- the recommendation panel (`repertoire_scores`, when the colour is to move): Move, Sound, Loss,
-  Expected, Replies, Penalty, Score and Share, as core's score gives them, and *Choose*
-  (`repertoire_choose`), which makes the selected move the choice;
-- the gaps (`repertoire_gaps`): Mass, Line and FEN, most often met first, and *Go to*
-  (`repertoire_goto`), which takes the board to the selected gap.
+- the position (`repertoire_position`): "Your move here is Nf3.", "You have no move saved here
+  yet…", or "Your opponent is to move here…", and *Remove this move* (`repertoire_remove`);
+- the recommendation panel (`repertoire_scores`, when the colour is to move, under "Moves to
+  choose from here, best first"): Move, Safe (core's sound), Gives away (the loss in pawns),
+  Expected, Replies, Penalty, Score and Played (the share), as core's score gives them, the
+  shares and scores as percentages, each column's header with a tooltip saying what it is; and
+  *Save this move* (`repertoire_choose`), which makes the selected move the choice;
+- the gaps (`repertoire_gaps`, "Positions with no answer yet, most common first"): How often,
+  Moves and Position (FEN), and *Go to this position* (`repertoire_goto`), which takes the board
+  to the selected gap.
 
 A board move where the colour is to move makes that move the position's choice, replacing any;
 a move where the opponent is to move only follows the line.
 
 ## Drill
 
-`DrillScreen` holds the colour (`drill_white`, `drill_black`), "Due: 1 of 2 cards"
-(`drill_due`), both repertoires' progress, "White: 1 due / 2 total · Black: 0 due / 0 total"
-(`drill_progress`), *Sync cards* (`drill_sync`) and *Start drill* (`drill_start`), the status line
-(`drill_status`), the verdict (`drill_verdict`), *Hard*, *Easy* and *Next* (`drill_hard`,
-`drill_easy`, `drill_next`), and the summary (`drill_summary`, `drill_summary_text`).
+`DrillScreen` holds the colour, *White repertoire* and *Black repertoire* (`drill_white`,
+`drill_black`), the colour's cards due, "1 due now, out of your 2 cards." (`drill_due`, or that
+there are none yet and how to make them), both repertoires' progress, "Your White repertoire has
+2 cards, 1 due now. Your Black repertoire has no cards." (`drill_progress`), *Update cards from
+your repertoire* (`drill_sync`) and *Start the drill* (`drill_start`), the status line
+(`drill_status`), the verdict (`drill_verdict`), *That was hard*, *That was easy* and *Next card*
+(`drill_hard`, `drill_easy`, `drill_next`), and the summary (`drill_summary`,
+`drill_summary_text`).
 
-Entering the screen, or Sync cards, syncs the colour's cards with its repertoire and then asks for
-the cards due. A drill takes the first due card each time: the board at the card's position,
-turned to its colour, and "Your move after 1. e4 e5" (the opponent's last move is not known, so
-the position is named by its line). The board takes one move:
+Entering the screen, or Update cards from your repertoire, syncs the colour's cards with its
+repertoire ("Your cards now match your repertoire.", then the cards made, started again and
+removed) and then asks for the cards due. A drill takes the first due card each time: the board
+at the card's position, turned to its colour, and "Your move after 1. e4 e5. Play it on the
+board." (the opponent's last move is not known, so the position is named by its line). The board
+takes one move:
 
-- **correct**: "Correct: Nf3.", graded good unless *Hard* or *Easy* is pressed first; the grade
-  is recorded once, at the first of a press, *Next*, or the end of two seconds;
-- **wrong**: recorded as again at once; the verdict names the card's move, and the board goes
-  back to the card's position and plays it.
+- **correct**: "Right. Nf3 is your move here.", graded good unless *That was hard* or *That was
+  easy* is pressed first; the grade is recorded once, at the first of a press, *Next card*, or the
+  end of two seconds, and the status bar gives the day the card comes back, "You will see this
+  card again on 5 November 2026.";
+- **wrong**: recorded as again at once; the verdict, "Not quite. Your move here is Nf3, not Nc3.
+  The board shows it now.", names the card's move, and the board goes back to the card's position
+  and plays it.
 
-*Next* asks for the cards due again, so a card answered is no longer among them; when none is
-due the drill ends with "Drill over: 2 reviewed, 1 correct, 1 again." Leaving the screen ends a
-drill the same way, and closing the window records a grade still open.
+*Next card* asks for the cards due again, so a card answered is no longer among them; when none is
+due the drill ends with "The drill is over. You answered 2 cards, 1 right and 1 wrong. The ones
+you missed come back soon." Leaving the screen ends a drill the same way, and closing the window
+records a grade still open.
 
 ## Export and import
 
-*File > Export profile…* writes a copy of `profiles.db` through the profile worker
+*File > Back up your work…* (the profile's export) writes a copy of `profiles.db` through the
+profile worker
 (`ProfileStore::export_profiles`, `docs/database.md` §12.5), to a file the chooser's save mode gives
 (**Files**). An export never replaces a file: the chooser refuses a name that is taken, and the
-worker refuses one that appeared since with a message box (`profile_error`). *File > Import
-profile…* replaces `profiles.db` with the chosen file. The other connections to it close first: the
+worker refuses one that appeared since with a message box (`profile_error`); the chooser offers
+`chess-coach-backup.db`. *File > Restore a backup…* (the import) replaces `profiles.db` with the
+chosen file. The other connections to it close first: the
 engine worker's search stops, so that it answers at once, and the engine and spar workers close
 their stores (`close_stores`, each a blocking queued call, a reset and no more). Then the profile
 worker (`import_profiles`) closes its own and runs `ProfileStore::import_profiles` on its thread,
@@ -462,8 +480,8 @@ or a file path typed there without Return, which gives the folder and, unless th
 edited after it, the name (the user's last edit wins), and refuses a name that holds a slash or is
 taken, as an export never replaces a file. It starts in the folder last chosen in (`files/last_dir`
 in `settings.ini`), else the home folder, and keeps no state of its own. `choose_file_to_open` and
-`choose_file_to_save` run it for Browse… (every file), Import PGN… (`*.pgn`), Export profile… and
-Import profile… (`*.db`). As a second guard the window first sends Qt's settings for anything else
+`choose_file_to_save` run it for Browse… (every file), Add lines from a PGN file… (`*.pgn`), Back up
+your work… and Restore a backup… (`*.db`). As a second guard the window first sends Qt's settings for anything else
 that takes the default format to the data directory (`keep_qt_settings_in`:
 `QSettings::setDefaultFormat(IniFormat)` and `setPath` for both scopes).
 
@@ -615,9 +633,9 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   Screenshots: `spar-interruption`, `spar-summary`, `spar-replay`.
 - `ui_repertoire_test`, on the same tier-4 tree: 1. e4 chosen by a board move and shown in the tree,
   then replaced by 1. a3, each time with the coverage equal to core's `compute_coverage` on the same
-  stores; the gap 1. a3 e5 listed and Go to taking the board there; Choose setting Nf3 there from
-  the recommendation panel and Remove choice clearing it; a PGN import with its counts, a conflict
-  among them; the black repertoire, the board turned and white's move only followed; and an export,
+  stores; the gap 1. a3 e5 listed and Go to this position taking the board there; Save this move
+  setting Nf3 there from the recommendation panel and Remove this move clearing it; a PGN import
+  with its counts, a move left out among them; the black repertoire, the board turned and white's move only followed; and an export,
   refused a second time over the same file, imported back after the choice was removed. Screenshots:
   `repertoire-gaps`, `repertoire-tree`.
 - `ui_lookup_test`, with a scratch folder as the bundle's resources
@@ -638,9 +656,9 @@ name, stopping the run when it is missing), `click(view, "e2")`, `square_point(v
   Screenshot: `file-chooser-open`.
 - `ui_drill_test`, on a white repertoire of two choices saved through `ProfileStore` with its
   cards then deleted (`drop_cards` in the fixture), so that entering the screen syncs them back:
-  a drill with a correct move, graded good at Next and due again a day later, a wrong move,
-  graded again with the card's move played on the board, and the summary; and Easy changing a
-  correct move's grade. Screenshots: `drill-card`, `drill-summary`.
+  a drill with a correct move, graded good at Next card and due again a day later, a wrong move,
+  graded again with the card's move played on the board, and the summary; and That was easy
+  changing a correct move's grade. Screenshots: `drill-card`, `drill-summary`.
 
 The window, Explore, Repertoire and Drill tests set `CHESS_COACH_STOCKFISH` to a path that does
 not exist, so no real engine runs in them, and the window and Explore tests write nothing; the

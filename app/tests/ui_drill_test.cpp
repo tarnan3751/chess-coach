@@ -125,28 +125,29 @@ class DrillTest : public QObject {
 
         // Entering the screen synced the two cards back, both due.
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
-                     QStringLiteral("Due: 2 of 2 cards"));
+                     QStringLiteral("2 due now, out of your 2 cards."));
         QCOMPARE(text(window, QStringLiteral("drill_progress")),
-                 QStringLiteral("White: 2 due / 2 total · Black: 0 due / 0 total"));
+                 QStringLiteral("Your White repertoire has 2 cards, 2 due now. Your Black "
+                                "repertoire has no cards."));
         QCOMPARE(session.cards().size(), std::size_t{2});
         QVERIFY(!board.isEnabled());
 
         press(window, QStringLiteral("drill_start"));
         QTRY_VERIFY(board.isEnabled());
-        QVERIFY(text(window, QStringLiteral("drill_status"))
-                    .startsWith(QStringLiteral("Your move after")));
+        QVERIFY(
+            text(window, QStringLiteral("drill_status")).startsWith(QStringLiteral("Your move ")));
         save_screenshot(window, QStringLiteral("drill"), QStringLiteral("card"));
 
         // The first card answered right: good, unless Hard or Easy; recorded at Next.
         const Position first = board.position();
         play(board, answers(board).first);
         QTRY_VERIFY(
-            text(window, QStringLiteral("drill_verdict")).startsWith(QStringLiteral("Correct")));
+            text(window, QStringLiteral("drill_verdict")).startsWith(QStringLiteral("Right.")));
         QVERIFY(child<QAbstractButton>(window, QStringLiteral("drill_easy")).isVisible());
         QVERIFY(!board.isEnabled());
         press(window, QStringLiteral("drill_next"));
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
-                     QStringLiteral("Due: 1 of 2 cards"));
+                     QStringLiteral("1 due now, out of your 2 cards."));
         for (const chesscoach::Card& card : session.cards()) {
             if (card.key == first.key()) {
                 QCOMPARE(card.state.repetitions, 1);
@@ -159,21 +160,22 @@ class DrillTest : public QObject {
         const auto [answer, wrong] = answers(board);
         const Position second = board.position();
         play(board, wrong);
-        QTRY_VERIFY(text(window, QStringLiteral("drill_verdict"))
-                        .contains(QStringLiteral("is not the move")));
+        QTRY_VERIFY(
+            text(window, QStringLiteral("drill_verdict")).startsWith(QStringLiteral("Not quite.")));
         QVERIFY(!child<QAbstractButton>(window, QStringLiteral("drill_easy")).isVisible());
         Position answered = second;
         static_cast<void>(answered.play_uci(answer));
         QTRY_COMPARE(board.position().fen(), answered.fen());
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
-                     QStringLiteral("Due: 1 of 2 cards"));
+                     QStringLiteral("1 due now, out of your 2 cards."));
         press(window, QStringLiteral("drill_next"));
 
         QTRY_VERIFY(child<QWidget>(window, QStringLiteral("drill_summary")).isVisible());
         QCOMPARE(text(window, QStringLiteral("drill_summary_text")),
-                 QStringLiteral("Drill over: 2 reviewed, 1 correct, 1 again."));
+                 QStringLiteral("The drill is over. You answered 2 cards, 1 right and 1 wrong. "
+                                "The ones you missed come back soon."));
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
-                     QStringLiteral("Due: 0 of 2 cards"));
+                     QStringLiteral("None of your 2 cards is due now."));
         for (const chesscoach::Card& card : session.cards()) {
             if (card.key == second.key()) {
                 QCOMPARE(card.state.repetitions, 0);
@@ -189,7 +191,7 @@ class DrillTest : public QObject {
         MainWindow& window = *session.window;
         const auto& board = child<BoardView>(window, QStringLiteral("board"));
         QTRY_COMPARE(text(window, QStringLiteral("drill_due")),
-                     QStringLiteral("Due: 2 of 2 cards"));
+                     QStringLiteral("2 due now, out of your 2 cards."));
         press(window, QStringLiteral("drill_start"));
         QTRY_VERIFY(board.isEnabled());
         const Position first = board.position();

@@ -116,7 +116,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(repertoire_, &RepertoireScreen::colour_changed, this,
             &MainWindow::repertoire_colour_changed);
     connect(repertoire_, &RepertoireScreen::import_clicked, this, [this] {
-        const QString path = choose_file_to_open(this, settings_, tr("Import a repertoire"),
+        const QString path = choose_file_to_open(this, settings_, tr("Add lines from a PGN file"),
                                                  {QStringLiteral("*.pgn")});
         if (!path.isEmpty()) {
             repertoire_->import_pgn(path);
@@ -251,7 +251,7 @@ MainWindow::MainWindow(const QString& data_dir, const QString& db, QWidget* pare
     connect(profile_worker_, &ProfileWorker::cards_ready, this, &MainWindow::cards_ready);
     connect(profile_worker_, &ProfileWorker::review_recorded, this, &MainWindow::review_recorded);
     connect(profile_worker_, &ProfileWorker::profiles_exported, this, [this](const QString& path) {
-        statusBar()->showMessage(tr("Profile exported to %1").arg(path), 5000);
+        statusBar()->showMessage(tr("Your work is backed up in %1.").arg(path), 5000);
     });
     connect(profile_worker_, &ProfileWorker::export_failed, this, &MainWindow::show_profile_error);
     connect(profile_worker_, &ProfileWorker::profile_failed, this, &MainWindow::profile_failed);
@@ -334,22 +334,23 @@ void MainWindow::build_toolbar() {
 
 void MainWindow::build_menus() {
     QMenu* file = menuBar()->addMenu(tr("&File"));
-    QAction* export_action = file->addAction(tr("&Export profile…"));
+    // The profile's export and import, in the user's words a backup and its restore.
+    QAction* export_action = file->addAction(tr("&Back up your work…"));
     export_action->setObjectName(QStringLiteral("export_action"));
     connect(export_action, &QAction::triggered, this, [this] {
         // An export never replaces a file, which the chooser's save mode refuses.
         const QString path =
-            choose_file_to_save(this, settings_, tr("Export the profile"), {QStringLiteral("*.db")},
-                                QStringLiteral("chess-coach-profile.db"));
+            choose_file_to_save(this, settings_, tr("Back up your work"), {QStringLiteral("*.db")},
+                                QStringLiteral("chess-coach-backup.db"));
         if (!path.isEmpty()) {
             export_profile(path);
         }
     });
-    import_action_ = file->addAction(tr("&Import profile…"));
+    import_action_ = file->addAction(tr("&Restore a backup…"));
     import_action_->setObjectName(QStringLiteral("import_action"));
     connect(import_action_, &QAction::triggered, this, [this] {
         const QString path =
-            choose_file_to_open(this, settings_, tr("Import a profile"), {QStringLiteral("*.db")});
+            choose_file_to_open(this, settings_, tr("Restore a backup"), {QStringLiteral("*.db")});
         if (!path.isEmpty()) {
             import_profile(path);
         }
@@ -650,8 +651,8 @@ void MainWindow::import_profile(const QString& path) {
     }
     emit close_stores_requested();
     // The busy dialog keeps the window from sending anything while the file is swapped: no move
-    // opens the engine cache and no End session saves a session meanwhile.
-    begin_import(tr("Importing the profile\u2026"), QStringLiteral("profile_import_progress"));
+    // opens the engine cache and no End the game saves a session meanwhile.
+    begin_import(tr("Restoring your work\u2026"), QStringLiteral("profile_import_progress"));
     emit profile_import_requested(path);
 }
 
@@ -662,7 +663,7 @@ void MainWindow::profile_import_done(const QString& path, const QString& error) 
     if (!error.isEmpty()) {
         show_profile_error(error);
     } else {
-        statusBar()->showMessage(tr("Profile imported from %1").arg(path), 5000);
+        statusBar()->showMessage(tr("Your work is restored from %1.").arg(path), 5000);
     }
     // Every screen reads the profile again.
     switch (screen_) {
@@ -771,8 +772,8 @@ void MainWindow::set_imports_enabled(bool enabled) {
 }
 
 void MainWindow::show_profile_error(const QString& message) {
-    auto* box =
-        new QMessageBox(QMessageBox::Warning, tr("Profile"), message, QMessageBox::Ok, this);
+    auto* box = new QMessageBox(QMessageBox::Warning, tr("Your saved work"), message,
+                                QMessageBox::Ok, this);
     box->setObjectName(QStringLiteral("profile_error"));
     box->setAttribute(Qt::WA_DeleteOnClose);
     box->open();
