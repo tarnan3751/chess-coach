@@ -464,7 +464,10 @@ class SparTest : public QObject {
         // 1. a3 keeps the game in the known lines, so the coach's e5 comes from the book.
         click(board, "a2");
         click(board, "a3");
-        QTRY_COMPARE_WITH_TIMEOUT(move_row(window, 0), QStringLiteral("1. a3 e5"), 4000);
+        // QTest::qWaitFor rather than QTRY_*_WITH_TIMEOUT: Qt 6.4's macro computes its poll step
+        // as timeout / 7 + 1, which clang-tidy flags at the call.
+        QVERIFY(QTest::qWaitFor([&] { return move_row(window, 0) == QStringLiteral("1. a3 e5"); },
+                                4000));
         press(window, QStringLiteral("spar_end"));
         QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
     }
