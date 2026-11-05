@@ -464,7 +464,7 @@ class SparTest : public QObject {
         // 1. a3 keeps the game in the known lines, so the coach's e5 comes from the book.
         click(board, "a2");
         click(board, "a3");
-        QTRY_VERIFY_WITH_TIMEOUT(move_row(window, 0) == QStringLiteral("1. a3 e5"), 4000);
+        QTRY_COMPARE_WITH_TIMEOUT(move_row(window, 0), QStringLiteral("1. a3 e5"), 4000);
         press(window, QStringLiteral("spar_end"));
         QTRY_VERIFY(child<QFrame>(window, QStringLiteral("spar_summary")).isVisible());
     }
