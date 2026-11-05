@@ -38,9 +38,10 @@
 # runs and practice are skipped. --runs is 5, --tier the app's default, 2. --out writes the table
 # to a file as well. The app runs offscreen (QT_QPA_PLATFORM, offscreen unless set), each run on a
 # scratch data directory of its own, never the owner's; the engines at one thread and 16 MB of
-# hash. Before measuring it waits until the one-minute load average is under MEASURE_MAX_LOAD (4),
-# checking every 15 s for up to MEASURE_LOAD_WAIT seconds (600), then measures anyway and says so;
-# the table's header gives the load before and after. The file cache is warm: nothing here can
+# hash. Before measuring it waits until the one-minute load average is under MEASURE_MAX_LOAD
+# (2.5), checking every 15 s for up to MEASURE_LOAD_WAIT seconds (600), then measures anyway and
+# says so; the table's header gives the load before and after, and a before and an after compare
+# only when they were measured at a similar load. The file cache is warm: nothing here can
 # empty it. Writes build/release/ in the tree it runs in, so an agent runs it only in its clone.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -110,7 +111,7 @@ fi
 load() {
   uptime 2>/dev/null | sed -nE 's/.*load averages?: *([0-9.]+).*/\1/p' | tr -d ',' | grep . || echo 0
 }
-max_load="${MEASURE_MAX_LOAD:-4}"
+max_load="${MEASURE_MAX_LOAD:-2.5}"
 waited=0
 load_note=""
 while awk -v l="$(load)" -v m="$max_load" 'BEGIN { exit !(l >= m) }'; do
@@ -134,15 +135,16 @@ app() {
 }
 
 # timed <metric> <method> <command>...: the command's wall time in milliseconds, after one
-# discarded run.
+# discarded run; the command's output goes to /dev/null, the sample alone into the samples.
 timed() {
   local metric="$1" method="$2" i
   shift 2
   "$@" >/dev/null 2>&1 || { echo "measure: $* failed" >&2; exit 1; }
   printf 'method\t%s\tms\t%s\n' "$metric" "$method" >>"$samples"
   for ((i = 0; i < runs; i++)); do
-    perl -MTime::HiRes=time -e '$m = shift; $t = time; system(@ARGV) == 0 or exit 1;
-      printf("sample\t%s\t%.2f\n", $m, (time - $t) * 1000)' "$metric" "$@" \
+    perl -MTime::HiRes=time -e '$m = shift; open(my $samples, ">&", \*STDOUT) or exit 1;
+      open(STDOUT, ">", "/dev/null") or exit 1; $t = time; system(@ARGV) == 0 or exit 1;
+      printf $samples "sample\t%s\t%.2f\n", $m, (time - $t) * 1000' "$metric" "$@" \
       >>"$samples" 2>/dev/null </dev/null || { echo "measure: $* failed" >&2; exit 1; }
   done
 }

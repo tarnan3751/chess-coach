@@ -3,9 +3,8 @@
 How the build is configured, how the tests are declared and selected, what the gate runs, the
 measurements, the module boundary check, the compiler, format and tidy settings, CI, the macOS
 package and the release workflow, the pinned dependencies, and how lanes deliver and land a
-series. The commands
-are in `CLAUDE.md`, **Commands**; the rules they enforce are in `CLAUDE.md`, **Architecture
-rules**.
+series. The commands are in `CLAUDE.md`, **Commands**; the rules they enforce are in `CLAUDE.md`,
+**Architecture rules**.
 
 ## Presets
 
@@ -108,16 +107,17 @@ chesscoach_add_test(<target> MODULE <core|pipeline|cli|app>
 
 Phase 8 changes nothing for speed without a number before and after (`PLAN.md` §11,
 2026-11-04), and the numbers come from `tools/measure.sh`. It builds the `release` preset, waits
-for the one-minute load average to fall under 4 (`MEASURE_MAX_LOAD`), measures each section over
-`--runs` runs (5), and prints one markdown table: each metric's median, its spread (min to max),
-the number of samples, the unit and how it was measured, under a header with the commit, the
-machine, the database, the engine and the load before and after. `--db` names the database, read
-only (the release database for a baseline; without it the sample is built through the pipeline
-into a scratch directory), `--engine` the Stockfish (else `CHESS_COACH_STOCKFISH` or the `PATH`),
-`--tier` the tier (2, the app's default), `--out` a file for the table, `--no-sounds` leaves out
-the second pass with the app's sounds (below), and the sections to run follow: `startup`,
-`explore`, `practice`, `board`, `repertoire`, `drill`, `memory`, `pipeline` and `cli`. The
-script's header says what each section runs.
+for the one-minute load average to fall under 2.5 (`MEASURE_MAX_LOAD`), measures each section
+over `--runs` runs (5), and prints one markdown table: each metric's median, its spread (min to
+max), the number of samples, the unit and how it was measured, under a header with the commit,
+the machine, the database, the engine and the load before and after. A before and an after
+compare only when they were measured at a similar load, which the headers show. `--db` names the
+database, read only (the release database for a baseline; without it the sample is built through
+the pipeline into a scratch directory), `--engine` the Stockfish (else `CHESS_COACH_STOCKFISH` or
+the `PATH`), `--tier` the tier (2, the app's default), `--out` a file for the table,
+`--no-sounds` leaves out the second pass with the app's sounds (below), and the sections to run
+follow: `startup`, `explore`, `practice`, `board`, `repertoire`, `drill`, `memory`, `pipeline`
+and `cli`. The script's header says what each section runs.
 
 **The app** is measured by `app_measure` (`app/tests/measure.cpp`), a program linking `app_lib`
 that opens the real `MainWindow` on a scratch data directory of its own (a `QTemporaryDir`) and
@@ -175,10 +175,12 @@ What the numbers are, and are not:
   in memory; a cold boot is slower. The first start of a freshly linked binary also pays the
   system's check of its signature (190 to 370 ms more before `main`), which is why the startup
   section discards one run.
-- **The cores' power states.** On Apple silicon a step measured on an idle machine includes the
-  cores waking: the Explore steps run two to three times faster while another core is busy (the
-  engine searching, or a `yes > /dev/null`). The medians are an idle machine's, the user's case;
-  compare a change's numbers with a baseline measured the same way, and read the spread.
+- **The machine's state.** Runs on an idle machine differ among themselves, the Explore steps by up
+  to three times from one run to the next, and they ran two to three times faster while another
+  core was busy (the engine searching, or a `yes > /dev/null`). The cores' power states on Apple
+  silicon, a core waking for a step, are a likely cause, not a measured one. The medians are an
+  idle machine's, the user's case; compare a change's numbers with a baseline measured the same
+  way at a similar load, and read the spread.
 
 ### Baseline, 2026-11-04
 
