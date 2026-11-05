@@ -198,7 +198,7 @@ link to the exact source it was built from. The piece images are Colin M.L. Burn
 from Wikimedia Commons (CC BY-SA 3.0). The data is Lichess's, under CC0. [NOTICE](NOTICE) lists
 every component and its licence, and [legal/](legal/) has the full text of each.
 
-## Contributing
+## About this project
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build, what
-the gate checks and how commits should be written.
+This is a personal project and I'm not taking pull requests. If something breaks, open an
+issue and I'll have a look.

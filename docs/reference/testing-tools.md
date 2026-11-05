@@ -349,7 +349,7 @@ Stockfish, on the `PATH`. vcpkg is cloned into `$RUNNER_TEMP/vcpkg` at the basel
 `vcpkg-configuration.json` pins (read with `jq`, so the hash lives in one file) and bootstrapped, and `VCPKG_ROOT` points at it; the vcpkg binary cache (`~/.cache/vcpkg/archives`)
 is kept in the Actions cache, keyed by the OS and the hash of `vcpkg.json`,
 `vcpkg-configuration.json` and `vcpkg/ports/`. On a failure the job uploads
-`build/gate-failures/`. `.github/dependabot.yml` updates the actions weekly. macOS minutes cost
+`build/gate-failures/`. macOS minutes cost
 ten times Ubuntu's on a private repository (`PLAN.md` §9).
 
 ## Packaging

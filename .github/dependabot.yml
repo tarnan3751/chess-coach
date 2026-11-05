@@ -1,8 +1,0 @@
-# Dependabot keeps the GitHub Actions in .github/workflows/ current; the C++ dependencies are
-# pinned by the vcpkg baseline and move only by a deliberate baseline change.
-version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
