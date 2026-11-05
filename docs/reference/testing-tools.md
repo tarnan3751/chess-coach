@@ -153,8 +153,9 @@ card or the summary) and `memory` (the resident size and the physical footprint 
 after each 50 of 200 Explore steps, after each of three practice games and after a drill of five
 cards). The engines run at one thread and 16 MB of hash, at the settings' 2 s for Explore and
 Practice's 0.5 s. ctest runs `app_measure all --fixture` on the fixture database with the fake
-engine (labels `app;bench`), so the gate's bench step runs every scenario once in seconds; it
-fails when a step never completes and has no time budget.
+engine (labels `app;bench`), so the gate's bench step runs every scenario once in seconds, without
+the thought before each timed move (below); it fails when a step never completes and has no time
+budget.
 
 What the numbers are, and are not:
 
@@ -167,11 +168,14 @@ What the numbers are, and are not:
   practice, board, repertoire and drill a second time with it, memory once, each metric's name
   then ending in `.sounds`; elsewhere, where the app plays no sound, `--sounds` is refused and
   there is no second pass. `explore.first_click` is a process's first move, its sound the first a
-  move plays, after the queue's silent one at the start. With the sounds on, each timed move
-  comes at least 300 ms after the last sound began, longer than the longest of them, so a sound
-  starts from silence as after a user's thought rather than stopping one still playing. Those
-  runs are audible: the volume is the app's NSSound's, which the measurement does not reach, and
-  it touches no system setting.
+  move plays, after the queue's silent one at the start. Those runs are audible: the volume is
+  the app's NSSound's, which the measurement does not reach, and it touches no system setting.
+- **A thought before every timed move.** Each timed move, silent or not, comes at least 300 ms
+  after the last, as after a user's thought: the measurement's method, longer than the longest
+  sound, so that with the sounds on a sound starts from silence rather than stopping one still
+  playing, and the same with them off, so that both passes idle alike between moves, which the
+  machine's state (below) makes count. The ctest smoke run on the fixture, whose times nobody
+  reads, skips it.
 - **Offscreen.** The window paints into its backing store as it does on macOS, raster, but no
   window server composites it and no display's refresh paces it. The cocoa platform's share is
   not measured; `QT_QPA_PLATFORM=cocoa tools/measure.sh startup` on a display would.
@@ -187,6 +191,9 @@ What the numbers are, and are not:
   way at a similar load, and read the spread.
 
 ### Baseline, 2026-11-04
+
+These tables were measured before `app_measure` paused 300 ms before each timed move (above),
+and the next baseline, measured with that pause, replaces them.
 
 The app, the CLI and the pipeline of `main` at `3849af9`, measured by `tools/measure.sh --db
 openings-2026-10.db --engine stockfish --runs 5` on the development machine (an Apple M5, ten

@@ -505,16 +505,18 @@ struct Options {
     QString engine; // empty: the engine is off
     int runs = 5;
     int tier = MainWindow::default_tier;
-    bool sounds = false; // the app's sounds play (--sounds)
+    bool fixture = false; // the fixture database (--fixture): ctest's smoke run, its times unread
 };
 
-// With the sounds on, lets the last one end before the next timed move, as a user's thinking
-// does: longer than the longest of the app's sounds (wrong.wav, 280 ms), so a move's sound starts
-// from silence rather than stopping one still playing.
-void let_sounds_end(const Options& options) {
-    constexpr int longest_sound_ms = 300;
-    if (options.sounds) {
-        pause(longest_sound_ms);
+// The user's thought before a timed move, the measurement's method: longer than the longest of the
+// app's sounds (wrong.wav, 280 ms), so that with the sounds on a move's sound starts from silence
+// rather than stopping one still playing; and the same with them off, so that both runs idle alike
+// between moves, which the machine's state makes count. The smoke run on the fixture, which times
+// nothing that is read, skips it.
+void think(const Options& options) {
+    constexpr int thought_ms = 300;
+    if (!options.fixture) {
+        pause(thought_ms);
     }
 }
 
@@ -796,7 +798,7 @@ void explore_to(const Session& session, const std::vector<std::string>& line) {
         *session.application, [&] { return summary.text() == expected && !board.animating(); },
         "the Explore table after " + std::to_string(line.size()) + " moves");
     pause(20); // any answer still in flight for an earlier position lands
-    let_sounds_end(*session.options);
+    think(*session.options);
 }
 
 void startup(MeasureApplication& application, Report& report, const Options& options,
@@ -956,7 +958,7 @@ void practice_game(const Session& session, Report* report, bool& first_engine) {
     bool in_book = book.in_book(Position::start());
     int moves = 0;
     while (end.isEnabled() && board.isEnabled()) {
-        let_sounds_end(*session.options);
+        think(*session.options);
         const Position before = board.position();
         std::string move;
         if (in_book && moves < practice_book_moves) {
@@ -1186,7 +1188,7 @@ void drill_session(const Session& session, const Scratch& scratch, Report* repor
         if (answer == scratch.answers().end()) {
             throw std::logic_error("a card the repertoire does not hold");
         }
-        let_sounds_end(*session.options);
+        think(*session.options);
         pick(application, board, answer->second);
         Watch right(
             application, window,
@@ -1359,7 +1361,7 @@ void repertoire_session(MeasureApplication& application, Report& report, const O
     }
     steps.step("save", "a board move saving black's answer at the first gap",
                [&](QElapsedTimer& clock) {
-                   let_sounds_end(options);
+                   think(options);
                    pick(application, board, *move);
                    static_cast<void>(drop(board, *move, clock));
                });
@@ -1456,7 +1458,7 @@ void repertoire_large_session(MeasureApplication& application, Report& report,
                            "one gap,",
                            large.held_out.line.size(), white),
                [&](QElapsedTimer& clock) {
-                   let_sounds_end(options);
+                   think(options);
                    pick(application, board, large.held_out.move);
                    static_cast<void>(drop(board, large.held_out.move, clock));
                });
@@ -1593,6 +1595,7 @@ int main(int argc, char* argv[]) {
         if (parser.isSet(fixture_option)) {
             fixture = std::make_unique<chesscoach::app::test::FixtureDb>();
             options.db = QString::fromStdString(fixture->path());
+            options.fixture = true;
         } else {
             options.db = parser.value(db_option);
         }
@@ -1609,7 +1612,6 @@ int main(int argc, char* argv[]) {
                 "--sounds needs the app's sound backend, which only macOS has");
         }
 #endif
-        options.sounds = sounds;
         if (sounds) {
             qunsetenv("CHESS_COACH_SILENT");
         } else if (!qputenv("CHESS_COACH_SILENT", "1")) {
