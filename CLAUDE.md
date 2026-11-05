@@ -21,9 +21,9 @@ heading of this file or of a doc.
 
 ## Status
 
-**Phases 0 to 6 are complete and version 1.0.0 is on `main`, untagged on purpose; Phase 7, the
-UI/UX pass, landed on 2026-11-04 and Phase 8, performance and cleanup, is next; the `v1.0.0` tag
-waits for it.** The skeleton (presets, the gate, the
+**Phases 0 to 8 are complete and version 1.0.0 is on `main`, untagged on purpose: Phase 7, the
+UI/UX pass, landed on 2026-11-04 and Phase 8, performance and cleanup, on 2026-11-05; the
+`v1.0.0` tag is the owner's next step.** The skeleton (presets, the gate, the
 boundary check, CI on macOS and Ubuntu; `docs/reference/testing-tools.md`); the data contract
 (`docs/database.md`); `core` (the position key, `Position` over chess-library, tiers, badges,
 names, the read-only opening store and the canonical dump, the recommendation score, the UCI
@@ -47,7 +47,9 @@ with a toggle, settings in `<data-dir>/settings.ini`, About, the UI harness with
 `docs/reference/app.md`); the macOS package with Qt, Stockfish and the published opening database
 inside (the one `data/release/bundled.txt` names), the licence texts in `legal/`,
 `tools/package.sh` and the tag-triggered release workflow (`docs/reference/testing-tools.md`);
-and the release-database tooling, `tools/build_release_db.sh` and `tools/verify_db.sh`
+the measurement, `tools/measure.sh` and `app_measure`, with the baseline in
+`docs/reference/testing-tools.md`, **Measuring**; and the release-database tooling,
+`tools/build_release_db.sh` and `tools/verify_db.sh`
 (`docs/reference/pipeline.md`, **Release database**; `data/release/README.md`), with data
 version 1 (October 2026) published as the `data-v1` release. `PLAN.md` §7 lists the phases with
 their sizes (Phases 7 and 8 at the end), §6 the data, §9 the process, §11 the decisions, §12 the
