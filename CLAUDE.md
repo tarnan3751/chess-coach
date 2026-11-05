@@ -111,6 +111,7 @@ real header: Qt under `$(brew --prefix qt)/include/`, a vcpkg port under
 | A release database: built from a data directory (the coordinator's or the owner's, never a lane's, but on the sample); verified, with the reproducibility rebuild | `tools/build_release_db.sh <data-dir> <out.db> --data-version N [--months ...]`; `tools/verify_db.sh <db> [--rebuild]` |
 | Land a delivered series; in a batch, every series but the last with `--no-gate` | `tools/land_series.sh <patch-dir> <base-commit> <tree-hash> [--no-gate]` |
 | The changelog section for a release, from the commit log | `tools/changelog.sh <version> [<from-ref>] [<to-ref>]` |
+| Measure the app and the pipeline (cold start, Explore steps, Practice replies, the board, memory, Repertoire, Drill, the CLI) on an idle machine, the release database given; the baseline is in `docs/reference/testing-tools.md`, **Measuring** | `tools/measure.sh [--db <file>] [--engine <binary>] [--runs N] [sections...]` |
 
 **Any configure or build writes files**: `build/<preset>/` in the tree it runs in, the vcpkg
 ports installed under it, and a normal app run reads and writes the owner's user data directory
