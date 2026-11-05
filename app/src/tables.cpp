@@ -50,11 +50,13 @@ QFont sized_font(QFont font, qreal pixels, QFont::Weight weight, const QPaintDev
 }
 
 QFont tabular(const QFont& font) {
-    QFont result = font;
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+    QFont result = font;
     result.setFeature(QFont::Tag("tnum"), 1);
-#endif
     return result;
+#else
+    return font;
+#endif
 }
 
 void paint_row(QPainter& painter, const QStyleOptionViewItem& option, const StudyPalette& palette) {
