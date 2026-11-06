@@ -22,7 +22,11 @@ configure preset uses Ninja and builds into `build/<preset>/`, which holds the v
 Each configure preset has a build preset and a test preset of the same name. The test presets
 print the output of a failing test and treat "no tests matched" as an error, which the gate and
 `tools/run_tests.sh` catch: they say so in one line ("no tests match yet", "no benchmarks yet")
-and succeed, so a module or a kind with no tests yet passes.
+and succeed, so a module or a kind with no tests yet passes. Every test has a timeout of 600 s
+(`execution.timeout` in the base test preset), sixty times the slowest test's time under the
+sanitizers on the development machine: a test that hangs fails as a timeout with its output, and
+ctest closes the test's output pipe at the timeout, so a child process the test left behind,
+holding that pipe, cannot keep ctest waiting past it (**CI**).
 
 The presets set no toolchain: the root `CMakeLists.txt` picks it before `project()`, from
 `$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake` when `VCPKG_ROOT` is set, else from
@@ -342,7 +346,16 @@ chess-library's header and reports false positives inside it, where no `NOLINT` 
 
 `.github/workflows/ci.yml` runs `tools/gates.sh`, the full gate, on `macos-15` and
 `ubuntu-24.04` for every push to `main` and every pull request, each job limited to 90 minutes,
-a newer push cancelling a running one. macOS installs `ninja llvm clang-format stockfish qt`
+a newer push cancelling a running one. Three Ubuntu runs, on 2026-11-05 and 2026-11-06, hit
+that limit in the test stage, and each time the only process alive beside `ctest` was one named
+`engine`: a child forked from the app's engine thread (a forked child carries its thread's name
+until `exec`), stuck before `exec`, holding the test's output pipe after the test process itself
+had gone, which kept ctest reading. reproc's child lists `/proc/self/fd` with `opendir` between
+`fork` and `exec`, which allocates, and a sanitizer runtime whose lock another thread held at
+the fork deadlocks there; that is the hypothesis, the macOS job having never hung and a rerun
+having passed every time (`gh run rerun <id> --failed`). The per-test timeout (**Presets**)
+turns the next one into a named ten-minute failure with the test's output in
+`build/gate-failures/`. macOS installs `ninja llvm clang-format stockfish qt`
 from Homebrew; Ubuntu installs `ninja-build clang-format clang-tidy qt6-base-dev qt6-svg-dev
 libgl1-mesa-dev stockfish` from apt (Qt 6.4) and puts `/usr/games`, where apt installs
 Stockfish, on the `PATH`. vcpkg is cloned into `$RUNNER_TEMP/vcpkg` at the baseline
