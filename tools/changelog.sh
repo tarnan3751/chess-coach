@@ -4,18 +4,18 @@
 #
 #   tools/changelog.sh <version> [<from-ref>] [<to-ref>]
 #
-# The section covers the commits in <from-ref>..<to-ref>. <to-ref> defaults to HEAD.
-# <from-ref> defaults to the previous tag reachable from <to-ref> (`git describe --tags
-# --abbrev=0 <to-ref>^`), or to the root when there is none, in which case the whole history
-# of <to-ref> is covered, the root commit included; pass `--` as <from-ref> to keep that
-# default while naming a <to-ref>. The output is a heading `## <version> — <date>` (the ISO
-# date of <to-ref>'s commit), then one subsection per commit type present, in the order
-# Features (feat), Fixes (fix), Performance (perf), Refactoring (refactor), Build (build),
-# CI (ci), Documentation (docs), Tests (test), Maintenance (chore, style), Reverts (revert),
-# and last Other, for subjects that are not Conventional Commits. Each commit is a line
-# `- **scope:** Summary (`sha`)`, or `- Summary (`sha`)` without a scope, oldest first; a
-# subject with the `!` breaking marker gets `**BREAKING:** ` before its summary, as in
-# `- **core:** **BREAKING:** Summary (`sha`)`.
+# The section covers the commits in <from-ref>..<to-ref>. <to-ref> defaults to HEAD. <from-ref>
+# defaults to the previous version tag (`v*`) reachable from <to-ref> (`git describe --tags
+# --abbrev=0 --match 'v*' <to-ref>^`; the data releases' `data-vN` tags sit on the same history and
+# are not releases of the app), or to the root when there is none, in which case the whole history
+# of <to-ref> is covered, the root commit included; pass `--` as <from-ref> to keep that default
+# while naming a <to-ref>. The output is a heading `## <version> — <date>` (the ISO date of
+# <to-ref>'s commit), then one subsection per commit type present, in the order Features (feat),
+# Fixes (fix), Performance (perf), Refactoring (refactor), Build (build), CI (ci), Documentation
+# (docs), Tests (test), Maintenance (chore, style), Reverts (revert), and last Other, for subjects
+# that are not Conventional Commits. Each commit is a line `- **scope:** Summary (`sha`)`, or `-
+# Summary (`sha`)` without a scope, oldest first; a subject with the `!` breaking marker gets
+# `**BREAKING:** ` before its summary, as in `- **core:** **BREAKING:** Summary (`sha`)`.
 #
 # To add a release to CHANGELOG.md, after tagging it:
 #   tools/changelog.sh 0.2.0 v0.1.0 v0.2.0
@@ -42,7 +42,7 @@ git rev-parse --verify -q "$to^{commit}" >/dev/null || {
   exit 2
 }
 if [ -z "$from" ]; then
-  from="$(git describe --tags --abbrev=0 "$to^" 2>/dev/null || true)"
+  from="$(git describe --tags --abbrev=0 --match 'v*' "$to^" 2>/dev/null || true)"
 fi
 if [ -n "$from" ]; then
   git rev-parse --verify -q "$from^{commit}" >/dev/null || {
