@@ -21,9 +21,10 @@ heading of this file or of a doc.
 
 ## Status
 
-**Phases 0 to 8 are complete and version 1.0.0 is on `main`, untagged on purpose: Phase 7, the
-UI/UX pass, landed on 2026-11-04 and Phase 8, performance and cleanup, on 2026-11-05; the
-`v1.0.0` tag is the owner's next step.** The skeleton (presets, the gate, the
+**Phases 0 to 8 are complete and version 1.0.0 is tagged `v1.0.0` on `main` (2026-11-05):
+Phase 7, the UI/UX pass, landed on 2026-11-04 and Phase 8, performance and cleanup, on
+2026-11-05; the release workflow drafts the macOS image, and publishing it is the owner's
+step.** The skeleton (presets, the gate, the
 boundary check, CI on macOS and Ubuntu; `docs/reference/testing-tools.md`); the data contract
 (`docs/database.md`); `core` (the position key, `Position` over chess-library, tiers, badges,
 names, the read-only opening store and the canonical dump, the recommendation score, the UCI

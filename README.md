@@ -12,12 +12,11 @@ a placeholder.
 
 ## Status
 
-5 November 2026: version 1.0.0 is done but not tagged yet. The pipeline builds the tiered database
-from the Lichess dumps, the CLI can query it, and the app has all four screens (Explore, Practice,
-Repertoire, Drill) plus one-file backup and restore. The first release database (data version 1,
-from the rated games of October 2026) is built, verified reproducible and published, ready for the
-release to bundle; see `data/release/README.md`. The macOS package and the release workflow are in
-place.
+5 November 2026: version 1.0.0 is tagged. The pipeline builds the tiered database from the Lichess
+dumps, the CLI can query it, and the app has all four screens (Explore, Practice, Repertoire, Drill)
+plus one-file backup and restore. The first release database (data version 1, from the rated games
+of October 2026) is built, verified reproducible and published, ready for the release to bundle; see
+`data/release/README.md`. The macOS package and the release workflow are in place.
 
 ## The four screens
 
